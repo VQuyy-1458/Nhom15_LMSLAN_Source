@@ -818,10 +818,21 @@ class LearningTests(unittest.TestCase):
         self.assertIsNone(self.request("/api/student/workspace", "s1")[1]["gradebooks"][0]["items"][0]["total"])
 
     def test_telemetry_uses_hashed_session_key(self):
+        settings = storage.read_json("settings.json")
+        settings.update({"exam_release_id": "telemetry-release", "exam_state": "started", "exam_released": True})
+        storage.write_json("settings.json", settings)
+        storage.write_json("assignments.json", {"s1": {"release_id": "telemetry-release", "status": "in_progress", "started_at": storage.utc_now(), "ends_at": self.future}})
         code, _ = self.request("/api/student/telemetry", "s1", {"visibility": "visible", "focused": "true", "tab_count": "2"})
         self.assertEqual(code, 200)
         self.assertEqual(len(storage.read_json("sessions.json")), 3)
         self.assertTrue(any(s.get("telemetry", {}).get("tab_count") == 2 for s in storage.read_json("sessions.json").values()))
+
+        assignments = storage.read_json("assignments.json")
+        assignments["s1"].update({"status": "submitted", "student_finalized": True})
+        storage.write_json("assignments.json", assignments)
+        self.assertEqual(self.request("/api/student/telemetry", "s1", {"visibility": "hidden", "focused": "false", "tab_count": "3"})[0], 200)
+        own = next(s for s in storage.read_json("sessions.json").values() if s["user_id"] == "s1")
+        self.assertNotIn("telemetry", own)
 
     def test_notification_feed_and_read_receipts_are_personal(self):
         c = self.course()
@@ -994,6 +1005,41 @@ class LearningTests(unittest.TestCase):
         storage.write_json("assignments.json", {"s1": assignment})
         self.assertFalse(self.request("/api/student/workspace", "s1")[1]["exam"]["can_submit"])
         self.assertEqual(self.request("/api/student/submit", "s1", {}, ("answer.txt", b"answer"))[0], 400)
+
+    def test_student_can_finalize_file_exam_early_and_leave_monitoring(self):
+        settings = storage.read_json("settings.json")
+        settings.update({"exam_catalog_id": "current", "exam_release_id": "early-file", "exam_state": "started", "exam_released": True,
+                         "exam_started_at": storage.utc_now(), "exam_participants": ["s1"], "accepted_submission_extensions": [".txt"],
+                         "submission_policy": "configurable", "max_submissions": 3})
+        storage.write_json("settings.json", settings)
+        storage.write_json("assignments.json", {"s1": {"release_id": "early-file", "status": "in_progress", "exam_file": "question.txt",
+                                                            "started_at": storage.utc_now(), "ends_at": self.future}})
+        code, result = self.request("/api/student/submit", "s1", {"final": "true"}, ("answer.txt", b"answer"))
+        self.assertEqual(code, 200, result)
+        assignment = storage.read_json("assignments.json")["s1"]
+        self.assertTrue(assignment["student_finalized"])
+        self.assertFalse(self.request("/api/student/workspace", "s1")[1]["exam"]["can_submit"])
+        self.assertEqual(self.request("/api/student/submit", "s1", {}, ("answer.txt", b"again"))[0], 400)
+        monitor = self.request("/api/admin/monitor?exam=current")[1]
+        self.assertFalse(monitor["students"][0]["monitoring_active"])
+        self.assertEqual(monitor["exam"]["submitted_count"], 1)
+
+    def test_student_can_finish_programming_exam_early(self):
+        course = self.course("s1")
+        exam_id = self.request("/api/admin/exam-configurations/save", form={"course_id": course, "type": "programming", "title": "Finish early",
+            "duration_minutes": "30", "languages": "python", "problems": json.dumps([{"title": "A", "tests": [{"input": "", "output": "1"}]}])})[1]["id"]
+        with patch.object(code_runner, "ready", return_value=True):
+            self.assertEqual(self.request("/api/admin/programming/control", form={"exam_id": exam_id, "action": "start"})[0], 200)
+        self.assertEqual(self.request("/api/student/programming/start", "s1", {"exam_id": exam_id})[0], 200)
+        self.assertEqual(self.request("/api/student/programming/finish", "s1", {"exam_id": exam_id})[0], 200)
+        exam = next(e for e in self.request("/api/student/workspace", "s1")[1]["programming"]["exams"] if e["id"] == exam_id)
+        self.assertTrue(exam["finalized"])
+        self.assertFalse(exam["can_submit"])
+        with patch.object(code_runner, "ready", return_value=True):
+            self.assertEqual(self.request("/api/student/programming/submit", "s1", {"exam_id": exam_id, "problem_index": "0", "language": "python"}, ("answer.py", b"print(1)"))[0], 409)
+        monitor = self.request("/api/admin/monitor?exam=" + exam_id)[1]
+        self.assertFalse(monitor["students"][0]["monitoring_active"])
+        self.assertEqual(monitor["exam"]["submitted_count"], 1)
 
     def test_all_student_routes_render_without_exposing_password(self):
         for name in ("dashboard", "courses", "calendar", "attendance", "assignments", "exams", "history", "grades", "notifications", "profile"):

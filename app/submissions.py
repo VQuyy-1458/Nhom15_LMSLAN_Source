@@ -38,7 +38,7 @@ def validate_zip(data: bytes) -> tuple[bool, str]:
     except (zipfile.BadZipFile, OSError, RuntimeError) as exc:
         return False, f"Không thể đọc ZIP: {exc}"
 
-def accept_submission(student_id: str, original_name: str, data: bytes, ip: str, request_id=None) -> dict:
+def accept_submission(student_id: str, original_name: str, data: bytes, ip: str, request_id=None, finalize=False) -> dict:
     from .learning import LOCK, LearningError
     if request_id and (len(request_id) > 80 or not re.fullmatch(r"[A-Za-z0-9._:-]+", request_id)):
         raise LearningError(400, "Mã yêu cầu nộp bài không hợp lệ.")
@@ -50,10 +50,10 @@ def accept_submission(student_id: str, original_name: str, data: bytes, ip: str,
                     raise LearningError(409, "Yêu cầu gửi lại có nội dung khác. Hãy tạo lần nộp mới.")
                 return previous
         with submission_rate.guard(student_id):
-            return _accept_submission(student_id, original_name, data, ip, request_id)
+            return _accept_submission(student_id, original_name, data, ip, request_id, finalize)
 
 
-def _accept_submission(student_id: str, original_name: str, data: bytes, ip: str, request_id=None) -> dict:
+def _accept_submission(student_id: str, original_name: str, data: bytes, ip: str, request_id=None, finalize=False) -> dict:
     if not data:
         raise ValueError("File bài làm không được rỗng.")
     if len(data) > MAX_REQUEST_SIZE:
@@ -76,7 +76,7 @@ def _accept_submission(student_id: str, original_name: str, data: bytes, ip: str
         raise ValueError("Lượt thi đã kết thúc hoặc bạn chưa được giao đề.")
     if not assignment.get("started_at"):
         raise ValueError("Bạn chưa bắt đầu làm bài.")
-    if assignment.get("forced_submit") or settings.get("exam_state") != "started":
+    if assignment.get("forced_submit") or assignment.get("student_finalized") or settings.get("exam_state") != "started":
         raise ValueError("Kỳ thi đã kết thúc hoặc giảng viên đã thu bài.")
     if assignment.get("status") in {"submitted", "expired"} and settings.get("submission_policy") != "configurable":
         raise ValueError("Trạng thái bài thi không cho phép nộp bài.")
@@ -115,7 +115,12 @@ def _accept_submission(student_id: str, original_name: str, data: bytes, ip: str
     records[student_id] = all_records
     write_json("submissions.json", records)
     assignment["status"] = "submitted"
+    if finalize:
+        # A final submission is irreversible: the student leaves the exam and
+        # subsequent uploads are rejected even when draft attempts were enabled.
+        assignment["student_finalized"] = True
+        assignment["submitted_at"] = record["submitted_at"]
     assignments[student_id] = assignment
     write_json("assignments.json", assignments)
-    audit("submission.accepted", student_id, ip, {"filename": saved_name, "size_bytes": len(data), "sha256": record["sha256"], "attempt": len(existing) + 1, "release_id": assignment.get("release_id")})
+    audit("submission.accepted", student_id, ip, {"filename": saved_name, "size_bytes": len(data), "sha256": record["sha256"], "attempt": len(existing) + 1, "release_id": assignment.get("release_id"), "final": bool(finalize)})
     return record

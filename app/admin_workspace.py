@@ -71,7 +71,8 @@ def exam_monitor(rows, exam_id, course_id=""):
                 index = record.get("problem_index")
                 if grade and grade.get("verdict") == "AC" and isinstance(index, int) and 0 <= index < problem_count:
                     solved.add(index)
-            row.update(exam_file=exam["title"], exam_status="submitted" if records else "in_progress" if attempt else "assigned",
+            finalized = attempt.get("status") == "submitted"
+            row.update(exam_file=exam["title"], exam_status="submitted" if finalized else "in_progress" if attempt else "assigned",
                        started_at=attempt.get("started_at"), ends_at=attempt.get("ends_at") or exam.get("ends_at"),
                        latest_verdict=(latest.get("result") or {}).get("verdict") or latest.get("state") if latest else None,
                        accepted_problems=len(solved), total_problems=problem_count, can_force=False, can_adjust=False)
@@ -85,8 +86,12 @@ def exam_monitor(rows, exam_id, course_id=""):
                        can_force=live and bool(exam.get("active")) and attempt.get("status") in {"assigned", "in_progress"},
                        can_adjust=live and bool(exam.get("active")) and bool(attempt.get("ends_at")))
         row_end = learning.date_value(row["ends_at"]) if row.get("ends_at") else None
+        monitoring_active = bool(live and row.get("started_at") and row_end and row_end > now and row.get("exam_status") == "in_progress")
         row.update(submission_count=len(records), latest_submission=records[-1] if records else None,
-                   remaining_seconds=max(0, int((row_end-now).total_seconds())) if row_end and row.get("started_at") else None)
+                   remaining_seconds=max(0, int((row_end-now).total_seconds())) if row_end and row.get("started_at") else None,
+                   monitoring_active=monitoring_active)
+        if not monitoring_active:
+            row["alerts"] = []
         if exam["type"] == "programming" and records:
             # The monitor only needs summary metadata, not every private test output.
             row["latest_submission"] = {k: records[-1].get(k) for k in ("id", "exam_id", "student_id", "problem_index", "problem_title", "submitted_at", "state")}
@@ -96,6 +101,9 @@ def exam_monitor(rows, exam_id, course_id=""):
         context["started_at"] = exam["scheduled_at"]
     context["live"] = live
     context["activity_id"] = ("code:" + exam_id) if exam["type"] == "programming" else "file:" + str(exam.get("release_id") or "")
+    context["taking_count"] = sum(bool(row.get("monitoring_active")) for row in result)
+    context["submitted_count"] = sum(row.get("exam_status") == "submitted" for row in result)
+    context["participant_count"] = len(result)
     return result, context
 
 

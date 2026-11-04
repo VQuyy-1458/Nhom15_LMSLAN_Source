@@ -28,15 +28,15 @@
       const e=monitorExam;
       $('monitor-exam-context').innerHTML=e?`<h2>${escape(e.title)}</h2><p class="muted">${e.type==='programming'?'Thi lập trình':'Thi nộp file'} · ${e.waiting?'Chờ đến giờ bắt đầu':e.live?'Đang diễn ra':'Chưa mở hoặc đã kết thúc'}${e.started_at?' · Bắt đầu '+escape(new Date(e.started_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})):''}${e.ends_at?' · Kết thúc '+escape(new Date(e.ends_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})):''}</p>${e.waiting?window.submissionDeadlines.waiting(e.started_at):''}<a class="btn btn-secondary" href="/admin?section=exam&exam=${encodeURIComponent(e.id)}${e.course_id?'&course='+encodeURIComponent(e.course_id):''}">Cấu hình / Điều chỉnh thời gian thi</a>`:'<p class="muted">Tổng quan sinh viên. Chọn kỳ thi phía trên để giám sát riêng danh sách dự thi và bài nộp của kỳ thi đó.</p>';
     }
-    monitorRows = data.students || [];
+    monitorRows = (data.students || []).filter(row=>!monitorExam||row.monitoring_active);
     monitorServerAt = Date.parse(data.occurred_at) || Date.now();
     if ($("stat-total")) $("stat-total").textContent = monitorRows.length;
     if ($("stat-online")) $("stat-online").textContent = data.online_count ?? 0;
     if ($("stat-submitted")) $("stat-submitted").textContent = monitorRows.filter((row) => row.submission_count > 0).length;
     if ($("stat-abnormal")) $("stat-abnormal").textContent = data.abnormal_count ?? 0;
-    if ($("monitor-stat-total")) $("monitor-stat-total").textContent=monitorRows.length;
+    if ($("monitor-stat-total")) $("monitor-stat-total").textContent=monitorExam?.taking_count??monitorRows.length;
     if ($("monitor-stat-online")) $("monitor-stat-online").textContent=data.online_count??0;
-    if ($("monitor-stat-submitted")) $("monitor-stat-submitted").textContent=monitorRows.filter(row=>row.exam_status==='submitted').length;
+    if ($("monitor-stat-submitted")) $("monitor-stat-submitted").textContent=monitorExam?.submitted_count??monitorRows.filter(row=>row.exam_status==='submitted').length;
     if ($("monitor-stat-attention")) $("monitor-stat-attention").textContent=data.abnormal_count??0;
     if ($("monitor-updated")) $("monitor-updated").textContent = "Đồng bộ server " + new Date(monitorServerAt).toLocaleTimeString();
     renderMonitor();

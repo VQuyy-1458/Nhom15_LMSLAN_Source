@@ -40,7 +40,7 @@
       return `<section class="panel code-exam" data-code-problem-list="${esc(e.id)}"><div class="panel-heading"><div><p class="eyebrow">THI LẬP TRÌNH</p><h2>${esc(e.title)}</h2><p class="muted">${e.duration_minutes} phút · ${e.languages.map(l=>languages[l]).join(' / ')}</p></div>${e.attempt?deadline(e):''}</div><p class="student-description">${esc(e.description||'Chọn một bài toán để đọc đề và viết lời giải.')}</p>${!e.attempt?entry(e):''}${e.attempt?`<div class="code-list-heading"><h3>Danh sách bài toán</h3><span><strong>${score}/${max}</strong> điểm tốt nhất</span></div>${window.listUi.controls('programming:problems:'+e.id,'problems')}<div class="table-wrap"><table class="code-problem-table"><thead><tr><th>Bài</th><th>Tên bài toán</th><th>Điểm tốt nhất</th><th>Lần nộp</th><th>Kết quả gần nhất</th><th></th></tr></thead><tbody>${problemRows.map(p=>{
         const attempts=rows.filter(r=>r.problem_index===p.index),last=attempts[attempts.length-1];
         return `<tr><td><span class="code-letter">${codeLabel(p.index)}</span></td><td><a class="student-list-title" data-code-problem="${p.index}" href="${esc(problemUrl(e,p.index))}">${esc(p.title)}</a><small>${p.time_limit_ms} ms · ${p.memory_limit_mb} MB</small></td><td><strong>${best(rows,p.index)}/${p.points}</strong></td><td>${attempts.length}</td><td>${last?window.programmingUi.status(last):'<span class="muted">Chưa nộp</span>'}</td><td><a class="btn btn-secondary btn-small" href="${esc(problemUrl(e,p.index))}">${e.can_submit?'Làm bài':'Xem bài'}</a></td></tr>`;
-      }).join('')}</tbody></table></div><p class="muted">Chọn tên bài để mở trang làm bài. Mỗi bài có lịch sử nộp và kết quả riêng.</p>`:''}</section>`;
+      }).join('')}</tbody></table></div><p class="muted">Chọn tên bài để mở trang làm bài. Mỗi bài có lịch sử nộp và kết quả riêng.</p>${e.finalized?`<div class="alert alert-info">Bạn đã nộp bài và kết thúc kỳ thi lúc ${esc(new Date(e.submitted_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}))}. Phiên giám sát đã dừng.</div>`:`<div class="code-submit-bar"><p>Nộp bài sớm sẽ khóa toàn bộ bài thi và dừng giám sát. Thao tác này không thể hoàn tác.</p><button type="button" class="btn btn-primary" data-code-finish="${esc(e.id)}"><i class="fa fa-check-circle"></i> Nộp bài và kết thúc thi</button></div>`}`:''}</section>`;
     }).join('');
   }
   function workspace(e,p,rows){
@@ -119,7 +119,17 @@
     form.elements.source.value=source;form.querySelector('[data-code-filename]').textContent=file.name;form.elements.file.value='';save(form);
     form.querySelector('[data-code-submit-message]').textContent='Đã đưa file vào trình soạn thảo. Bấm Submit bài để nộp.';
   }
-  document.addEventListener('click',event=>{const button=event.target.closest('[data-code-upload]');if(button)button.form.elements.file.click();});
+  document.addEventListener('click',async event=>{
+    const upload=event.target.closest('[data-code-upload]');if(upload){upload.form.elements.file.click();return;}
+    const finish=event.target.closest('[data-code-finish]');if(!finish)return;
+    if(!confirm('Nộp bài và kết thúc kỳ thi? Sau khi xác nhận bạn không thể submit thêm và phiên giám sát sẽ dừng.'))return;
+    finish.disabled=true;
+    try{
+      await window.cssRequest('/api/student/programming/finish',{method:'POST',body:new URLSearchParams({exam_id:finish.dataset.codeFinish})});
+      window.cssToast('Đã nộp bài và kết thúc kỳ thi.','success');
+      const url=new URL(location.href);url.searchParams.delete('problem');history.replaceState(null,'',url.pathname+url.search);location.reload();
+    }catch(error){finish.disabled=false;window.cssToast(error.message||'Không thể kết thúc kỳ thi.','error');}
+  });
   document.addEventListener('input',event=>{if(event.target.matches('[data-code-editor]'))save(event.target.form);});
   document.addEventListener('scroll',event=>{if(event.target.matches?.('[data-code-editor]'))updateLines(event.target.form);},true);
   document.addEventListener('change',async event=>{

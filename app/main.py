@@ -98,7 +98,8 @@ def student_exam_snapshot(student_id):
     records=[r for r in read_json("submissions.json").get(student_id,[]) if current and r.get("release_id")==item.get("release_id")]
     limit=1 if settings.get("submission_policy")=="once" else int(settings.get("max_submissions",1))
     forced=bool(current and item.get("forced_submit"))
-    return {"state":"scheduled" if waiting else settings.get("exam_state","idle"),"common_starts_at":common_start,"planned_end":planned_end,"assigned":current,"started":started,"status":item.get("status") if current else "not_assigned","exam_file":item.get("exam_file") if started else None,"started_at":item.get("started_at") if started else None,"ends_at":item.get("ends_at") if started else None,"remaining_seconds":remaining,"can_start":bool(active and not started and not forced and item.get("status")=="assigned"),"can_submit":bool(active and started and remaining>0 and not forced and len(records)<limit),"forced_submit":forced,"submission_count":len(records),"max_submissions":limit,"duration_minutes":settings.get("exam_duration_minutes",90),"password_enabled":settings.get("exam_password_enabled",False),"extensions":settings.get("accepted_submission_extensions",[".zip"]),"course_id":settings.get("exam_course_id") if current else None,"title":(settings.get("exam_title") or "Kỳ thi nộp file") if current else "Kỳ thi nộp file"}
+    finalized=bool(current and item.get("student_finalized"))
+    return {"state":"scheduled" if waiting else settings.get("exam_state","idle"),"common_starts_at":common_start,"planned_end":planned_end,"assigned":current,"started":started,"status":item.get("status") if current else "not_assigned","exam_file":item.get("exam_file") if started else None,"started_at":item.get("started_at") if started else None,"ends_at":item.get("ends_at") if started else None,"remaining_seconds":remaining,"can_start":bool(active and not started and not forced and not finalized and item.get("status")=="assigned"),"can_submit":bool(active and started and remaining>0 and not forced and not finalized and len(records)<limit),"forced_submit":forced,"finalized":finalized,"submitted_at":item.get("submitted_at") if finalized else None,"submission_count":len(records),"max_submissions":limit,"duration_minutes":settings.get("exam_duration_minutes",90),"password_enabled":settings.get("exam_password_enabled",False),"extensions":settings.get("accepted_submission_extensions",[".zip"]),"course_id":settings.get("exam_course_id") if current else None,"title":(settings.get("exam_title") or "Kỳ thi nộp file") if current else "Kỳ thi nộp file"}
 
 
 def monitoring_snapshot(course_id="", exam_id="") -> dict:
@@ -127,8 +128,29 @@ def monitoring_snapshot(course_id="", exam_id="") -> dict:
     context=None
     if exam_id:
         result,context=admin_workspace.exam_monitor(result,exam_id,course_id)
-    abnormal_count=sum(1 for row in result if row["alerts"])
-    return {"occurred_at":utc_now(),"students":result,"online_count":sum(1 for row in result if row["logged_in"]),"abnormal_count":abnormal_count,"exam":context}
+    abnormal_count=sum(1 for row in result if row["alerts"] and (not exam_id or row.get("monitoring_active")))
+    return {"occurred_at":utc_now(),"students":result,"online_count":sum(1 for row in result if row["logged_in"] and (not exam_id or row.get("monitoring_active"))),"abnormal_count":abnormal_count,"exam":context}
+
+
+def student_is_taking_exam(student_id):
+    """Telemetry is collected only while the student has a live attempt."""
+    now = datetime.now(timezone.utc)
+    settings = read_json("settings.json")
+    assignment = read_json("assignments.json").get(student_id, {})
+    if (settings.get("exam_state") == "started" and settings.get("exam_released")
+            and assignment.get("release_id") == settings.get("exam_release_id")
+            and assignment.get("status") in {"in_progress", "submitted"} and not assignment.get("forced_submit")
+            and not assignment.get("student_finalized") and assignment.get("ends_at")
+            and datetime.fromisoformat(assignment["ends_at"]) > now):
+        return True
+    attempts = read_json("programming_attempts.json", {})
+    for exam in exam_catalog.listing():
+        attempt = attempts.get(exam["id"] + ":" + student_id)
+        if (exam["type"] == "programming" and exam["state"] == "started" and not exam.get("waiting")
+                and attempt and attempt.get("status") not in {"submitted", "expired"}
+                and learning.date_value(attempt["ends_at"]) > now):
+            return True
+    return False
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "LAN-LMS/2.0"
@@ -621,6 +643,9 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/student/programming/start":
                 sess=self._auth(req,"student")
                 return self._json(programming.start(sess,f,client_ip(req)))
+            if path=="/api/student/programming/finish":
+                sess=self._auth(req,"student")
+                return self._json(programming.finish(sess,f,client_ip(req)))
             if path=="/api/student/programming/submit":
                 sess=self._auth(req,"student")
                 return self._json(programming.submit(sess,f,req.files.get("file"),client_ip(req)))
@@ -753,7 +778,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not file or not file.get("filename"): raise ClientError(400,"Hãy chọn file bài làm.")
                 data=file["data"]
                 if len(data)>MAX_REQUEST_SIZE: raise ClientError(413,"File vượt giới hạn 50 MiB.")
-                try: record=accept_submission(sess["user_id"],file["filename"],data,client_ip(req),f.get("request_id"))
+                try: record=accept_submission(sess["user_id"],file["filename"],data,client_ip(req),f.get("request_id"),f.get("final") in {"true","1","on","yes"})
                 except ValueError as e: raise ClientError(400,str(e))
                 return self._json({"ok":True,"submission":record})
             if path=="/api/student/telemetry":
@@ -766,7 +791,10 @@ class Handler(BaseHTTPRequestHandler):
                     sessions=read_json("sessions.json"); token_key=sess["token_key"]
                     current=sessions.get(token_key)
                     if not current: raise ClientError(401,"Phiên đăng nhập không hợp lệ.")
-                    current["telemetry"]={"visibility":"hidden" if f.get("visibility")=="hidden" else "visible","focused":flag("focused",True),"tab_count":tab_count,"browser":f.get("browser","")[:80],"updated_at":utc_now()}
+                    if student_is_taking_exam(sess["user_id"]):
+                        current["telemetry"]={"visibility":"hidden" if f.get("visibility")=="hidden" else "visible","focused":flag("focused",True),"tab_count":tab_count,"browser":f.get("browser","")[:80],"updated_at":utc_now()}
+                    else:
+                        current.pop("telemetry", None)
                     current["last_seen"]=utc_now(); sessions[token_key]=current; write_json("sessions.json",sessions)
                 return self._json({"ok":True})
             if path=="/api/admin/admins":

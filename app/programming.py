@@ -58,13 +58,14 @@ def snapshot(sid):
         attempt = attempts.get(row["id"] + ":" + sid)
         from .deadlines import exam_end
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
-        allowed = bool(attempt and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now)
+        finalized = bool(attempt and attempt.get("status") == "submitted")
+        allowed = bool(attempt and not finalized and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now)
         item = {k: row.get(k) for k in ("id", "title", "description", "course_id", "duration_minutes", "state", "started_at", "scheduled_at")}
         item["assessment_type"] = row.get("assessment_type", "test")
         if row.get("waiting"):
             item["state"] = "scheduled"
             item["started_at"] = row.get("started_at") or row.get("scheduled_at")
-        item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "languages": row["programming"]["languages"], "problems": []})
+        item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
         if attempt:
             item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"])]
         result.append(item)
@@ -119,7 +120,7 @@ def student_submissions(sid, exam_id, problem_index):
     from .deadlines import exam_end
     end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
     now = datetime.now(timezone.utc)
-    allowed = bool(attempt and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now and (not end or end > now))
+    allowed = bool(attempt and attempt.get("status") != "submitted" and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now and (not end or end > now))
     return {"submissions": [public_submission(r) for r in rows() if r["student_id"] == sid and r["exam_id"] == exam_id and r["problem_index"] == index],
             "can_submit": allowed, "server_time": utc_now(), "ends_at": attempt.get("ends_at") if attempt else None}
 
@@ -142,6 +143,31 @@ def start(session, form, ip):
             write_json("programming_attempts.json", attempts)
             audit("programming.student_started", sid, ip, {"exam_id": row["id"]})
         return {"ok": True}
+
+
+def finish(session, form, ip):
+    """Let a student finalize early and immediately leave monitoring."""
+    sid = session["user_id"]
+    with learning.LOCK, atomic_transaction():
+        row = exam(form.get("exam_id"))
+        if not eligible(row, sid):
+            raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
+        attempts = read_json("programming_attempts.json", {})
+        key = row["id"] + ":" + sid
+        attempt = attempts.get(key)
+        if not attempt:
+            raise learning.LearningError(409, "Bạn chưa vào làm bài thi.")
+        if attempt.get("status") == "submitted":
+            return {"ok": True, "submitted_at": attempt.get("submitted_at")}
+        now = datetime.now(timezone.utc)
+        if row["state"] != "started" or row.get("waiting") or learning.date_value(attempt["ends_at"]) <= now:
+            raise learning.LearningError(409, "Kỳ thi đã hết thời gian nộp bài.")
+        submitted_at = utc_now()
+        attempt.update({"status": "submitted", "submitted_at": submitted_at})
+        attempts[key] = attempt
+        write_json("programming_attempts.json", attempts)
+        audit("programming.student_finished", sid, ip, {"exam_id": row["id"]})
+        return {"ok": True, "submitted_at": submitted_at}
 
 
 def submit(session, form, file, ip):
@@ -167,7 +193,7 @@ def submit(session, form, file, ip):
                     raise learning.LearningError(409, "Yêu cầu gửi lại có nội dung khác. Hãy tạo lần nộp mới.")
                 return {"ok":True, "submission":public_submission(previous)}
         attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
-        if row["state"] != "started" or row.get("waiting") or not attempt or learning.date_value(attempt["ends_at"]) <= datetime.now(timezone.utc): raise learning.LearningError(409, "Chưa bắt đầu hoặc đã hết thời gian nộp bài.")
+        if row["state"] != "started" or row.get("waiting") or not attempt or attempt.get("status") == "submitted" or learning.date_value(attempt["ends_at"]) <= datetime.now(timezone.utc): raise learning.LearningError(409, "Chưa bắt đầu, đã nộp bài hoặc đã hết thời gian nộp bài.")
         from .deadlines import exam_end
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
         if common_end and common_end <= datetime.now(timezone.utc): raise learning.LearningError(409, "Đã hết thời gian nộp bài của kỳ thi.")
