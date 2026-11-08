@@ -21,7 +21,7 @@ from . import code_runner, config, learning, storage
 from .security import hash_password
 from .seed_demo import NAMES, zipped
 
-VERSION = "lan-lms-trial-v2"
+VERSION = "lan-lms-trial-v3"
 VN = timezone(timedelta(hours=7))
 DIRECTORIES = ("data", "learning-files", "submissions", "de-thi", "programming-submissions", "demo-inputs")
 PASSWORD = "111111"
@@ -93,23 +93,23 @@ def prepare(root=None):
         data["courses"].append({**identity(key,-45),"code":code,"name":title,"group":"Nhóm 01","semester":"Học kỳ 1 · 2026–2027" if not completed else "Học kỳ hè · 2025–2026","description":description,"student_ids":members,"status":"completed" if completed else "active","weights":{"attendance":10,"homework":20,"midterm":30,"final":40}})
         for i in range(8 if completed else 12):
             day = -60+i*3 if completed else (-14+i*3 if i<4 else 0 if i==4 else (i-4)*3)
-            lesson = {**identity(f"{key}-lesson-{i+1}",min(day,0)),"course_id":cid,"title":f"Buổi {i+1:02} · "+["Nhập môn và môi trường thực hành","Thực hành cơ bản","Xử lý dữ liệu","Ôn tập giữa kỳ","Thực hành tổng hợp","Hỏi đáp và luyện tập"][i%6],"description":"Đọc tài liệu, làm bài thực hành và điểm danh bằng QR trong buổi học.","kind":"lesson","starts_at":at(day,minutes=-10) if day==0 else at(day,hour=7 if key in {"network","cpp"} else 13),"location":"Phòng A203" if key in {"network","cpp"} else "Phòng B105"}
+            lesson = {**identity(f"{key}-lesson-{i+1}",min(day,0)),"course_id":cid,"title":f"Buổi {i+1:02} · "+["Nhập môn và môi trường thực hành","Thực hành cơ bản","Xử lý dữ liệu","Ôn tập giữa kỳ","Thực hành tổng hợp","Hỏi đáp và luyện tập"][i%6],"description":"Đọc tài liệu, làm bài thực hành và điểm danh trong mạng LAN khi giảng viên mở phiên.","kind":"lesson","starts_at":at(day,minutes=-10) if day==0 else at(day,hour=7 if key in {"network","cpp"} else 13),"location":"Phòng A203" if key in {"network","cpp"} else "Phòng B105"}
             data["events"].append(lesson)
             if i<4 or completed:
                 records={sid:{"status":"late" if (j+i)%8==0 else "present","checked_in_at":lesson["starts_at"],"reason":""} for j,sid in enumerate(members) if (j+i)%7!=6}
                 data["attendance"].append({**identity(f"{key}-attendance-{i+1}",day),"course_id":cid,"event_id":lesson["id"],"lesson_at":lesson["starts_at"],"title":lesson["title"],"description":"Điểm danh theo lịch học.","expires_at":at(day,minutes=60,hour=7 if key in {"network","cpp"} else 13),"closed":True,"code":secrets.token_hex(4).upper(),"records":records})
             elif i==4 and key=="network":
-                data["attendance"].append({**identity("network-attendance-today"),"course_id":cid,"event_id":lesson["id"],"lesson_at":lesson["starts_at"],"title":lesson["title"],"description":"Phiên QR đang mở để dùng thử. SV001 chưa điểm danh.","expires_at":at(minutes=120),"closed":False,"code":secrets.token_hex(4).upper(),"records":{sid:{"status":"present","checked_in_at":at(),"reason":""} for sid in ids[1:4]}})
+                data["attendance"].append({**identity("network-attendance-today"),"course_id":cid,"event_id":lesson["id"],"lesson_at":lesson["starts_at"],"title":lesson["title"],"description":"Phiên LAN đang mở để dùng thử. SV001 chưa điểm danh; đăng nhập sẽ tự ghi nhận.","expires_at":at(minutes=1440),"closed":False,"code":secrets.token_hex(4).upper(),"records":{sid:{"status":"present","checked_in_at":at(),"reason":""} for sid in ids[1:4]}})
         materials = [
-            ("Đề cương và cách đánh giá","de-cuong.txt",f"{title}\n{description}\n\nĐánh giá: chuyên cần 10%, bài tập 20%, giữa kỳ 30%, cuối kỳ 40%.\nGiữa kỳ lấy trung bình các kỳ thi giữa kỳ; Test không tính vào điểm khóa học.\n"),
-            ("Hướng dẫn thực hành","huong-dan.txt","Đọc yêu cầu; chạy chương trình với test mẫu; kiểm tra tình huống biên; nộp file và xem biên nhận.\nĐiểm danh: mở mục Điểm danh trên điện thoại, quét QR giảng viên cung cấp.\nKỳ thi dùng đồng hồ chung kể từ lúc giảng viên mở.\n"),
+            ("Đề cương và cách đánh giá","de-cuong.txt",f"{title}\n{description}\n\nĐánh giá: chuyên cần 10%, bài tập 20%, giữa kỳ 30%, cuối kỳ 40%.\nThực hành lấy trung bình; mỗi khóa có một kỳ giữa kỳ và một kỳ cuối kỳ. Test không tính điểm.\n"),
+            ("Hướng dẫn thực hành","huong-dan.txt","Đọc yêu cầu; chạy chương trình với test mẫu; kiểm tra tình huống biên; nộp bài và xem biên nhận.\nĐiểm danh: giảng viên mở phiên theo lịch, tài khoản đang đăng nhập trong LAN được ghi nhận tự động.\nKỳ thi dùng đồng hồ chung kể từ lúc giảng viên mở.\n"),
             ("Ví dụ nhập xuất và kiểm thử","sum.cpp",SUM_SOURCES["cpp"]),
         ]
         if key=="database":materials[2]=("Ví dụ cơ sở dữ liệu thư viện","thu-vien.txt","CREATE TABLE doc_gia (id INTEGER PRIMARY KEY, ho_ten VARCHAR(100));\nCREATE TABLE sach (id INTEGER PRIMARY KEY, ten_sach VARCHAR(200));\nCREATE TABLE phieu_muon (doc_gia_id INTEGER, sach_id INTEGER, ngay_muon DATE);\nSELECT d.ho_ten, s.ten_sach FROM phieu_muon p JOIN doc_gia d ON d.id=p.doc_gia_id JOIN sach s ON s.id=p.sach_id;\n")
         if key=="python":materials[2]=("Ví dụ nhập xuất Python","sum.py",SUM_SOURCES["python"])
         if key=="network":materials[2]=("TCP Echo Server tham khảo","echo_server.py","import socket\nwith socket.socket() as server:\n    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n    server.bind(('0.0.0.0', 9000))\n    server.listen()\n    connection, address = server.accept()\n    with connection:\n        data = connection.recv(4096)\n        connection.sendall(data)\n")
         for i,(name,filename,text) in enumerate(materials):
-            data["materials"].append({**identity(f"{key}-material-{i+1}",-10+i),"course_id":cid,"title":name,"topic":"Tài liệu học phần","description":"Tài liệu phục vụ thực hành và kiểm thử chức năng xem/tải.",**payload("learning-files",f"{key}-material-{i+1}-"+filename,filename,text)})
+            data["materials"].append({**identity(f"{key}-material-{i+1}",-10+i),"course_id":cid,"lesson_id":f"trial-v2-{key}-lesson-{i+1}","title":name,"topic":"Tài liệu học phần","description":"Tài liệu phục vụ thực hành và kiểm thử chức năng xem/tải.",**payload("learning-files",f"{key}-material-{i+1}-"+filename,filename,text)})
         tasks[cid] = []
         titles = ["Ôn tập kiến thức cơ bản","Xử lý dữ liệu và tình huống biên","Thực hành có đề đính kèm","Bài tập tổng hợp cuối chủ đề"] if not completed else ["Nhập xuất và biến","Mảng, hàm và vòng lặp"]
         for i,name in enumerate(titles):
@@ -118,7 +118,7 @@ def prepare(root=None):
             exercise="Bài 1: Đọc hai số nguyên a, b và in a+b.\nBài 2: Đọc n và n số nguyên; in phần tử lớn nhất.\nKiểm thử số âm, số 0 và dữ liệu lớn."
             if key=="network":exercise="Bài 1: Viết TCP Echo Server lắng nghe cổng 9000 và trả lại chuỗi nhận từ client.\nBài 2: Viết client gửi UTF-8, nhận phản hồi; xử lý đóng kết nối và thông báo lỗi.\nNộp source, README và ít nhất ba tình huống kiểm thử."
             if key=="database":exercise="Bài 1: Thiết kế bảng độc giả, sách và phiếu mượn cho thư viện; khai báo khóa chính, khóa ngoại.\nBài 2: Viết SQL tìm sách đang mượn, số lượt mượn theo độc giả, sách chưa được mượn.\nNộp ZIP gồm schema.sql, queries.sql và dữ liệu kiểm thử."
-            task={**identity(f"{key}-task-{i+1}",-20+i),"course_id":cid,"title":f"Bài tập {i+1:02} · {name}","topic":"Thực hành","description":f"Hoàn thành yêu cầu trong file đề bài của {title}. Nộp mã nguồn hoặc ZIP có README hướng dẫn chạy.\nTiêu chí: đúng chức năng 6 điểm, kiểm thử 2 điểm, trình bày 2 điểm.","due_at":at(day,hour=23),"max_attempts":5,**payload("learning-files",f"{key}-task-{i+1}.txt","de-bai.txt",f"{title} — {name}\n\n{exercise}\n")}
+            task={**identity(f"{key}-task-{i+1}",-20+i),"course_id":cid,"lesson_id":f"trial-v2-{key}-lesson-{i+1}","kind":"file","title":f"Bài tập {i+1:02} · {name}","topic":"Thực hành","description":f"Hoàn thành yêu cầu trong file đề bài của {title}. Nộp mã nguồn hoặc ZIP có README hướng dẫn chạy.\nTiêu chí: đúng chức năng 6 điểm, kiểm thử 2 điểm, trình bày 2 điểm.","due_at":at(day,hour=23),"max_attempts":5,**payload("learning-files",f"{key}-task-{i+1}.txt","de-bai.txt",f"{title} — {name}\n\n{exercise}\n")}
             if day<0: task["closed_at"]=task["due_at"]
             data["assignments"].append(task);tasks[cid].append(aid)
             for j,sid in enumerate(members):
@@ -143,22 +143,42 @@ def prepare(root=None):
 
     sum_problem={"title":"Tổng hai số nguyên","statement":"Đọc hai số nguyên a, b (|a|, |b| ≤ 10^9) từ stdin, in a+b ra stdout. Không in lời nhắc nhập.","points":100,"time_limit_ms":1000,"memory_limit_mb":256,"checker":"tokens","tests":copy.deepcopy(SUM_TESTS)}
     max_problem={"title":"Phần tử lớn nhất","statement":"Dòng đầu là n (1 ≤ n ≤ 100000); dòng sau gồm n số nguyên. In phần tử lớn nhất. Dữ liệu có thể toàn số âm.","points":100,"time_limit_ms":1500,"memory_limit_mb":256,"checker":"tokens","tests":copy.deepcopy(MAX_TESTS)}
+    harness_problem={"title":"Viết class Solution có hàm add","statement":"Viết class Solution với method add(a, b) trả về tổng hai số nguyên. Không cần hàm main; mã kiểm thử sẽ gọi method.","points":100,"time_limit_ms":1000,"memory_limit_mb":256,"checker":"tokens","execution_mode":"harness","tests":[{"input":"","test_code":"print(Solution().add(2, 3))","output":"5\n","sample":True},{"input":"","test_code":"print(Solution().add(-4, 9))","output":"5\n","sample":False}]}
+    bank=[]
+    def question(key,cid,kind,category,problem,published=False):
+        row={**identity("question-"+key,-8),"course_id":cid,"kind":kind,"category":category,"published":published,"problem":copy.deepcopy(problem),"updated_at":at(-1)}
+        bank.append(row)
+        return row
+    question("practice-sum",course_ids["network"],"code","practice",sum_problem,True)
+    lab_question=question("lab-sum",course_ids["network"],"code","lab",sum_problem)
+    exam_sum=question("exam-sum",course_ids["network"],"code","exam",sum_problem)
+    exam_max=question("exam-max",course_ids["network"],"code","exam",max_problem)
+    exam_harness=question("exam-harness",course_ids["network"],"code","exam",harness_problem)
+    file_question=question("exam-file",course_ids["network"],"file","exam",{"title":"TCP Client–Server","statement":"Viết TCP server trả lại thông điệp nhận được; nộp ZIP gồm mã nguồn, README và test."})
+    code_homework={**identity("network-code-task",-2),"course_id":course_ids["network"],"lesson_id":"trial-v2-network-lesson-6","kind":"code","category":"lab","question_id":lab_question["id"],"problem":copy.deepcopy(sum_problem),"title":"Thực hành code · Tổng hai số","description":"Nộp code C/C++/Java/Python để bộ chấm chạy test mẫu và test ẩn.","due_at":at(7,hour=23),"max_attempts":6,"topic":"Thực hành"}
+    data["assignments"].append(code_homework)
+    papers=[{**identity("paper-code",-5),"course_id":course_ids["network"],"kind":"code","title":"Đề thi lập trình từ ngân hàng","question_ids":[exam_sum["id"],exam_max["id"]],"question_count":1,"updated_at":at(-1)},
+            {**identity("paper-file",-5),"course_id":course_ids["network"],"kind":"file","title":"Đề thi nộp file từ ngân hàng","question_ids":[file_question["id"]],"question_count":1,"generated_files":["LAN_LMS_De_Thi_TCP.txt"],"updated_at":at(-1)}]
     catalog=[]
     def exam(key,cid,title,category="test",state="idle",kind="programming",problems=None):
         course=next(c for c in data["courses"] if c["id"]==cid)
-        row={"id":"trial-v2-"+key,"course_id":cid,"title":title,"description":"Bộ dùng thử LAN-LMS. Test dùng để luyện tập; giữa kỳ tính trung bình; mỗi khóa có một kỳ thi cuối kỳ.","type":kind,"assessment_type":category,"state":state,"duration_minutes":120 if state=="started" else 60,"scheduled_at":at(minutes=5) if state=="started" else at(2 if category=="midterm" else 7,hour=9),"participants":course["student_ids"],"created_at":at(-15)}
+        row={"id":"trial-v2-"+key,"course_id":cid,"title":title,"description":"Bộ dùng thử LAN-LMS. Test không tính điểm; mỗi khóa có một kỳ giữa kỳ và một kỳ cuối kỳ.","type":kind,"assessment_type":category,"state":state,"duration_minutes":1440 if state=="started" else 60,"scheduled_at":at(minutes=5) if state=="started" else at(2 if category=="midterm" else 7,hour=9),"participants":course["student_ids"],"created_at":at(-15)}
         if kind=="programming":row["programming"]={"languages":["c","cpp","java","python"],"problems":copy.deepcopy(problems or [sum_problem,max_problem])}
         else:row["file_settings"]={"exam_duration_minutes":row["duration_minutes"],"submission_policy":"configurable","max_submissions":20,"overwrite_previous":True,"accepted_submission_extensions":[".zip",".txt",".cpp",".c",".java",".py"]}
-        if state=="started":row.update({"started_at":at(),"ends_at":at(minutes=120),"scheduled_at":at()})
+        if state=="started":row.update({"started_at":at(),"ends_at":at(minutes=1440),"scheduled_at":at()})
         if state=="ended":row.update({"started_at":at(-4),"ends_at":at(-4,minutes=60),"ended_at":at(-4,minutes=60),"scheduled_at":at(-4)})
         catalog.append(row);return row
     file_exam=exam("file-test",course_ids["network"],"Test nộp file · Thực hành TCP",state="started",kind="file")
+    file_exam["paper_id"]=papers[1]["id"]
     old_file_exam=exam("file-history",course_ids["network"],"Test nộp file · Lịch sử buổi trước",state="ended",kind="file")
     old_file_exam["release_id"]="trial-v2-history-file-release"
     code_exam=exam("code-test",course_ids["network"],"Test chấm code · Tổng hai số và tìm max",state="started")
+    code_exam["programming"].update({"paper_id":papers[0]["id"],"question_count":1})
+    harness_exam=exam("harness-test",course_ids["network"],"Test class/method · Solution.add",state="started",problems=[harness_problem])
+    harness_exam["programming"]["languages"]=["python"]
     exam("cpp-test",course_ids["cpp"],"Test lập trình C/C++/Java/Python",state="started")
     historical=exam("network-midterm-1",course_ids["network"],"Giữa kỳ 01 · Nhập xuất và số nguyên","midterm","ended",problems=[sum_problem])
-    exam("network-midterm-2",course_ids["network"],"Giữa kỳ 02 · Mảng và thuật toán","midterm")
+    exam("network-review-test",course_ids["network"],"Test ôn tập · Mảng và thuật toán","test")
     exam("network-final",course_ids["network"],"Cuối kỳ · Thực hành lập trình mạng","final")
     exam("cpp-midterm",course_ids["cpp"],"Giữa kỳ · Nhập xuất và mảng","midterm")
     exam("cpp-final",course_ids["cpp"],"Cuối kỳ · Lập trình C++","final")
@@ -183,11 +203,18 @@ def prepare(root=None):
         grade={"id":subid+"-grade","result":copy.deepcopy(result),"graded_at":when,"graded_by":"judge"}
         programming_rows.append({"id":subid,"exam_id":historical["id"],"exam_title":historical["title"],"course_id":historical["course_id"],"student_id":sid,"full_name":students[sid]["full_name"],"problem_index":0,"problem_title":sum_problem["title"],"max_score":100,"language":language,"original_filename":code_runner.LANGUAGES[language],"submitted_at":when,"state":"done","result":result,"size_bytes":len(source.encode("utf-8")),"sha256":hashlib.sha256(source.encode("utf-8")).hexdigest(),"ip":"127.0.0.1","grading_history":[grade],"graded_at":when})
         attempts[historical["id"]+":"+sid]={"started_at":historical["started_at"],"ends_at":historical["ends_at"],"status":"expired","closed_at":historical["ends_at"]}
+    homework_source=SUM_SOURCES["python"].encode("utf-8")
+    homework_id="trial-v3-homework-SV002"
+    homework_folder=stage/"programming-submissions"/homework_id;homework_folder.mkdir()
+    (homework_folder/"source").write_bytes(homework_source)
+    write_json(homework_folder/"problem.json",sum_problem)
+    homework_result=copy.deepcopy(programming_rows[0]["result"])
+    programming_rows.append({"id":homework_id,"exam_id":"assignment:"+code_homework["id"],"assignment_id":code_homework["id"],"assignment_title":code_homework["title"],"course_id":course_ids["network"],"student_id":"SV002","full_name":students["SV002"]["full_name"],"problem_index":0,"problem_title":sum_problem["title"],"max_score":100,"language":"python","original_filename":"main.py","submitted_at":at(-1),"state":"done","result":homework_result,"size_bytes":len(homework_source),"sha256":hashlib.sha256(homework_source).hexdigest(),"ip":"127.0.0.1","grading_history":[{"id":homework_id+"-grade","result":homework_result,"graded_at":at(-1),"graded_by":"judge"}],"graded_at":at(-1),"attempt":1,"judge_image":code_runner.image_identity()})
 
     release="trial-v2-live-file-release"
     settings=copy.deepcopy(storage.DEFAULTS["settings.json"])
     settings.update(file_exam["file_settings"])
-    settings.update({"exam_catalog_id":file_exam["id"],"exam_course_id":file_exam["course_id"],"exam_title":file_exam["title"],"exam_assessment_type":"test","exam_state":"started","exam_released":True,"exam_release_id":release,"exam_release_at":at(),"exam_started_at":at(),"exam_ends_at":at(minutes=120),"exam_closed_automatically":False,"exam_participants":ids,"distribution_mode":"selected","distribution_config":{"exam_files":["LAN_LMS_De_Thi_TCP.txt"]}})
+    settings.update({"exam_catalog_id":file_exam["id"],"exam_course_id":file_exam["course_id"],"exam_title":file_exam["title"],"exam_assessment_type":"test","exam_state":"started","exam_released":True,"exam_release_id":release,"exam_release_at":at(),"exam_started_at":at(),"exam_ends_at":at(minutes=1440),"exam_closed_automatically":False,"exam_participants":ids,"distribution_mode":"selected","distribution_config":{"exam_files":["LAN_LMS_De_Thi_TCP.txt"]}})
     file_exam["release_id"]=release
     file_assignments={sid:{"exam_file":"LAN_LMS_De_Thi_TCP.txt","exam_id":file_exam["id"],"assessment_type":"test","course_id":file_exam["course_id"],"exam_title":file_exam["title"],"release_id":release,"assigned_at":at(),"started_at":None,"ends_at":None,"status":"assigned","ip_at_assignment":None} for sid in ids}
     (stage/"de-thi"/"LAN_LMS_De_Thi_TCP.txt").write_text("THỰC HÀNH NỘP FILE — LAN-LMS\n\nXây dựng TCP Client/Server gửi chuỗi và nhận phản hồi. Nộp ZIP gồm mã nguồn, README hướng dẫn chạy và mô tả kiểm thử.\nĐây là bài Test, không tính vào điểm khóa học. Giảng viên có thể chấm file trong kho Bài nộp.\n",encoding="utf-8")
@@ -204,14 +231,15 @@ def prepare(root=None):
             rows.append(row)
         file_history[sid]=rows
 
-    notices=[{"id":f"trial-v2-notice-{i}","student_id":None if i%3 else ids[i%20],"title":["Kỳ thi Test lập trình đã mở","Bài tập mới có đề đính kèm","Điểm danh buổi thực hành hôm nay","Xem kết quả giữa kỳ 01"][i%4],"message":["Vào Lập trình mạng → Kỳ thi → Test chấm code để bắt đầu. Dùng bộ file trong demo-inputs để thử AC, WA, CE và TLE.","Xem đề bài, chọn file và nộp trước hạn. Mỗi lần nộp được lưu riêng để xem lại.","Giảng viên mở QR từ buổi học trên lịch; sinh viên quét ở mục Điểm danh.","Kết quả giữa kỳ và điểm bài tập được cập nhật trong Bảng điểm. Test không tính vào tổng kết."][i%4],"created_at":at(minutes=-i*35),"created_by":"Giảng viên"} for i in range(12)]
-    values={"students.json":students,"learning.json":data,"exam_catalog.json":catalog,"settings.json":settings,"assignments.json":file_assignments,"submissions.json":file_history,"programming_submissions.json":programming_rows,"programming_attempts.json":attempts,"sessions.json":{},"login_attempts.json":{},"machines.json":{},"notifications.json":notices,"notification_reads.json":{},"submission_rate.json":{}}
+    notices=[{"id":f"trial-v3-notice-{i}","student_id":None if i%3 else ids[i%20],"title":["Kỳ thi Test lập trình đã mở","Bài tập mới có đề đính kèm","Điểm danh buổi thực hành hôm nay","Xem kết quả giữa kỳ"][i%4],"message":["Vào Lập trình mạng → Kỳ thi → Test chấm code để bắt đầu. Dùng bộ file trong demo-inputs để thử AC, WA, CE và TLE.","Xem đề bài, chọn file và nộp trước hạn. Mỗi lần nộp được lưu riêng để xem lại.","Giảng viên mở điểm danh từ buổi học trên lịch; tài khoản sinh viên đang đăng nhập LAN được ghi nhận.","Kết quả giữa kỳ và điểm bài tập được cập nhật trong Bảng điểm. Test không tính vào tổng kết."][i%4],"created_at":at(minutes=-i*35),"created_by":"Giảng viên"} for i in range(12)]
+    values={"students.json":students,"learning.json":data,"exam_catalog.json":catalog,"question_bank.json":bank,"exam_papers.json":papers,"settings.json":settings,"assignments.json":file_assignments,"submissions.json":file_history,"programming_submissions.json":programming_rows,"programming_attempts.json":attempts,"sessions.json":{},"login_attempts.json":{},"machines.json":{},"notifications.json":notices,"notification_reads.json":{},"submission_rate.json":{}}
     for name,value in values.items():write_json(stage/"data"/name,value)
     write_json(stage/"data"/"admins.json",storage.read_json("admins.json"))
 
-    kit={"tong_hai_so.py":SUM_SOURCES["python"],"tong_hai_so.cpp":SUM_SOURCES["cpp"],"tong_hai_so.c":SUM_SOURCES["c"],"Main.java":SUM_SOURCES["java"],"tim_max.py":"n=int(input())\na=list(map(int,input().split()))\nprint(max(a))\n","sai_ket_qua.py":"print(0)\n","loi_bien_dich.cpp":"int main( broken\n","qua_thoi_gian.py":"while True:\n    pass\n","bai_tap_mau.zip":zipped({"main.py":SUM_SOURCES["python"],"README.txt":"Bài làm để thử nộp file và chấm thủ công.\n"})}
+    kit={"tong_hai_so.py":SUM_SOURCES["python"],"tong_hai_so.cpp":SUM_SOURCES["cpp"],"tong_hai_so.c":SUM_SOURCES["c"],"Main.java":SUM_SOURCES["java"],"Solution.py":"class Solution:\n    def add(self, a, b):\n        return a + b\n","tim_max.py":"n=int(input())\na=list(map(int,input().split()))\nprint(max(a))\n","sai_ket_qua.py":"print(0)\n","loi_bien_dich.cpp":"int main( broken\n","qua_thoi_gian.py":"while True:\n    pass\n","bai_tap_mau.zip":zipped({"main.py":SUM_SOURCES["python"],"README.txt":"Bài làm để thử nộp file và chấm thủ công.\n"})}
     csv_text=io.StringIO(newline="");writer=csv.DictWriter(csv_text,fieldnames=["input","output","sample"]);writer.writeheader();writer.writerows(SUM_TESTS)
     kit["testcase_tong_hai_so.csv"]=csv_text.getvalue()
+    kit["testcase_class_method.csv"]="test_code,output,sample\n\"print(Solution().add(2, 3))\",5,true\n\"print(Solution().add(-4, 9))\",5,false\n"
     instructions=f"""# LAN-LMS — Bộ dùng thử mới
 
 Tạo lúc {now.strftime('%d/%m/%Y %H:%M')} (Việt Nam). Tài khoản admin được giữ nguyên.
@@ -220,20 +248,23 @@ SV001 là tài khoản chính; chưa bắt đầu kỳ thi Test và chưa điể
 
 ## Thử chấm code
 1. Đăng nhập SV001, mở Lập trình mạng → Kỳ thi → Test chấm code.
-2. Bấm Bắt đầu. Đồng hồ chung đã chạy từ lúc nạp bộ dữ liệu, thời lượng 120 phút.
-3. Bài Tổng hai số: nộp tong_hai_so.py/c/cpp hoặc Main.java đúng ngôn ngữ để nhận AC.
+2. Bấm Bắt đầu. Đồng hồ chung đã chạy từ lúc nạp bộ dữ liệu, thời lượng 24 giờ.
+3. Đề từ ngân hàng phát ngẫu nhiên một trong hai bài: Tổng hai số hoặc Phần tử lớn nhất.
+   Tổng hai số dùng tong_hai_so.py/c/cpp hoặc Main.java; Phần tử lớn nhất dùng tim_max.py.
 4. Nộp sai_ket_qua.py để thấy WA; loi_bien_dich.cpp cho CE; qua_thoi_gian.py cho TLE.
-5. Bài Phần tử lớn nhất: dùng tim_max.py. Xem test mẫu; test ẩn không lộ input/output.
+5. Test class/method là kỳ thi riêng chỉ dùng Python: nộp Solution.py; xem test_code mẫu, test ẩn không lộ nội dung.
 6. Giảng viên xem Bài nộp → Thi lập trình để kiểm tra input, output, lịch sử và chấm lại.
 
 ## Các luồng khác
 - Nộp file: Kỳ thi → Test nộp file, dùng bai_tap_mau.zip; giữ được mọi lần nộp.
-- Bài tập: chọn Thực hành có đề đính kèm; xem/tải đề, nộp file rồi chấm trong vai trò admin.
-- Điểm danh: admin mở Lập trình mạng → Lịch & điểm danh → buổi hôm nay → xem QR; SV001 quét QR.
-- Giữa kỳ 01 đã có kết quả chấm Docker thật. Giữa kỳ 02 và Cuối kỳ ở trạng thái nháp để mở thử.
-- Test không tính điểm; nhiều giữa kỳ lấy trung bình; mỗi khóa chỉ có một kỳ thi cuối kỳ.
+- Bài tập: chọn Thực hành có đề đính kèm để nộp file, hoặc Thực hành code · Tổng hai số để chấm tự động.
+- Luyện tập: mở câu Tổng hai số công khai trong khóa học; không tính điểm.
+- Học theo tuần: chọn tuần rồi mới hiện buổi học, tài liệu và bài tập được gắn vào buổi.
+- Điểm danh: phiên Lập trình mạng đang mở; SV001 đăng nhập LAN sẽ tự được ghi nhận có mặt.
+- Giữa kỳ đã có kết quả chấm Docker thật. Cuối kỳ ở trạng thái nháp để mở thử.
+- Test không tính điểm; mỗi khóa chỉ có một kỳ giữa kỳ và một kỳ cuối kỳ.
 - Python căn bản là khóa đã hoàn thành, có bảng điểm và lịch sử để xem lại.
-- Khi hết 120 phút, kỳ thi đang mở tự kết thúc. Có thể mở kỳ giữa kỳ/khóa C++ hoặc tạo Test mới trong Cấu hình kỳ thi.
+- Khi hết 24 giờ, kỳ thi đang mở tự kết thúc. Có thể tạo Test mới trong Cấu hình kỳ thi.
 
 CSV test case và nguồn mẫu nằm cạnh file hướng dẫn này. Không in lời nhắc khi nhập dữ liệu.
 """
@@ -242,7 +273,7 @@ CSV test case và nguồn mẫu nằm cạnh file hướng dẫn này. Không in
     for name,content in kit.items():
         (stage/"demo-inputs"/name).write_bytes(content.encode("utf-8") if isinstance(content,str) else content)
     (stage/"demo-inputs"/"LAN_LMS_Test_Kit.zip").write_bytes(zipped(kit))
-    marker={"version":VERSION,"created_at":at(),"students":ids,"courses":course_ids,"active_code_exam":code_exam["id"],"active_file_exam":file_exam["id"],"counts":{"courses":len(data["courses"]),"students":len(students),"materials":len(data["materials"]),"assignments":len(data["assignments"]),"attendance_sessions":len(data["attendance"]),"exams":len(catalog),"assignment_attempts":len(data["submissions"]),"file_attempts":sum(map(len,file_history.values())),"real_judged_code_attempts":len(programming_rows)}}
+    marker={"version":VERSION,"created_at":at(),"students":ids,"courses":course_ids,"active_code_exam":code_exam["id"],"active_harness_exam":harness_exam["id"],"active_file_exam":file_exam["id"],"counts":{"courses":len(data["courses"]),"students":len(students),"lessons":sum(e["kind"]=="lesson" for e in data["events"]),"materials":len(data["materials"]),"assignments":len(data["assignments"]),"questions":len(bank),"papers":len(papers),"attendance_sessions":len(data["attendance"]),"exams":len(catalog),"assignment_attempts":len(data["submissions"]),"file_attempts":sum(map(len,file_history.values())),"real_judged_code_attempts":len(programming_rows)}}
     write_json(stage/"data"/"demo_seed.json",marker)
     validate(stage)
     print(json.dumps({"staging":str(stage),**marker},ensure_ascii=True,indent=2),flush=True)
@@ -257,12 +288,19 @@ def validate(stage):
     for key in ("materials","assignments","submissions"):
         for row in data[key]:
             if row["course_id"] not in courses:raise RuntimeError("Invalid course reference")
+            if row.get("lesson_id") and (row["lesson_id"] not in events or events[row["lesson_id"]]["course_id"]!=row["course_id"]):raise RuntimeError("Invalid linked lesson")
             if row.get("stored_name") and not (stage/"learning-files"/row["stored_name"]).is_file():raise RuntimeError("Missing learning payload")
     for row in data["attendance"]:
         if row["event_id"] not in events or events[row["event_id"]]["course_id"]!=row["course_id"]:raise RuntimeError("Unlinked attendance")
     catalog=json.loads((stage/"data"/"exam_catalog.json").read_text(encoding="utf-8"))
     for cid in courses:
         if sum(e["course_id"]==cid and e["assessment_type"]=="final" for e in catalog)!=1:raise RuntimeError("Expected one final per course")
+        if sum(e["course_id"]==cid and e["assessment_type"]=="midterm" for e in catalog)>1:raise RuntimeError("Only one midterm per course")
+    bank={q["id"]:q for q in json.loads((stage/"data"/"question_bank.json").read_text(encoding="utf-8"))}
+    for paper in json.loads((stage/"data"/"exam_papers.json").read_text(encoding="utf-8")):
+        if not 1<=paper["question_count"]<=len(paper["question_ids"]):raise RuntimeError("Invalid paper size")
+        if any(qid not in bank or bank[qid]["course_id"]!=paper["course_id"] for qid in paper["question_ids"]):raise RuntimeError("Invalid paper question")
+        if any(not (stage/"de-thi"/name).is_file() for name in paper.get("generated_files",[])):raise RuntimeError("Missing paper payload")
     for row in json.loads((stage/"data"/"programming_submissions.json").read_text(encoding="utf-8")):
         source=stage/"programming-submissions"/row["id"]/"source"
         if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest()!=row["sha256"]:raise RuntimeError("Missing or inconsistent source")
@@ -280,11 +318,11 @@ def apply(stage, root=None):
     validate(stage)
     now=datetime.now(timezone.utc)
     settings=json.loads((stage/"data"/"settings.json").read_text(encoding="utf-8"))
-    settings.update({"exam_started_at":now.isoformat(),"exam_ends_at":(now+timedelta(minutes=120)).isoformat(),"exam_release_at":now.isoformat()})
+    settings.update({"exam_started_at":now.isoformat(),"exam_ends_at":(now+timedelta(minutes=settings["exam_duration_minutes"])).isoformat(),"exam_release_at":now.isoformat()})
     write_json(stage/"data"/"settings.json",settings)
     catalog=json.loads((stage/"data"/"exam_catalog.json").read_text(encoding="utf-8"))
     for exam in catalog:
-        if exam["state"]=="started":exam.update({"started_at":now.isoformat(),"ends_at":(now+timedelta(minutes=120)).isoformat(),"scheduled_at":now.isoformat()})
+        if exam["state"]=="started":exam.update({"started_at":now.isoformat(),"ends_at":(now+timedelta(minutes=exam["duration_minutes"])).isoformat(),"scheduled_at":now.isoformat()})
     write_json(stage/"data"/"exam_catalog.json",catalog)
     # Read the latest admin credentials only after the live server has stopped.
     write_json(stage/"data"/"admins.json",json.loads((root/"data"/"admins.json").read_text(encoding="utf-8")))

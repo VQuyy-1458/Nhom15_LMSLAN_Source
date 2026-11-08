@@ -974,7 +974,7 @@ Thêm ba kỳ thi code thử, cần Docker/image:
 
 Tài khoản CHAMTHU01, mật khẩu khởi tạo **ThiThu2026!**. Thêm --draft để tạo nháp khi chưa có bộ chấm. start_trial_exams.bat là lối tắt tạo/mở bộ thử rồi chạy web.
 
-app.reset_demo là công cụ **thay bộ dữ liệu**: --prepare tạo staging, --apply <staging> đưa mẫu vào và chuyển dữ liệu cũ sang backup. Bộ này dùng SV001–SV020, mật khẩu mẫu 111111. Không thuộc cài đặt thông thường; nên dùng bản sao riêng để trình diễn. Mật khẩu mẫu không bảo đảm còn đúng sau khi tài khoản đổi mật khẩu.
+`app.reset_demo` là công cụ **thay bộ dữ liệu**: `--prepare` tạo staging và chấm bài mẫu bằng Docker, `--apply <staging>` đưa bộ mới vào rồi chuyển dữ liệu cũ sang backup. Bộ hiện tại có SV001–SV020/`111111`, bốn khóa, nội dung theo tuần, ngân hàng câu hỏi, bài tập code/file, điểm danh LAN và kỳ thi mẫu. Xem [hướng dẫn bộ dữ liệu thử](docs/TRIAL_DATA_GUIDE.md). Mật khẩu mẫu không bảo đảm còn đúng sau khi tài khoản đổi mật khẩu.
 
 Bộ `app.seed_demo` dùng DEMO001–DEMO020/`111111`, khác bộ mới DEMO001–DEMO010/`01012005`. Các ID có thể trùng; tài khoản tồn tại không được tự đặt lại mật khẩu. Nên chọn đúng một bộ cho dữ liệu mới.
 
