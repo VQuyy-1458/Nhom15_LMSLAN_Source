@@ -49,7 +49,7 @@ class BackendHardeningTests(unittest.TestCase):
         failed = False
         def fail_once(path,value):
             nonlocal failed
-            if path.name == "settings.json" and not failed:
+            if path.name == "students.json" and not failed:
                 failed=True
                 raise OSError("simulated disk error")
             return original(path,value)
@@ -166,15 +166,15 @@ class BackendHardeningTests(unittest.TestCase):
     def test_file_submission_failure_leaves_no_receipt_payload_or_quota(self):
         self.file_exam()
         before=storage.read_json("assignments.json")
-        original=storage.atomic_write
+        original=storage._sqlite_write
         failed=False
-        def fail_once(path,value):
+        def fail_once(writes):
             nonlocal failed
-            if path.name=="assignments.json" and not failed:
+            if "assignments.json" in writes and not failed:
                 failed=True
                 raise OSError("simulated failed assignment commit")
-            return original(path,value)
-        with patch.object(storage,"atomic_write",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
+            return original(writes)
+        with patch.object(storage,"_sqlite_write",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
             code,result=self.request("/api/student/submit","s1",{"request_id":"failed-submit"},file=("answer.txt",b"answer"))
         self.assertEqual(code,500,result)
         self.assertEqual(storage.read_json("submissions.json"),{})
@@ -235,15 +235,15 @@ class BackendHardeningTests(unittest.TestCase):
     def test_code_commit_failure_cleans_source_and_does_not_schedule(self):
         with patch.object(code_runner,"ready",return_value=True),patch.object(programming,"schedule") as schedule:
             exam_id=self.programming_exam()
-            original=storage.atomic_write
+            original=storage._sqlite_write
             failed=False
-            def fail_once(path,value):
+            def fail_once(writes):
                 nonlocal failed
-                if path.name=="programming_submissions.json" and not failed:
+                if "programming_submissions.json" in writes and not failed:
                     failed=True
                     raise OSError("simulated code commit failure")
-                return original(path,value)
-            with patch.object(storage,"atomic_write",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
+                return original(writes)
+            with patch.object(storage,"_sqlite_write",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
                 code,result=self.request("/api/student/programming/submit","s1",{"exam_id":exam_id,"language":"python","problem_index":"0","request_id":"failed-code"},file=("answer.py",b"print(3)"))
             self.assertEqual(code,500,result)
             self.assertEqual(programming.rows(),[])

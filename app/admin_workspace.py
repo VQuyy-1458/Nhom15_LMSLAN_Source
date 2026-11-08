@@ -1,7 +1,7 @@
 """Bridge course learning data and the existing file-exam workflow."""
 from datetime import datetime, timezone
 
-from . import learning
+from . import learning, programming
 from .storage import read_json, write_json, utc_now, audit
 
 
@@ -51,7 +51,7 @@ def exam_monitor(rows, exam_id, course_id=""):
     for record in code_records:
         if record["exam_id"] == exam_id:
             code_by_student.setdefault(record["student_id"], []).append(record)
-    problem_count = len(exam.get("programming", {}).get("problems", []))
+    problem_count = exam.get("programming", {}).get("question_count", len(exam.get("programming", {}).get("problems", [])))
     file_records = read_json("submissions.json") if exam["type"] == "file" else {}
     assignments = read_json("assignments.json") if exam["type"] == "file" else {}
     result = []
@@ -129,6 +129,8 @@ def overview(session, course_id=""):
         latest = {}
         for row in submissions:
             latest[(row["assignment_id"], row["student_id"])] = row
+        for record in programming.assignment_submissions(course_ids={course["id"]}):
+            latest[(record["assignment_id"], record["student_id"])] = {"score": record.get("effective_score")}
         course["student_count"] = len(members)
         course["pending_count"] = sum(r.get("score") is None for r in latest.values())
         course["lessons"] = [r for r in data["events"] if r["course_id"] == course["id"] and r["kind"] == "lesson"]
@@ -138,6 +140,10 @@ def overview(session, course_id=""):
     data["server_time"] = utc_now()
     from .exam_catalog import listing
     data["exams"] = listing()
+    from . import question_bank
+    data["questions"] = question_bank.questions()
+    data["papers"] = question_bank.papers()
+    data["code_assignments"] = programming.assignment_submissions()
     data["stats"]["running_exams"] += sum(e["type"] == "programming" and e["state"] == "started" for e in data["exams"])
     return data
 

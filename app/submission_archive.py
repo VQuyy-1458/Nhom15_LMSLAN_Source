@@ -47,7 +47,7 @@ def _index():
             activity = "file:"+(row.get("release_id") or str(row.get("course_id"))+":"+str(row.get("exam_title")))
             add(key, "file", row, sid, activity, row.get("exam_title") or "Kỳ thi nộp file cũ", submissions.UPLOAD_DIR / row["filename"], submissions.UPLOAD_DIR, row.get("submitted_at", ""), row.get("attempt"))
     for row in programming.rows():
-        add("code:"+row["id"], "code", row, row["student_id"], "code:"+row["exam_id"]+":"+str(row["problem_index"]), row["exam_title"]+" · "+row["problem_title"], programming.FILES / row["id"] / "source", programming.FILES, row["submitted_at"])
+        add("code:"+row["id"], "code", row, row["student_id"], "code:"+row["exam_id"]+":"+str(row["problem_index"]), (row.get("exam_title") or row.get("assignment_title") or "Luyện tập")+" · "+row["problem_title"], programming.FILES / row["id"] / "source", programming.FILES, row["submitted_at"], row.get("attempt"))
     groups = {}
     for row in rows: groups.setdefault((row["student_id"],row["activity_id"]), []).append(row)
     for group in groups.values():

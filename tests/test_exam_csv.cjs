@@ -11,12 +11,14 @@ assert.deepEqual(parse('input,output\n"\\n","\\t"\n\n'),[{input:'\\n',output:'\\
 assert.deepEqual(parse('input,output,sample\n1,2,\n3,4,FALSE'),[{input:'1',output:'2',sample:false},{input:'3',output:'4',sample:false}]);
 assert.equal(parse('input,output\n'+Array(100).fill('1,2').join('\n')).length,100);
 assert.equal(parse(fs.readFileSync(path.join(__dirname,'../static/samples/test-cases.csv'),'utf8')).length,3);
+assert.deepEqual(parse('test_code,output,sample\n"print(Solution().add(2, 3))",5,true'),[{test_code:'print(Solution().add(2, 3))',input:'',output:'5',sample:true}]);
 for(const [source,message] of [
   ['',/trống/],['input,output\n',/chưa có/],['input,answer\n1,2',/tiêu đề/],
   ['input,input,output\na,b,c',/trùng/],['input,output,extra\n1,2,3',/tiêu đề/],
   ['input,output\n1,2,3',/dòng 2.*2 cột/],['input,output,sample\n1,2,maybe',/sample/],
   ['input,output\n"abc,2',/chưa đóng/],['input,output\n"abc"x,2',/ký tự thừa/],
   ['input,output\nab"c,2',/bao trọn/],['input,output\n'+Array(101).fill('1,2').join('\n'),/100 test/],
-  ['input,output\n"'+('a'.repeat(100001))+'",2',/100.000/]
+  ['input,output\n"'+('a'.repeat(100001))+'",2',/100.000/],
+  ['test_code,output\n"'+('a'.repeat(20001))+'",2',/20.000/]
 ])assert.throws(()=>parse(source),message);
 console.log('PASS: CSV BOM, comma/semicolon, escaped quotes, multiline, whitespace, samples, size/count limits and invalid files');

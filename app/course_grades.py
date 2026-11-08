@@ -13,6 +13,7 @@ def exam_marks(course_id, student_ids):
     exams = [e for e in listing() if e.get("course_id") == course_id and e.get("assessment_type") in {"midterm", "final"} and e.get("state") != "idle"]
     files = read_json("submissions.json", {})
     code = read_json("programming_submissions.json", [])
+    programming_attempts = read_json("programming_attempts.json", {})
     indexed_code = {}
     for attempt in code:
         indexed_code.setdefault((attempt.get("exam_id"),attempt.get("student_id"),attempt.get("problem_index")),[]).append(attempt)
@@ -32,7 +33,10 @@ def exam_marks(course_id, student_ids):
                 elif exam["state"] == "ended":
                     score = 0
             else:
-                problems = exam.get("programming", {}).get("problems", [])
+                pool = exam.get("programming", {}).get("problems", [])
+                assignment = programming_attempts.get(exam["id"] + ":" + sid, {})
+                selected = assignment.get("problem_indices") if isinstance(assignment.get("problem_indices"), list) else list(range(len(pool)))
+                problems = [pool[index] for index in selected if isinstance(index, int) and 0 <= index < len(pool)]
                 marks = []
                 for index, problem in enumerate(problems):
                     attempts = indexed_code.get((exam["id"],sid,index),[])

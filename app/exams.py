@@ -67,6 +67,13 @@ def distribute_exams(mode: str, config: dict | None = None) -> dict:
         raise ValueError("Chế độ phân phối không hợp lệ.")
     assignments = {}
     settings = read_json("settings.json")
+    active_exam = next((row for row in read_json("exam_catalog.json", []) if row["id"] == settings.get("exam_catalog_id")), None)
+    if active_exam and active_exam.get("paper_id"):
+        from .question_bank import papers
+        paper = next((row for row in papers() if row["id"] == active_exam["paper_id"]), None)
+        if not paper or any(name not in files for name in paper.get("generated_files", [])):
+            raise ValueError("File đề sinh từ ngân hàng đã thiếu; hãy lưu lại đề thi.")
+        mode, config = "random", {"exam_files": paper["generated_files"]}
     course_id = settings.get("exam_course_id")
     members = None
     if course_id:

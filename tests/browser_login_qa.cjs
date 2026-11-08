@@ -65,11 +65,11 @@ async function login(username='QA001'){await waitFor(()=>evaluate("!!document.qu
   }
   console.log('PASS: notification success feedback, reset, recipient search persistence, broadcast switch and actual delivery/privacy');
   await send('Network.clearBrowserCookies');
-  await navigate(base+`/student/attendance?session=${fixture.attendance}&code=${fixture.code}`);
+  await navigate(base+`/student/attendance?course=${fixture.course}`);
   await waitFor(()=>evaluate("!!document.querySelector('#username')"));
-  assert.equal(await evaluate("document.querySelector('[name=next]').value.includes('/student/attendance?session=')"),true);
+  assert.equal(await evaluate("document.querySelector('[name=next]').value.includes('/student/attendance?course=')"),true);
   await login();
-  await waitFor(()=>evaluate("document.querySelector('#qr-read-status')?.textContent.includes('Điểm danh thành công')"));
-  assert.equal(await evaluate("new URLSearchParams(location.search).has('code')"),false);
-  console.log('PASS: mobile LAN-style QR link survives login and automatically checks in');
+  await waitFor(()=>evaluate("location.pathname==='/student/attendance' && document.querySelector('#workspace-content')?.textContent.includes('Có mặt')"));
+  assert.equal(await evaluate("document.querySelectorAll('#attendance-qr-photo, [data-action=check-in]').length"),0);
+  console.log('PASS: mobile LAN attendance page survives login and shows automatic check-in');
 })().catch(async e=>{console.error(e);try{console.error(await evaluate("JSON.stringify({url:location.href,text:document.body.innerText.slice(0,800)})"));}catch(_){}process.exitCode=1;}).finally(async()=>{socket?.close();browser?.kill();app?.kill();await delay(400);if(path.dirname(path.resolve(profile))===path.resolve(os.tmpdir())&&path.basename(profile).startsWith('classroom-login-'))fs.rmSync(profile,{recursive:true,force:true});});

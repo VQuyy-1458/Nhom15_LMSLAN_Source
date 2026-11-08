@@ -1,6 +1,6 @@
 # NETWORK PROGRAMMING – FINAL PROJECT
 
-**LAN LMS — Hệ thống quản lý học tập và thi trong mạng LAN**
+**LAN-LMS — Hệ thống quản lý học tập và thi trong mạng LAN**
 
 **Năm học 2026–2027 · Nhóm 15 · Lớp 10**
 
@@ -37,7 +37,7 @@
 
 ## 1.1. Project Name
 
-**LAN LMS (Classroom Submission Server)** — Hệ thống quản lý học tập và thi trong mạng LAN.
+**LAN-LMS** — Hệ thống quản lý học tập và thi trong mạng LAN.
 
 ## 1.2. Topic
 
@@ -69,7 +69,7 @@ Trong lớp học thực hành, giảng viên cần phát tài liệu, giao bài
 
 ## 2.2. Motivation
 
-Theo chương 1 và 3 của báo cáo, LAN LMS tập trung các hoạt động này vào một hệ thống web trong phòng máy. Sinh viên chỉ cần trình duyệt; giảng viên vận hành một server trong LAN, không cần cài client riêng hoặc triển khai dịch vụ Internet cho mỗi lớp.
+Theo chương 1 và 3 của báo cáo, LAN-LMS tập trung các hoạt động này vào một hệ thống web trong phòng máy. Sinh viên chỉ cần trình duyệt; giảng viên vận hành một server trong LAN, không cần cài client riêng hoặc triển khai dịch vụ Internet cho mỗi lớp.
 
 ## 2.3. Objectives
 
@@ -85,8 +85,8 @@ Theo chương 1 và 3 của báo cáo, LAN LMS tập trung các hoạt động n
 
 - Một server cho lớp học/phòng máy trong LAN; client là trình duyệt máy tính hoặc di động.
 - Hai vai trò admin/giảng viên và sinh viên; quản lý nhiều khóa học.
-- LMS, điểm danh QR, thi file, thi code, giám sát, thông báo, lịch sử và xuất dữ liệu.
-- Lưu trữ JSON/JSONL và payload file, sao lưu/kiểm chứng/phục hồi.
+- LMS theo tuần, điểm danh tự động trong LAN, thi file, thi code, giám sát, thông báo, lịch sử và xuất dữ liệu.
+- Lưu dữ liệu nghiệp vụ trong SQLite, dữ liệu phiên/xác thực trong JSON và payload file; hỗ trợ sao lưu/kiểm chứng/phục hồi.
 
 ### Out of scope
 
@@ -101,7 +101,7 @@ Theo chương 1 và 3 của báo cáo, LAN LMS tập trung các hoạt động n
 
 ## 3.1. System Description
 
-LAN LMS (Classroom Submission Server) là hệ thống web dành cho lớp học/phòng máy: quản lý khóa học, học liệu, lịch học, điểm danh QR, bài tập, thi nộp file, chấm lập trình và bảng điểm. Giảng viên chạy server; sinh viên dùng trình duyệt trên cùng mạng LAN, không cần cài client.
+LAN-LMS là hệ thống web dành cho lớp học/phòng máy: quản lý khóa học, học liệu theo tuần, lịch học, điểm danh LAN, bài tập, thi nộp file, chấm lập trình và bảng điểm. Giảng viên chạy server; sinh viên dùng trình duyệt trên cùng mạng LAN, không cần cài client.
 
 ## 3.2. Target Users
 
@@ -116,10 +116,11 @@ Có hai vai trò: **Admin/giảng viên** và **Sinh viên**. Các admin có quy
 | --- | --- | --- |
 | Tài khoản | Nhập danh sách, khóa/mở, reset mật khẩu, gỡ khóa đăng nhập tạm, tạo admin | Đăng nhập, xem hồ sơ, đổi mật khẩu |
 | Khóa học | Tạo/sửa, quản lý thành viên, nhập/xuất gói khóa, tổng kết | Xem khóa được tham gia và đã tổng kết |
-| Học liệu | Đăng tài liệu theo khóa/chủ đề | Xem trước, tải về |
-| Lịch | Tạo buổi học, thông báo, lịch thi | Xem lịch tháng và hoạt động sắp tới |
-| Bài tập | Giao bài, đính kèm đề, đặt hạn/số lượt, chấm và phản hồi | Nộp/nộp lại, xem phiên bản và nhận xét |
-| Điểm danh | Mở phiên từ buổi học, hiển thị QR, điều chỉnh kết quả kèm lý do | Quét camera/ảnh QR, xem lịch sử |
+| Học liệu | Đăng tài liệu, gắn vào buổi học | Chọn tuần, xem trước và tải về |
+| Lịch | Tạo một hoặc nhiều buổi học theo tuần, thông báo, lịch thi | Xem lịch tháng và hoạt động sắp tới |
+| Bài tập | Giao bài file hoặc code, đặt hạn/số lượt, chấm và phản hồi | Nộp/nộp lại, xem phiên bản và nhận xét |
+| Điểm danh | Mở phiên từ buổi học, tự ghi nhận tài khoản đang đăng nhập LAN, chỉnh kết quả | Đăng nhập trong phiên mở để được ghi nhận, xem lịch sử |
+| Ngân hàng câu hỏi | Tạo câu luyện tập/thực hành/thi, đề dùng lại và phát ngẫu nhiên | Luyện tập với câu đã công khai |
 | Thi nộp file | Phân phối đề, bắt đầu/kết thúc, gia hạn, ép thu bài | Nhận đề, xem giờ, nộp file |
 | Thi lập trình | Tạo bài toán/test, mở thi, xem kết quả, chấm lại | Nộp C/C++/Java/Python, xem điểm |
 | Giám sát | Theo dõi online, IP, trình duyệt, tab/cửa sổ và bài nộp | Cập nhật hiện diện khi dùng trang |
@@ -141,7 +142,7 @@ flowchart TD
     B[Trình duyệt sinh viên] -->|HTTP/HTTPS trên TCP| S
     S[Python HTTP server] --> T[Jinja2 và HTML/CSS/JavaScript]
     S --> L[Khóa học, tài khoản, thi, điểm danh, bài nộp]
-    L --> D[JSON, journal giao dịch, audit]
+    L --> D[SQLite nghiệp vụ, JSON phiên, journal giao dịch, audit]
     L --> F[Kho học liệu, đề thi, bài nộp]
     L --> Q[Hàng đợi chấm - 2 worker]
     Q --> C[Docker Linux - biên dịch và chạy test]
@@ -156,21 +157,21 @@ Sơ đồ được nhúng bằng Mermaid để không phụ thuộc ảnh ngoài
 
 | Thành phần | Trách nhiệm |
 | --- | --- |
-| Client trình duyệt | Hiển thị HTML/CSS, gửi fetch/form, quét QR và cập nhật trạng thái |
+| Client trình duyệt | Hiển thị HTML/CSS, gửi fetch/form và cập nhật trạng thái |
 | HTTP server | Nhận kết nối, phân tích request, xác thực và trả HTML/JSON/file |
 | Dịch vụ nghiệp vụ | Tài khoản, LMS, thi, điểm danh, thông báo, bảng điểm |
-| Kho JSON và file | Metadata, payload, phiên bản, journal và audit; không có database server riêng |
+| SQLite và file | Dữ liệu học tập/kỳ thi/bài nộp trong SQLite, payload file riêng, journal và audit; không cần database server riêng |
 | Worker hạn/lịch | Tự mở thi đủ cấu hình theo lịch và đóng nhận bài khi hết hạn |
 | Worker chấm | Hai worker nền gửi mã nguồn vào Docker, lưu kết quả/lịch sử |
 | Worker bảo trì | Sao lưu định kỳ, manifest và kiểm tra dữ liệu |
 
 ## 4.3. Data Flow
 
-Client gửi yêu cầu → server kiểm tra phiên/quyền/đầu vào → nghiệp vụ đọc hoặc cập nhật JSON và payload → server trả kết quả. Với code, biên nhận được lưu trước rồi worker chấm snapshot; client polling để nhận verdict. Các luồng ghi được đồng bộ trong một tiến trình, payload được lưu trước metadata tham chiếu tới nó.
+Client gửi yêu cầu → server kiểm tra phiên/quyền/đầu vào → nghiệp vụ đọc hoặc cập nhật SQLite/JSON và payload → server trả kết quả. Với code, biên nhận được lưu trước rồi worker chấm snapshot; client polling để nhận verdict. Các luồng ghi được đồng bộ trong một tiến trình, payload được lưu trước metadata tham chiếu tới nó.
 
 - HTTP dùng thread theo kết nối, tối đa **128 worker**, backlog **128**; quá tải trả 503 và Retry-After.
 - RLock bảo vệ trạng thái dùng chung. Các luồng tương ứng tách nhận body/gửi response khỏi khóa nghiệp vụ để hạn chế client chậm giữ khóa.
-- JSON ghi qua file tạm, fsync và os.replace. Giao dịch nhiều cập nhật JSON/audit có journal để phục hồi thao tác gián đoạn; payload lưu trước metadata.
+- Dữ liệu nghiệp vụ lưu trong `data/lms.sqlite3` với giao dịch SQLite. JSON còn dùng cho xác thực và phiên, ghi qua file tạm và thay thế nguyên tử; journal phục hồi giao dịch nhiều tài liệu/audit. Payload lưu trước metadata.
 - OS lease ngăn server và CLI đã tích hợp cùng sửa một bộ dữ liệu. Mỗi bộ dữ liệu chỉ chạy **một tiến trình server**.
 - Worker kiểm tra hạn khoảng mỗi giây, quét lại bài chờ chấm khoảng mỗi 10 giây. Hết hạn không phụ thuộc sinh viên giữ trang mở.
 
@@ -297,8 +298,8 @@ Bổ sung các endpoint hiện hành: `GET /api/admin/exam-preflight` xem cấu 
 | Backend | Python; http.server, socket, ssl, threading, concurrent.futures |
 | Template | Jinja2 >=3.1,<4, dependency trực tiếp duy nhất trong requirements.txt |
 | Frontend | HTML, CSS, JavaScript thuần; Tailwind CSS 3.4.17 để build CSS |
-| QR/icon | ZXing Browser 0.2.1 và Font Awesome trong static/vendor/ |
-| Lưu trữ | JSON, payload file riêng, audit JSON Lines |
+| Icon | Font Awesome trong static/vendor/ |
+| Lưu trữ | SQLite cho dữ liệu nghiệp vụ, JSON cho xác thực/phiên, payload file riêng, audit JSON Lines |
 | Chấm code | Docker CLI; Debian Bookworm, GCC/G++, OpenJDK 17, Python 3 |
 | Kiểm thử | Python unittest, Node.js, Chrome/Chromium/Edge qua CDP |
 
@@ -310,7 +311,7 @@ Không cần FastAPI, Uvicorn, Pydantic, database server hoặc Node.js để ch
 | IDE | Không bắt buộc IDE cụ thể; báo cáo không ghi IDE thực nghiệm |
 | OS | Script Windows và Linux/macOS; Docker cần Linux containers để chấm |
 
-Nội dung kiến trúc/công nghệ tương ứng chương 2, 4–7 của báo cáo. Thư viện QR được phục vụ cục bộ; việc xác thực kết quả quét luôn do server thực hiện.
+Nội dung kiến trúc/công nghệ tương ứng chương 2, 4–7 của báo cáo. Kết quả điểm danh được máy chủ ghi nhận theo phiên và tài khoản sinh viên.
 
 ---
 
@@ -345,7 +346,7 @@ Bổ sung bằng chứng cho các cập nhật: `app/exam_schedule.py`, `app/exa
 
 | Khía cạnh | Phạm vi ban đầu | Bản đề xuất hiện tại |
 | --- | --- | --- |
-| Chức năng | Phát/nhận bài dạng file | LMS, QR, file/code, điểm và thông báo tích hợp |
+| Chức năng | Phát/nhận bài dạng file | LMS, điểm danh LAN, file/code, điểm và thông báo tích hợp |
 | Giao tiếp | Request/response nhận bài | HTTP/1.1, API có phân quyền, polling và kiểm soát body/timeout |
 | Xử lý code | Không thuộc phạm vi phát/nhận file | Hàng đợi hai worker, snapshot và Docker giới hạn tài nguyên |
 | Dữ liệu | Metadata và payload | Giao dịch/journal, retry chống trùng, phiên bản và backup kiểm chứng |
@@ -374,7 +375,7 @@ Nhom15_LMSLAN_Source/
 ├── judge/Dockerfile             # Image bộ chấm
 ├── tests/                       # Unit, HTTP, browser, benchmark
 ├── docs/                        # Hướng dẫn và audit kỹ thuật
-├── data/                        # Metadata JSON
+├── data/                        # SQLite nghiệp vụ và JSON xác thực/phiên
 ├── de-thi/                      # Đề thi
 ├── learning-files/              # Học liệu, đề và bài nộp bài tập
 ├── submissions/                 # Bài thi file
@@ -389,7 +390,7 @@ Nhom15_LMSLAN_Source/
 | --- | --- |
 | main, http, config, runtime | Routing, form, response, cấu hình, worker, lease |
 | security, accounts, setup_admin, configure_admin | Xác thực, nhập tài khoản, bootstrap admin |
-| storage | JSON, cache, khóa, giao dịch, journal, audit |
+| storage | SQLite, JSON xác thực/phiên, khóa, giao dịch, journal, audit |
 | learning, course_grades, course_packages | LMS, điểm danh, bảng điểm, chuyển khóa |
 | exams, exam_catalog, admin_workspace | Phát đề, cấu hình thi, quản trị |
 | submissions, submission_rate, submission_archive | Nhận bài, quota, kho bài |
@@ -398,19 +399,19 @@ Nhom15_LMSLAN_Source/
 | notifications | Feed và trạng thái đọc cá nhân |
 | seed_demo, programming_trial, reset_demo | Dữ liệu/kỳ thi trình diễn |
 
-| File dữ liệu trong data/ | Nội dung |
+| Tài liệu dữ liệu trong data/ | Nội dung |
 | --- | --- |
 | students.json, admins.json | Hồ sơ, hash mật khẩu, trạng thái |
 | sessions.json, login_attempts.json, auth_throttle.json | Phiên/kiểm soát đăng nhập |
-| learning.json | Courses, materials, events, assignments, submissions, attendance, grades |
-| settings.json, assignments.json | Thi file hiện hành, đề/hạn theo sinh viên |
-| exam_catalog.json | Cấu hình thi file/code |
-| submissions.json | Biên nhận/lịch sử thi file |
-| programming_submissions.json, programming_attempts.json | Code, lịch sử chấm, phiên làm bài |
+| lms.sqlite3: learning.json | Courses, materials, events, assignments, submissions, attendance, grades |
+| lms.sqlite3: settings.json, assignments.json | Thi file hiện hành, đề/hạn theo sinh viên |
+| lms.sqlite3: exam_catalog.json, exam_papers.json, question_bank.json | Cấu hình thi và ngân hàng câu hỏi/đề |
+| lms.sqlite3: submissions.json | Biên nhận/lịch sử thi file |
+| lms.sqlite3: programming_submissions.json, programming_attempts.json | Code, lịch sử chấm, phiên làm bài |
 | submission_rate.json | Tần suất nộp |
-| notifications.json, notification_reads.json | Thông báo và trạng thái đọc |
+| lms.sqlite3: notifications.json; notification_reads.json | Thông báo và trạng thái đọc |
 
-Audit ghi ở logs/audit.jsonl. Liên kết qua course_id, assignment_id, exam_id, student_id, release_id. Không sửa JSON trực tiếp khi server chạy. Gói xuất khóa tái sử dụng nội dung, không thay backup tài khoản, điểm và bài nộp.
+Audit ghi ở logs/audit.jsonl. Liên kết qua course_id, assignment_id, exam_id, student_id, release_id. Không sửa SQLite hoặc JSON trực tiếp khi server chạy. Gói xuất khóa tái sử dụng nội dung, không thay backup tài khoản, điểm và bài nộp.
 
 Cấu trúc trên mô tả source/runtime thực tế, không bắt buộc tách `source/client` và `source/server`: client nằm trong `templates/` và `static/`, server trong `app/`. Khi đóng gói học phần, bổ sung `report/report.pdf` và `statics/results/` cho báo cáo/bằng chứng được phép công bố; các mục này không được xem là đã có chỉ vì xuất hiện trong khung mẫu.
 
@@ -519,7 +520,7 @@ Docker cần chạy để nhận và chấm bài code. Scheduler tự mở theo 
 
 ## 10.3. Database Setup
 
-Không dùng MySQL/PostgreSQL hoặc SQL schema. Server/CLI khởi tạo các JSON runtime khi cần; không có bước SQL migration. Để tạo dữ liệu minh họa mới, ưu tiên `TAO_DATA_DEMO.bat` như mục 10.2. Các bộ seed cũ ở mục 21.2 là những lựa chọn khác, có tài khoản/mật khẩu khác; không trộn chúng trên cùng dữ liệu nếu chưa đối chiếu.
+Không dùng MySQL/PostgreSQL. Server tự khởi tạo SQLite và nhập dữ liệu nghiệp vụ JSON cũ vào `data/lms.sqlite3` một lần khi khởi động; giữ file cũ để đối chiếu. Để tạo dữ liệu minh họa mới, ưu tiên `TAO_DATA_DEMO.bat` như mục 10.2. Các bộ seed cũ ở mục 21.2 là những lựa chọn khác, có tài khoản/mật khẩu khác; không trộn chúng trên cùng dữ liệu nếu chưa đối chiếu.
 
 ## 10.4. Configuration
 
@@ -552,7 +553,7 @@ $env:CSS_TLS_KEY = 'D:\certs\server.key'
 .\.venv\Scripts\python.exe run_server.py
 ```
 
-Thời lượng, thí sinh, định dạng/số lượt nộp, mật khẩu đề và trọng số cấu hình qua admin. JSON nền được tạo khi cần; không cần SQL migration. Source không kèm dữ liệu lớp thật; server giữ dữ liệu runtime hiện có khi khởi tạo.
+Thời lượng, thí sinh, định dạng/số lượt nộp, mật khẩu đề và trọng số cấu hình qua admin. SQLite được tạo và nhập dữ liệu JSON cũ khi cần. Source không kèm dữ liệu lớp thật; server giữ dữ liệu runtime hiện có khi khởi tạo.
 
 ### Sao lưu và phục hồi
 
@@ -595,7 +596,7 @@ Phục hồi xóa session/throttle nguồn cũ. Backup demo cũ có thể thiế
 | Camera HTTP LAN lỗi | Chụp/chọn ảnh hoặc HTTPS được tin cậy |
 | Không chấm code | Docker Linux, image, dung lượng, readiness |
 | Chưa có tổng điểm | Bài chưa chấm, trọng số, loại đánh giá, thành phần |
-| Thiếu CSS/icon/QR | Kiểm tra static/vendor, build CSS nếu cần |
+| Thiếu CSS/icon | Kiểm tra static/vendor, build CSS nếu cần |
 
 ---
 
@@ -651,7 +652,7 @@ npm test
 
 Browser QA không thay toàn bộ unittest. Đặt CSS_TEST_CHROME nếu không tìm thấy trình duyệt. Linux/macOS dùng đường dẫn Python/cú pháp biến môi trường tương ứng.
 
-Test bao phủ tài khoản/Origin/ZIP, LMS, thi/điểm, HTTP/body chậm, retry, lỗi ghi/giao dịch, queue, Docker, CSV, QR, phân quyền, mobile và lỗi JavaScript/CSP. Test nghiệp vụ/browser dùng dữ liệu tạm.
+Test bao phủ tài khoản/Origin/ZIP, LMS, thi/điểm, HTTP/body chậm, retry, lỗi ghi/giao dịch, queue, Docker, CSV, điểm danh LAN, phân quyền, mobile và lỗi JavaScript/CSP. Test nghiệp vụ/browser dùng dữ liệu tạm.
 
 Kiểm tra riêng các luồng cập nhật:
 
@@ -673,7 +674,7 @@ Dừng server để chạy CLI bảo trì/seed trên cùng dữ liệu; test ngh
 | --- | --- | --- | --- |
 | 1 | Phiên, phân quyền, tài khoản | FR-01–02 | Log chức năng; test security/accounts |
 | 2 | Khóa học, học liệu, lịch, bài tập | FR-03–04 | Unittest và browser QA |
-| 3 | Điểm danh QR | FR-05 | Test quyền/hạn; browser QR |
+| 3 | Điểm danh LAN | FR-05 | Test quyền/hạn; tự ghi nhận khi đăng nhập |
 | 4 | Thi file, code và chấm Docker | FR-06–08 | Test vòng đời, verdict và snapshot; Docker thật bật riêng |
 | 5 | Giám sát và thông báo | FR-09–10 | API và browser QA |
 | 6 | Bảng điểm và kho bài nộp | FR-11–12 | Test điểm, lịch sử và xuất dữ liệu |
@@ -697,11 +698,9 @@ Dừng server để chạy CLI bảo trì/seed trên cùng dữ liệu; test ngh
 4. Sinh viên dùng cửa sổ/hồ sơ trình duyệt khác admin để tránh ghi đè cookie giữa hai vai trò.
 5. Giảng viên chấm/phản hồi; sinh viên xem điểm và lịch sử.
 
-### Điểm danh QR
+### Điểm danh trong LAN
 
-Tạo buổi học trong lịch rồi mở phiên từ buổi đó. Sinh viên vào **Điểm danh**, quét camera hoặc chọn ảnh QR. Backend kiểm tra thành viên, mã, hạn và trạng thái phiên. Quét lại không tạo trùng, không tự ghi đè quyết định Vắng của giảng viên.
-
-HTTPS/localhost hỗ trợ camera video. HTTP trên IP LAN có thể bị hạn chế getUserMedia; có luồng chụp/chọn ảnh. Liên kết QR giữ qua bước đăng nhập để tiếp tục điểm danh.
+Tạo buổi học trong lịch rồi mở điểm danh từ buổi đó. Tài khoản sinh viên đang đăng nhập trong LAN được ghi nhận có mặt; sinh viên đăng nhập khi phiên còn mở cũng được cập nhật. Giảng viên có thể sửa có mặt, đến muộn, về sớm, vắng và vắng có phép, kể cả sau khi đóng phiên. Sinh viên xem lịch sử trong mục **Điểm danh** trên sidebar.
 
 ### Thi nộp file
 
@@ -782,7 +781,7 @@ Theo chương 8–9 của báo cáo và artifact benchmark: chạy trên máy c�
 | --- | --- |
 | A – Tài khoản | Nhập danh sách, đăng nhập, khóa, reset và phân quyền |
 | B – LMS | Khóa, thành viên, học liệu, bài tập và bảng điểm |
-| C – Điểm danh | QR đúng/sai, thời hạn, quyền và ngăn ghi trùng |
+| C – Điểm danh | Phiên mở/đóng, quyền, ghi nhận khi đăng nhập và ngăn ghi trùng |
 | D – Thi file | Phân phối, giờ thi, ZIP, retry và biên nhận |
 | E – Thi code | Ngôn ngữ, verdict, test ẩn và lịch sử chấm lại |
 | F – Phục hồi | Lỗi giữa giao dịch, journal, JSON/audit và chống nộp trùng |
@@ -853,7 +852,7 @@ Khi tăng tải, giới hạn 128 HTTP worker và queue chấm bảo vệ tài n
 - JSON/khóa trong tiến trình phù hợp một server; chưa hỗ trợ nhiều server cùng ghi. Chương trình ngoài bỏ qua lease có thể phá nhất quán.
 - Giới hạn worker/queue là rào chắn tài nguyên, không cam kết sức chứa 128 sinh viên dưới mọi tải.
 - HTTP mặc định không mã hóa; public deployment cần TLS, proxy và giám sát theo môi trường.
-- Telemetry có thể bị can thiệp, QR có thể chia sẻ; không bảo đảm chống gian lận hoặc xác minh hiện diện vật lý.
+- Telemetry và đăng nhập LAN không bảo đảm chống gian lận hoặc xác minh hiện diện vật lý.
 - Chưa có SSO, quyền giảng viên riêng theo khóa, checker số thực/tùy biến, bài code nhiều file.
 - Chính sách mật khẩu import/tự đổi/reset chưa đồng nhất; import chưa bắt buộc đổi lần đầu.
 - Giữ mọi phiên bản/backup tăng dung lượng; kiểm thử phục hồi không thay thử mất điện thật trên mọi filesystem.
@@ -862,7 +861,7 @@ Khi tăng tải, giới hạn 128 HTTP worker và queue chấm bảo vệ tài n
 
 # 17. Future Work
 
-1. Thay JSON bằng cơ sở dữ liệu có giao dịch khi cần truy vấn và mở rộng lớn hơn.
+1. Chuẩn hóa các bảng nghiệp vụ SQLite để truy vấn tốt hơn khi dữ liệu tăng lớn.
 2. Tách bộ chấm thành dịch vụ riêng, điều chỉnh worker theo tài nguyên thực tế.
 3. Hoàn thiện triển khai HTTPS, proxy, theo dõi dịch vụ và tự khởi động lại.
 4. Bổ sung phân quyền giảng viên theo khóa, SSO và thống nhất chính sách mật khẩu.
@@ -983,7 +982,7 @@ Bộ `app.seed_demo` dùng DEMO001–DEMO020/`111111`, khác bộ mới DEMO001�
 
 1. Chạy quy trình máy mới, đăng nhập admin và một sinh viên ở hai hồ sơ riêng.
 2. Mở khóa học, học liệu, lịch và bảng điểm; chỉ rõ điểm demo nhập tay.
-3. Tạo/mở phiên điểm danh từ buổi học, dùng QR/ảnh để điểm danh và kiểm tra lịch sử.
+3. Tạo/mở phiên điểm danh từ buổi học, đăng nhập sinh viên trong LAN và kiểm tra lịch sử.
 4. Nộp bài tập, chấm/nhận xét, xem bản nộp và bảng điểm.
 5. Chuẩn bị thi file, phân phối đề và đặt lịch gần; xác nhận sinh viên chưa vào sớm và đến giờ được vào.
 6. Chuẩn bị thi code với bài tổng hai số, test mẫu/ẩn, thí sinh và lịch. Chỉ lưu, không chấm thử bắt buộc; chờ tự mở rồi vào trang từng bài để viết code/submit.
@@ -1015,7 +1014,7 @@ Xuất báo cáo Word đã cung cấp sang `report/report.pdf`; lưu phiếu Com
 - Thông tin nhóm, tỷ lệ đóng góp và tài liệu tham khảo.
 - Không cần SQL schema vì không dùng database server.
 
-Loại venv, cache, image/container và dữ liệu lớp thật khỏi gói source công khai. Không công bố session, hash mật khẩu, khóa TLS, audit hoặc bài nộp thật. Các JSON runtime được tạo khi chạy; dữ liệu giả lập có thể tái tạo bằng script.
+Loại venv, cache, image/container và dữ liệu lớp thật khỏi gói source công khai. Không công bố session, hash mật khẩu, khóa TLS, audit hoặc bài nộp thật. SQLite và JSON phiên được tạo khi chạy; dữ liệu giả lập có thể tái tạo bằng script.
 
 ---
 
