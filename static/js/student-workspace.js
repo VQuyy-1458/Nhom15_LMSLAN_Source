@@ -33,8 +33,47 @@
     const listId='student:attendance:'+scope;const rows=window.listUi.view(listId,filtered(data.attendance,scope,{...filters,q:''}).filter(r=>(!filters.status||ownStatus(r)===filters.status)&&(!filters.session||r.session_status===filters.session)),'attendance',{statusFilter:false});
     return `${window.studentAttendance.scanner()}<section class="panel"><div class="student-section-head"><h2>Lịch sử điểm danh</h2><span class="muted">Kết quả đồng bộ với giảng viên</span></div>${toolbar(data,'',{...filters,course:scope||filters.course},{search:false,statusLabel:'Điểm danh',statuses:[['present','Có mặt'],['late','Đến muộn'],['absent','Vắng'],['unrecorded','Chưa điểm danh'],['excluded','Không tính điểm']],session:true})}${window.listUi.controls(listId,'attendance')}${table(['Ngày học','Buổi học','Khóa học','Điểm danh','Phiên'],rows,r=>`<tr class="activity-table-row" data-activity="attendance" data-learning-row="attendance" data-item="${r.id}"><td>${day(r.lesson_at)}</td><td><button type="button" class="student-list-title" data-learning-detail="attendance" data-item="${r.id}">${esc(r.title)}</button></td><td>${esc(courseName(data,r.course_id))}</td><td>${pill(...statuses[ownStatus(r)])}</td><td>${pill(...(sessions[r.session_status]||sessions.closed))}</td></tr>`,page)}</section>`;
   }
+  const weekKey=value=>{
+    const local=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+    const monday=new Date(local+'T00:00:00+07:00');
+    monday.setTime(monday.getTime()-((new Date(local+'T12:00:00Z').getUTCDay()+6)%7)*86400000);
+    return monday.toISOString();
+  };
+  function courseAnnouncements(data,id,week=''){
+    const notices=data.events.filter(e=>e.course_id===id&&e.kind==='announcement'&&(!week||weekKey(e.starts_at)===week)).sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at));
+    return notices.map(n=>`<article class="student-week-notice activity-surface" data-activity="announcement"><h3><i class="fa fa-bullhorn" aria-hidden="true"></i> ${esc(n.title)}</h3><p class="muted">${date(n.starts_at)}</p><p class="student-description">${esc(n.description||'Chưa có nội dung bổ sung.')}</p></article>`).join('')||'<p class="muted">Chưa có thông báo liên quan.</p>';
+  }
+  function announcements(data,id){
+    return `<section class="panel"><div class="student-section-head"><h2>Thông báo khóa học</h2><a class="btn btn-secondary" href="/student/notifications">Tất cả thông báo của tôi</a></div>${courseAnnouncements(data,id)}</section>`;
+  }
+  function weekly(data,id,selectedWeek='all'){
+    const lessons=data.events.filter(e=>e.course_id===id&&e.kind==='lesson').sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at));
+    const current=weekKey(new Date()),groups=new Map();
+    lessons.forEach(e=>{const key=weekKey(e.starts_at);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(e);});
+    if(!groups.has(current))groups.set(current,[]);
+    const first=lessons.length?Date.parse(weekKey(lessons[0].starts_at)):null;
+    const weeks=[...groups].sort(([a],[b])=>a.localeCompare(b));
+    const selected=selectedWeek==='current'?current:groups.has(selectedWeek)?selectedWeek:'all';
+    const weekLabel=key=>{
+      const start=new Date(key),end=new Date(start.getTime()+6*86400000);
+      const number=first===null?0:Math.floor((start.getTime()-first)/(7*86400000))+1;
+      return `${number>0?'Tuần '+number:'Tuần hiện tại'} · ${day(start)} – ${day(end)}${key===current?' · Tuần này':''}`;
+    };
+    const weekFilter=`<div class="student-week-filter"><label for="student-week-select">Lọc theo tuần<select id="student-week-select" data-student-week-filter><option value="all" ${selected==='all'?'selected':''}>Tất cả các tuần</option>${weeks.map(([key])=>`<option value="${esc(key)}" ${selected===key?'selected':''}>${esc(weekLabel(key))}</option>`).join('')}</select></label><button type="button" class="btn btn-secondary" data-student-week-current><i class="fa fa-calendar-check-o" aria-hidden="true"></i> Tuần hiện tại</button><span class="muted" role="status">${selected==='all'?`Hiển thị ${weeks.length} tuần`:weekLabel(selected)}</span></div>`;
+    const states={excluded:['Không tính điểm',''],submitted:['Đã nộp','green'],overdue:['Quá hạn','amber'],not_submitted:['Chưa nộp','blue']};
+    return `<section class="panel"><div class="student-section-head"><div><h2>Học theo tuần</h2><p class="muted">Theo dõi bài học, bài đọc và hoàn thành bài tập theo từng buổi. Tuần hiện tại được mở sẵn.</p></div><a class="btn btn-secondary" href="/student/courses?course=${encodeURIComponent(id)}&tab=announcements">Thông báo khóa học</a></div>${weekFilter}<div class="student-week-list">${weeks.filter(([key])=>selected==='all'||key===selected).map(([key,items])=>{
+      const start=new Date(key),end=new Date(start.getTime()+6*86400000),number=first===null?0:Math.floor((start.getTime()-first)/(7*86400000))+1;
+      const label=items.length&&number>0?'Tuần '+number:'Tuần hiện tại';
+      return `<details class="student-week ${key===current?'is-current-week':''}" ${selected!=='all'||key===current?'open':''}><summary><strong>${label}</strong> · ${day(start)} – ${day(end)} ${key===current?pill('Tuần này','blue'):''}<span class="muted"> · ${items.length} buổi học</span></summary><div class="student-week-body">${items.map(e=>{
+        const content=(data.session_contents||[]).find(x=>x.event_id===e.id)||{};
+        const material=data.materials.find(m=>m.course_id===id&&m.id===content.material_id);
+        const assignment=data.assignments.find(a=>a.course_id===id&&a.id===content.assignment_id);
+        return `<article class="student-week-lesson"><h3>${esc(e.title)}</h3><p class="muted">${date(e.starts_at)}${e.ends_at?' – '+new Date(e.ends_at).toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit'}):''} · ${esc(e.location||'Chưa đặt phòng')}</p><div class="student-week-content"><section><h4>Bài học</h4><p class="student-description">${esc(content.lesson_text||'Giảng viên chưa cập nhật bài học.')}</p></section><section><h4>Bài đọc</h4><p class="student-description">${esc(content.reading_text||'Chưa có bài đọc.')}</p></section><section class="activity-surface" data-activity="material"><h4>Tài liệu</h4>${material?`<button type="button" class="student-list-title" data-learning-detail="material" data-item="${esc(material.id)}">${esc(material.title)}</button>${material.description?`<p class="student-description">${esc(material.description)}</p>`:''}${material.original_filename?`<div class="student-list-actions"><button type="button" class="btn btn-secondary" data-preview-url="/api/learning/preview/materials/${encodeURIComponent(material.id)}">Xem tài liệu</button><a class="btn btn-ghost" href="/api/learning/files/materials/${encodeURIComponent(material.id)}">Tải về</a></div>`:''}`:'<p class="muted">Chưa gắn tài liệu.</p>'}</section><section class="activity-surface" data-activity="assignment"><h4>Bài tập</h4>${assignment?`<button type="button" class="student-list-title" data-learning-detail="assignment" data-item="${esc(assignment.id)}">${esc(assignment.title)}</button><p class="muted">Hạn nộp: ${date(assignment.due_at)}</p>${pill(...states[assignmentStatus(data,assignment)])}<div class="student-list-actions"><button type="button" class="btn btn-secondary" data-learning-detail="assignment" data-item="${esc(assignment.id)}">Xem yêu cầu & nộp bài</button></div>`:'<p class="muted">Chưa gắn bài tập.</p>'}</section></div></article>`;
+      }).join('')||'<p class="muted">Tuần này chưa có buổi học được lên lịch.</p>'}<section class="student-week-announcements"><h3>Thông báo trong tuần</h3>${courseAnnouncements(data,id,key)}</section></div></details>`;
+    }).join('')}</div></section>`;
+  }
   function course(data,c,tab,body){
-    const tabs=[['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch học','calendar'],['exams','Kỳ thi','shield'],['grades','Kết quả','bar-chart']];
+    const tabs=[['weekly','Học theo tuần','calendar-check-o'],['announcements','Thông báo','bullhorn'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch học','calendar'],['exams','Kỳ thi','shield'],['grades','Kết quả','bar-chart']];
     return `<div class="student-stack"><div class="student-course-breadcrumb"><a href="/student/courses">Khóa học</a><i class="fa fa-angle-right"></i><span>${esc(c.name)}</span></div><header class="student-course-heading"><div class="student-course-title"><span class="student-course-symbol"><i class="fa fa-book"></i></span><div><h1>${esc(c.name)}${c.group?' · '+esc(c.group):''}</h1><div class="student-course-subtitle"><span>${esc(c.code)}</span><span>${esc(c.semester)}</span>${c.enrollment?.joined_at?`<span>Tham gia: ${date(c.enrollment.joined_at)}</span>`:''}${pill(c.status==='completed'?'Đã tổng kết':'Đang học',c.status==='completed'?'':'green')}</div></div></div><label class="student-course-switch"><span class="sr-only">Đổi khóa học</span><select data-student-course-switch aria-label="Đổi khóa học">${data.courses.map(r=>`<option value="${r.id}" ${r.id===c.id?'selected':''}>${esc(r.code)} · ${esc(r.name)}</option>`).join('')}</select></label></header><nav class="student-tabs student-course-tabs" aria-label="Chức năng khóa học">${tabs.map(([v,t,icon])=>`<a href="/student/courses?course=${c.id}&tab=${v}" class="${tab===v?'active':''}" ${tab===v?'aria-current="page"':''}><i class="fa fa-${icon}"></i> ${t}</a>`).join('')}</nav>${c.status==='completed'?'<div class="alert alert-info">Khóa học đã tổng kết. Bạn vẫn xem được tài liệu, bài nộp và kết quả.</div>':''}${body}</div>`;
   }
   function exams(data,{scope,filters,page}){
@@ -43,5 +82,5 @@
     const listId='student:exams:'+scope;const visible=window.listUi.view(listId,filtered(rows,scope,filters),'exams',{search:false});
     return `<section class="panel"><div class="student-section-head"><h2>Kỳ thi</h2><span class="muted">Chọn kỳ thi để xem đề và tham gia</span></div>${toolbar(data,scope,filters)}${window.listUi.controls(listId,'exams')}${table(['Kỳ thi','Hình thức','Loại kỳ thi','Thời lượng','Trạng thái'],visible,e=>`<tr class="activity-table-row" data-activity="${activityColors.exam(e)}" data-learning-row="exam" data-item="${e.id}"><td><button type="button" class="student-list-title" data-student-exam="${e.id}">${esc(e.title)}</button></td><td>${e.type==='code'?'Thi lập trình':'Thi nộp file'}</td><td>${activityColors.badge(activityColors.exam(e),e.assessment_type==='test'||!e.assessment_type?'Test · Không tính điểm':undefined)}</td><td>${e.duration_minutes} phút</td><td>${pill(({scheduled:'Chờ đến giờ bắt đầu',started:'Đang mở',distributed:'Chờ bắt đầu',ended:'Đã kết thúc'})[e.state]||'Chưa mở',e.state==='started'?'green':'')}${e.state==='scheduled'?window.submissionDeadlines.waiting(e.started_at,{compact:true}):''}</td></tr>`,page)}</section>`;
   }
-  window.studentWorkspace={materials,assignments,attendance,course,exams,toolbar};
+  window.studentWorkspace={weekly,announcements,materials,assignments,attendance,course,exams,toolbar};
 })();

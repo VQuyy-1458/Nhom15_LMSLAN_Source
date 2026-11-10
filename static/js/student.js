@@ -37,7 +37,7 @@
     return `<article class="panel student-course student-course-${theme}"><div class="student-course-cover"><span class="student-course-cover-icon"><i class="fa fa-${icon}" aria-hidden="true"></i></span>${status(c.status==='completed'?'Đã tổng kết':'Đang học',c.status==='completed'?'':'green')}</div><div class="student-course-body"><small class="student-course-code">${esc(c.code)}</small><h3>${esc(c.name)}</h3><p class="muted">${esc(c.semester)}</p><div class="student-course-meta"><a href="/student/courses${query}">Vào khóa học <i class="fa fa-arrow-right" aria-hidden="true"></i></a></div></div></article>`;
   }
   function entries(){return [...filtered(data.events).map(e=>({...e,at:e.starts_at,activity:e.kind,type:e.kind==='announcement'?'Thông báo':e.kind==='exam'?'Lịch thi':'Buổi học',view:'calendar'})),...filtered(data.assignments).map(a=>({...a,at:a.due_at,activity:'assignment',type:'Hạn nộp bài',view:'assignments'}))].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));}
-  function eventRow(e){const type=e.view==='assignments'?'assignment':'event';return `<div class="student-row activity-surface" data-activity="${activityColors.kind(e.activity)}"><div class="student-date-tile"><strong>${new Date(e.at).toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit'})}</strong><small>TH ${new Date(e.at).toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',month:'2-digit'})}</small></div><div class="student-row-body"><div class="student-row-title"><button type="button" class="student-list-title" data-learning-detail="${type}" data-item="${e.id}">${esc(e.title)}</button>${activityColors.badge(e.activity,e.type)}</div><p class="muted">${esc(courseName(e.course_id))} · ${date(e.at)}${e.location?' · '+esc(e.location):''}</p></div></div>`;}
+  function eventRow(e){const type=e.view==='assignments'?'assignment':'event';return `<div class="student-row activity-surface" data-activity="${activityColors.kind(e.activity)}"><div class="student-date-tile"><strong>${new Date(e.at).toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit'})}</strong><small>TH ${new Date(e.at).toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',month:'2-digit'})}</small></div><div class="student-row-body"><div class="student-row-title"><button type="button" class="student-list-title" data-learning-detail="${type}" data-item="${e.id}">${esc(e.title)}</button>${activityColors.badge(e.activity,e.type)}</div><p class="muted">${esc(courseName(e.course_id))} · ${date(e.at)}${e.kind==='lesson'&&e.ends_at?' – '+new Date(e.ends_at).toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit'}):''}${e.location?' · '+esc(e.location):''}</p></div></div>`;}
   function calendar(){
     const [year,m]=month.split('-').map(Number), days=new Date(year,m,0).getDate(),offset=(new Date(year,m-1,1).getDay()+6)%7;
     const all=window.listUi.view('student:calendar',entries(),'events');
@@ -52,8 +52,8 @@
     const c=data.courses.find(c=>c.id===course());
     if(course()&&!c)return `<section class="panel">${empty('Không tìm thấy khóa học','Khóa học không tồn tại hoặc bạn chưa được cấp quyền.','lock')}</section>`;
     if(c){
-      const tab=new URLSearchParams(location.search).get('tab')||'materials';
-      const views={materials,calendar:calendarView,assignments:assignmentsView,exams:examsView,grades:gradesView};
+      const tab=new URLSearchParams(location.search).get('tab')||'weekly';
+      const views={weekly:()=>window.studentWorkspace.weekly(data,c.id,new URLSearchParams(location.search).get('week')||'all'),announcements:()=>window.studentWorkspace.announcements(data,c.id),materials,calendar:calendarView,assignments:assignmentsView,exams:examsView,grades:gradesView};
       return window.studentWorkspace.course(data,c,tab,(views[tab]||materials)());
     }
     const rows=window.listUi.view('student:courses',data.courses.filter(c=>(`${c.name} ${c.code} ${c.semester}`).toLocaleLowerCase('vi').includes(filters.q.toLocaleLowerCase('vi'))&&(!filters.status||c.status===filters.status)),'courses',{search:false,statusFilter:false});
@@ -89,7 +89,7 @@
   function detailContent(type,row){
     if(type==='assignment')return assignmentCard(row);
     if(type==='material')return `<h3>${esc(row.title)}</h3><p class="muted">${esc(row.original_filename)} · ${date(row.created_at)}</p><p class="student-description">${esc(row.description||'Giảng viên chưa bổ sung nội dung.')}</p><div class="student-actions"><button type="button" class="btn btn-primary" data-preview-url="/api/learning/preview/materials/${row.id}">Xem trực tiếp</button><a class="btn btn-secondary" data-has-preview="true" href="/api/learning/files/materials/${row.id}">Tải về</a></div>`;
-    if(type==='event')return `<h3>${esc(row.title)}</h3><p class="muted">${esc(courseName(row.course_id))} · ${date(row.starts_at)} · ${esc(row.location||'Chưa đặt địa điểm')}</p><p class="student-description">${esc(row.description||'Không có mô tả thêm.')}</p>`;
+    if(type==='event')return `<h3>${esc(row.title)}</h3><p class="muted">${esc(courseName(row.course_id))} · ${date(row.starts_at)}${row.ends_at?' – '+new Date(row.ends_at).toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour:'2-digit',minute:'2-digit'}):''} · ${esc(row.location||'Chưa đặt địa điểm')}</p><p class="student-description">${esc(row.description||'Không có mô tả thêm.')}</p>`;
     return `<h3>${esc(row.title)}</h3><p class="muted">${esc(courseName(row.course_id))} · ${date(row.lesson_at)}</p><p>${row.grading_applicable===false?'Không tính điểm · Buổi học trước khi tham gia khóa học':({present:'Có mặt',late:'Đến muộn',absent:'Vắng'})[row.record?.status]||(row.open?'Chưa điểm danh':'Vắng')} · ${row.session_status==='open'?'Phiên đang mở':row.session_status==='closed'?'Phiên đã đóng':'Phiên hết hạn'}</p>${row.record?`<p class="muted">Ghi nhận: ${date(row.record.checked_in_at)}</p><p class="student-description">${esc(row.record.reason||'')}</p>`:''}`;
   }
   function refreshDetail(){
@@ -129,7 +129,7 @@
     const url=new URL(location.href);if(url.pathname!=='/student/courses'||!url.searchParams.get('course'))return;
     const tab=url.searchParams.get('tab');
     if(tab==='attendance'){url.pathname='/student/attendance';url.searchParams.delete('tab');}
-    else if(!['materials','assignments','calendar','exams','grades'].includes(tab))url.searchParams.set('tab','materials');
+    else if(!['weekly','announcements','materials','assignments','calendar','exams','grades'].includes(tab))url.searchParams.set('tab','weekly');
     history.replaceState(null,'',url.pathname+url.search);
   }
   window.listUi.on('student',()=>{page=1;render();refreshDetail();});
@@ -207,10 +207,18 @@
       form.reset();delete form.dataset.requestId;await load();
     }catch(e){error(e);let inline=form.querySelector('[data-student-form-error]');if(!inline){inline=document.createElement('p');inline.dataset.studentFormError='';inline.setAttribute('role','alert');form.append(inline);}inline.textContent=e.message;window.cssToast(e.message,'error');}finally{submitting=false;if(button)button.disabled=false;}
   });
+  function selectStudyWeek(value){
+    const url=new URL(location.href);
+    if(value==='all')url.searchParams.delete('week');else url.searchParams.set('week',value);
+    history.pushState(null,'',url.pathname+url.search);render();
+    document.querySelector('[data-student-week-filter]')?.focus({preventScroll:true});
+  }
+  document.addEventListener('click',e=>{if(e.target.closest('[data-student-week-current]'))selectStudyWeek('current');});
   document.addEventListener('change',async e=>{
+    if(e.target.matches('[data-student-week-filter]')){selectStudyWeek(e.target.value);return;}
     if(e.target.matches('input[type=file]')&&e.target.form)delete e.target.form.dataset.requestId;
     if(e.target.closest('#filter-form')&&e.target.matches('select')){applyFilters(e.target.form);return;}
-    if(e.target.matches('[data-student-course-switch]')){const url=new URL(location.href);url.searchParams.set('course',e.target.value);url.searchParams.delete('assignment');url.searchParams.delete('exam');history.pushState(null,'',url.pathname+url.search);filters={q:'',status:'',course:'',session:''};page=1;render();return;}
+    if(e.target.matches('[data-student-course-switch]')){const url=new URL(location.href);url.searchParams.set('course',e.target.value);url.searchParams.delete('week');url.searchParams.delete('assignment');url.searchParams.delete('exam');history.pushState(null,'',url.pathname+url.search);filters={q:'',status:'',course:'',session:''};page=1;render();return;}
     if(e.target.type==='file'&&e.target.form)delete e.target.form.dataset.requestId;
 
   });

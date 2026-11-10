@@ -83,6 +83,80 @@ class LearningTests(unittest.TestCase):
     def course(self, members="s1"):
         return self.create("course", name="Course", code="CS1", semester="2026", student_ids=members)
 
+    def test_schedule_generate_uses_vietnam_time_without_zoneinfo_and_deduplicates(self):
+        course = self.course()
+        form = {"course_id": course, "title": "Lesson", "start_date": "2026-11-01",
+                "end_date": "2026-11-16", "weekday": "0", "start_time": "06:30", "end_time": "09:00",
+                "location": "Room 1"}
+        # Reproduce Windows installations without the optional timezone database.
+        from zoneinfo import ZoneInfoNotFoundError
+        with patch("zoneinfo.ZoneInfo", side_effect=ZoneInfoNotFoundError("missing tzdata")):
+            code, result = self.request("/api/learning/schedule-generate", form=form)
+            self.assertEqual(code, 200, result)
+            self.assertEqual(len(learning.load()["events"]), 3)
+            generated = copy.deepcopy(learning.load()["events"])
+            code, result = self.request("/api/learning/schedule-generate", form=form)
+            self.assertEqual(code, 200, result)
+            self.assertEqual(learning.load()["events"], generated)
+        events = learning.load()["events"]
+        self.assertEqual([e["starts_at"] for e in events], [
+            "2026-11-01T23:30:00+00:00", "2026-11-08T23:30:00+00:00",
+            "2026-11-15T23:30:00+00:00"])
+        self.assertEqual([e["ends_at"] for e in events], ["2026-11-02T02:00:00+00:00", "2026-11-09T02:00:00+00:00", "2026-11-16T02:00:00+00:00"])
+        self.assertTrue(all(e["course_id"] == course and e["location"] == "Room 1" for e in events))
+
+    def test_schedule_generate_updates_existing_end_times_without_losing_content(self):
+        course = self.course()
+        legacy = self.create("event", course_id=course, title="Keep title", kind="lesson",
+                             starts_at="2026-11-09T07:00:00+07:00")
+        self.create("session-content-save", event_id=legacy, lesson_text="Keep lesson", reading_text="Keep reading")
+        form = {"course_id": course, "title": "New lesson", "start_date": "2026-11-09",
+                "end_date": "2026-11-16", "weekday": "0", "start_time": "07:00", "end_time": "09:30"}
+        contents = copy.deepcopy(learning.load()["session_contents"])
+        code, result = self.request("/api/learning/schedule-generate", form=form)
+        self.assertEqual(code, 200, result)
+        self.assertEqual((result["created_sessions"], result["updated_sessions"]), (1, 1))
+        data = learning.load()
+        self.assertEqual(len(data["events"]), 2)
+        self.assertEqual(data["session_contents"], contents)
+        self.assertEqual(learning.find(data, "events", legacy)["title"], "Keep title")
+        self.assertEqual(learning.find(data, "events", legacy)["ends_at"], "2026-11-09T02:30:00+00:00")
+        code, result = self.request("/api/learning/schedule-generate", form={**form, "end_time": "10:00"})
+        self.assertEqual(code, 200, result)
+        self.assertEqual((result["created_sessions"], result["updated_sessions"]), (0, 2))
+        self.assertTrue(all(e["ends_at"].endswith("T03:00:00+00:00") for e in learning.load()["events"]))
+        # Read back through the workspace used by the UI.
+        workspace = self.request("/api/admin/workspace")[1]
+        self.assertTrue(all(e.get("ends_at") for e in workspace["events"] if e["course_id"] == course))
+
+    def test_schedule_generate_rejects_invalid_dates_times_and_weekdays(self):
+        form = {"course_id": self.course(), "title": "Lesson", "start_date": "2026-11-01",
+                "end_date": "2026-11-16", "weekday": "0", "start_time": "07:00", "end_time": "09:00"}
+        before = learning.load()
+        for invalid in ({"start_date": "2026-02-30"}, {"end_date": "2026-10-31"},
+                        {"end_date": "2028-11-01"}, {"start_time": "25:00"}, {"weekday": "7"}, {"end_time": "07:00"}, {"end_time": "06:00"}, {"end_time": "25:00"}, {"end_time": ""}):
+            with self.subTest(invalid=invalid):
+                code, result = self.request("/api/learning/schedule-generate", form={**form, **invalid})
+                self.assertEqual(code, 400, result)
+                self.assertEqual(learning.load(), before)
+
+    def test_lesson_end_time_can_be_added_to_legacy_lesson(self):
+        course = self.course()
+        event = self.create("event", course_id=course, title="Legacy lesson", kind="lesson",
+                            starts_at="2026-11-10T00:00:00+00:00")
+        form = {"event_id": event, "end_time": "09:30", "lesson_text": "Lesson"}
+        code, result = self.request("/api/learning/session-content-save", form=form)
+        self.assertEqual(code, 200, result)
+        self.assertEqual(learning.find(learning.load(), "events", event)["ends_at"], "2026-11-10T02:30:00+00:00")
+        before = learning.load()
+        for end in ("07:00", "06:30", "25:00", ""):
+            code, result = self.request("/api/learning/session-content-save", form={**form, "end_time": end})
+            self.assertEqual(code, 400, result)
+            self.assertEqual(learning.load(), before)
+        # Old clients saving content without end_time preserve the recorded end.
+        self.assertEqual(self.request("/api/learning/session-content-save", form={"event_id": event})[0], 200)
+        self.assertEqual(learning.find(learning.load(), "events", event)["ends_at"], "2026-11-10T02:30:00+00:00")
+
     def test_admin_reset_password_clears_lockout_and_revokes_only_target_sessions(self):
         for _ in range(3):
             self.request("/login", role="s1", form={"username": "s1", "password": "wrong"})
