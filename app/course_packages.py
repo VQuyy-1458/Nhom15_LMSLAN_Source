@@ -102,12 +102,14 @@ def import_course(file, session, ip):
     for row in package.get("events", []):
         if row.get("kind") not in {"lesson", "announcement", "exam"}:
             raise learning.LearningError(400, "Loại lịch trong gói không hợp lệ.")
-        staged["events"].append({"id": secrets.token_hex(10), "created_at": now, "course_id": cid, "title": field(row, "title"), "description": field(row, "description", 10000, False), "kind": row["kind"], "starts_at": learning.date_value(row.get("starts_at")).isoformat(), "location": field(row, "location", 200, False)})
+        starts_at = learning.date_value(row.get("starts_at"))
+        event = {"id": secrets.token_hex(10), "created_at": now, "course_id": cid, "title": field(row, "title"), "description": field(row, "description", 10000, False), "kind": row["kind"], "starts_at": starts_at.isoformat(), "location": field(row, "location", 200, False)}
         if row.get("ends_at"):
-            end = learning.date_value(row["ends_at"])
-            if end <= learning.date_value(row["starts_at"]):
-                raise learning.LearningError(400, "Gi\u1edd k\u1ebft th\u00fac ph\u1ea3i sau gi\u1edd b\u1eaft \u0111\u1ea7u.")
-            staged["events"][-1]["ends_at"] = end.isoformat()
+            ends_at = learning.date_value(row["ends_at"])
+            if ends_at <= starts_at:
+                raise learning.LearningError(400, "Thời gian kết thúc của hoạt động phải sau thời gian bắt đầu.")
+            event["ends_at"] = ends_at.isoformat()
+        staged["events"].append(event)
     written = []
     with learning.LOCK:
         data = learning.load()

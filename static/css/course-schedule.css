@@ -17,6 +17,11 @@
 .course-admin-shell .schedule-panel-head h3{font-size:17px;color:#203958;letter-spacing:-.02em;margin:0}
 .course-admin-shell .schedule-counts{display:flex;align-items:center;gap:15px;color:#7b8ca5;font-size:11px;white-space:nowrap}
 .course-admin-shell .schedule-counts strong{font-size:13px;color:#314d73}
+.course-admin-shell .event-week-range{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.course-admin-shell .event-weekdays{margin:0;padding:12px 14px;border:1px solid #dfe7f1;border-radius:9px}
+.course-admin-shell .event-weekdays legend{padding:0 5px;color:#526984;font-size:12px;font-weight:650}
+.course-admin-shell .event-weekdays>div{display:flex;flex-wrap:wrap;gap:8px 16px}
+.course-admin-shell .event-weekdays label{display:flex;align-items:center;gap:6px;color:#435875;font-size:12px}
 .course-admin-shell .schedule-day-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:stretch}
 .course-admin-shell .schedule-day-chip{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:158px;padding:11px;border:1px solid #e5ebf4;border-radius:10px;background:#f9fbfe}
 .course-admin-shell .schedule-day-chip.has-events{border-color:#d5e2f5;background:#f6f9ff}
@@ -49,7 +54,7 @@
 .course-admin-shell .attendance-detail-table td{vertical-align:middle}
 @media(max-width:1100px){.course-admin-shell .schedule-day-strip{overflow-x:auto;grid-template-columns:repeat(7,minmax(160px,1fr));padding-bottom:4px}}
 @media(max-width:900px){.course-admin-shell .schedule-header{align-items:flex-start;flex-direction:column}.course-admin-shell .schedule-header-actions{justify-content:flex-start}}
-@media(max-width:560px){.course-admin-shell .schedule-header h2{font-size:23px}.course-admin-shell .schedule-header-actions{width:100%}.course-admin-shell .schedule-header-actions>.btn{flex:1}.course-admin-shell .schedule-panel,.course-admin-shell .schedule-history{padding:17px}.course-admin-shell .schedule-panel-head{align-items:flex-start;flex-direction:column}.course-admin-shell .schedule-history-row{gap:9px;padding:11px}.course-admin-shell .schedule-item-icon{flex-basis:30px;height:30px}}
+@media(max-width:560px){.course-admin-shell .schedule-header h2{font-size:23px}.course-admin-shell .schedule-header-actions{width:100%}.course-admin-shell .schedule-header-actions>.btn{flex:1}.course-admin-shell .schedule-panel,.course-admin-shell .schedule-history{padding:17px}.course-admin-shell .schedule-panel-head{align-items:flex-start;flex-direction:column}.course-admin-shell .schedule-history-row{gap:9px;padding:11px}.course-admin-shell .schedule-item-icon{flex-basis:30px;height:30px}.course-admin-shell .event-week-range{grid-template-columns:1fr}}
 .overview-week-lessons{display:grid;gap:14px}
 .overview-week-lesson{border:1px solid #e1e8f2;border-radius:12px;padding:18px;min-width:0}
 .overview-week-lesson h3{margin:0 0 6px;font-size:16px}

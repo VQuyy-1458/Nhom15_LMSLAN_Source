@@ -5,11 +5,12 @@ import copy
 from contextlib import ExitStack
 import hashlib
 import math
+import re
 import secrets
 import threading
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone, date, time
+from datetime import date, date as calendar_date, datetime, time, time as wall_time, timedelta, timezone
 from pathlib import Path
 
 from .config import BASE_DIR, RUNTIME_DIR
@@ -64,7 +65,7 @@ def gradebook(data, course, student_ids):
     task_due = {task["id"]:date_value(task["due_at"]) <= now for task in tasks}
     rows = []
     for sid in student_ids:
-        absent = sum(a["records"].get(sid, {}).get("status") not in {"present", "late"}
+        absent = sum(a["records"].get(sid, {}).get("status") not in {"present", "late", "early_departure"}
                      for a in closed if enrollments.applies(course, sid, a, "attendance", students))
         values = {"attendance": max(0, 10 - absent), "homework": None, "midterm": None, "final": None}
         homework = []
@@ -119,6 +120,53 @@ def date_value(value):
         raise LearningError(400, "Thời gian không hợp lệ hoặc thiếu múi giờ.")
 
 
+def lesson_schedule(form):
+    def iso_week(value):
+        match = re.fullmatch(r"(\d{4})-W(\d{2})", value or "")
+        if not match:
+            raise LearningError(400, "Tuần bắt đầu và tuần kết thúc không hợp lệ.")
+        try:
+            return calendar_date.fromisocalendar(int(match.group(1)), int(match.group(2)), 1)
+        except ValueError:
+            raise LearningError(400, "Tuần bắt đầu hoặc tuần kết thúc không tồn tại.")
+
+    first_monday, last_monday = iso_week(form.get("start_week")), iso_week(form.get("end_week"))
+    weeks = (last_monday - first_monday).days // 7 + 1
+    if weeks < 1:
+        raise LearningError(400, "Tuần kết thúc phải bằng hoặc sau tuần bắt đầu.")
+    if weeks > 53:
+        raise LearningError(400, "Mỗi lần tạo lịch chỉ được chọn tối đa 53 tuần.")
+
+    if not re.fullmatch(r"\d{2}:\d{2}", form.get("start_time", "")) or not re.fullmatch(r"\d{2}:\d{2}", form.get("end_time", "")):
+        raise LearningError(400, "Giờ bắt đầu hoặc kết thúc không hợp lệ.")
+    try:
+        starts = wall_time.fromisoformat(form["start_time"])
+        ends = wall_time.fromisoformat(form["end_time"])
+    except ValueError:
+        raise LearningError(400, "Giờ bắt đầu hoặc kết thúc không hợp lệ.")
+    if starts >= ends:
+        raise LearningError(400, "Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.")
+
+    raw_weekdays = form.get("weekdays", "")
+    try:
+        weekdays = sorted({int(value) for value in raw_weekdays.split(",") if value})
+    except ValueError:
+        raise LearningError(400, "Thứ trong tuần không hợp lệ.")
+    if not weekdays or any(day < 1 or day > 7 for day in weekdays):
+        raise LearningError(400, "Hãy chọn ít nhất một thứ trong tuần hợp lệ.")
+
+    vietnam_tz = timezone(timedelta(hours=7))
+    occurrences = []
+    for week in range(weeks):
+        monday = first_monday + timedelta(weeks=week)
+        for weekday in weekdays:
+            day = monday + timedelta(days=weekday - 1)
+            starts_at = datetime.combine(day, starts, vietnam_tz)
+            ends_at = datetime.combine(day, ends, vietnam_tz)
+            occurrences.append((starts_at.isoformat(), ends_at.isoformat()))
+    return occurrences
+
+
 def find(data, collection, item_id):
     item = next((r for r in data[collection] if r["id"] == item_id), None)
     if not item:
@@ -133,6 +181,54 @@ def course_access(data, course_id, session, write=False):
     if write and course["status"] == "completed":
         raise LearningError(409, "Khóa học đã tổng kết, chỉ được xem dữ liệu.")
     return course
+
+
+def record_student_presence(student_id):
+    """Add an active student to every applicable attendance session still open."""
+    with LOCK, atomic_transaction():
+        data = load()
+        students = read_json("students.json")
+        student = students.get(student_id)
+        if not student or not student.get("active", True):
+            return 0
+        now = datetime.now(timezone.utc)
+        sessions = read_json("sessions.json")
+        logged_in = False
+        for item in sessions.values():
+            if not isinstance(item, dict) or item.get("role") != "student" or item.get("user_id") != student_id:
+                continue
+            try:
+                expires_at = float(item.get("expires_at", 0))
+            except (TypeError, ValueError):
+                continue
+            if expires_at > now.timestamp():
+                logged_in = True
+                break
+        if not logged_in:
+            return 0
+
+        updated = []
+        courses = {course["id"]: course for course in data["courses"]}
+        for attendance in data["attendance"]:
+            if attendance.get("closed") or date_value(attendance.get("expires_at")) <= now or student_id in attendance.get("records", {}):
+                continue
+            course = courses.get(attendance.get("course_id"))
+            if not course or course.get("status") == "completed":
+                continue
+            if student_id not in enrollments.member_ids(course, students):
+                continue
+            if not enrollments.applies(course, student_id, {"lesson_at": attendance.get("lesson_at")}, "attendance", students):
+                continue
+            attendance.setdefault("records", {})[student_id] = {
+                "status": "present",
+                "checked_in_at": now.isoformat(),
+                "source": "lan-session",
+            }
+            updated.append(attendance["id"])
+        if updated:
+            write_json("learning.json", data)
+            audit("learning.attendance_auto_checkin", student_id, student.get("last_ip", "127.0.0.1"), {"sessions": updated})
+        return len(updated)
 
 
 def own_submission(data, submission_id, session):
@@ -266,6 +362,7 @@ def mutate(session, action, form, files, ip):
         data = load()
         admin = session["role"] == "admin"
         sid = session["user_id"]
+        response = None
         if action != "submit" and action != "check-in" and not admin:
             raise LearningError(403, "Chỉ giảng viên được quản lý nội dung học tập.")
         row = {"id": secrets.token_hex(10), "created_at": utc_now()}
@@ -363,7 +460,9 @@ def mutate(session, action, form, files, ip):
                 data["session_contents"].append(row)
         elif action in {"material", "event", "assignment", "attendance"}:
             course_id = text(form, "course_id", 80)
-            course_access(data, course_id, session, write=True)
+            course = course_access(data, course_id, session, write=True)
+            kind = form.get("kind", "lesson") if action == "event" else None
+            bulk_lesson = action == "event" and kind == "lesson" and any(form.get(key) for key in ("start_week", "end_week", "start_time", "end_time"))
             lesson = None
             if action == "attendance":
                 lesson = find(data, "events", text(form, "event_id", 80))
@@ -372,16 +471,55 @@ def mutate(session, action, form, files, ip):
                 existing = next((s for s in data["attendance"] if s.get("event_id") == lesson["id"]), None)
                 if existing:
                     return {"ok": True, "id": existing["id"]}
-            row.update({"course_id": course_id, "title": lesson["title"] if lesson else text(form, "title"), "topic": text(form, "topic", 200, False), "description": text(form, "description", 10000, False)})
+            title = lesson["title"] if lesson else "" if bulk_lesson else text(form, "title")
+            row.update({"course_id": course_id, "title": title, "topic": text(form, "topic", 200, False), "description": text(form, "description", 10000, False)})
             if action == "material":
                 row.update(save_file(files.get("file")))
                 data["materials"].append(row)
             elif action == "event":
-                starts = date_value(form.get("starts_at"))
-                row.update({"starts_at": starts.isoformat(), "location": text(form, "location", 200, False), "kind": form.get("kind", "lesson")})
-                if row["kind"] not in {"lesson", "announcement", "exam"}:
+                if kind not in {"lesson", "announcement", "exam"}:
                     raise LearningError(400, "Loại lịch không hợp lệ.")
-                data["events"].append(row)
+                location = text(form, "location", 200, False)
+                if bulk_lesson:
+                    occurrences = lesson_schedule(form)
+                    created_events = []
+                    existing_slots = {
+                        (event["course_id"], date_value(event["starts_at"]), date_value(event["ends_at"]))
+                        for event in data["events"]
+                        if event.get("kind") == "lesson" and event.get("ends_at")
+                    }
+                    skipped_count = 0
+                    for starts_at, ends_at in occurrences:
+                        slot = (course_id, date_value(starts_at), date_value(ends_at))
+                        if slot in existing_slots:
+                            skipped_count += 1
+                            continue
+                        lesson_date = datetime.fromisoformat(starts_at).strftime("%d/%m/%Y")
+                        event = {
+                            **row,
+                            "id": secrets.token_hex(10),
+                            "created_at": utc_now(),
+                            "title": f"Buổi học ngày {lesson_date}",
+                            "starts_at": starts_at,
+                            "ends_at": ends_at,
+                            "location": location,
+                            "kind": kind,
+                        }
+                        data["events"].append(event)
+                        created_events.append(event)
+                        existing_slots.add(slot)
+                    if created_events:
+                        row = created_events[0]
+                    response = {"ok": True, "ids": [event["id"] for event in created_events], "count": len(created_events), "skipped_count": skipped_count}
+                else:
+                    starts = date_value(form.get("starts_at"))
+                    row.update({"starts_at": starts.isoformat(), "location": location, "kind": kind})
+                    if form.get("ends_at"):
+                        ends = date_value(form["ends_at"])
+                        if ends <= starts:
+                            raise LearningError(400, "Thời gian kết thúc phải sau thời gian bắt đầu.")
+                        row["ends_at"] = ends.isoformat()
+                    data["events"].append(row)
             elif action == "assignment":
                 due = date_value(form.get("due_at"))
                 if due <= datetime.now(timezone.utc):
@@ -394,8 +532,35 @@ def mutate(session, action, form, files, ip):
                 expires = date_value(form["expires_at"]) if form.get("expires_at") else datetime.now(timezone.utc) + timedelta(minutes=integer(form, "duration_minutes", 15, 1, 240))
                 if expires <= datetime.now(timezone.utc):
                     raise LearningError(400, "Thời hạn điểm danh phải ở tương lai.")
-                row.update({"event_id": lesson["id"], "lesson_at": lesson["starts_at"], "expires_at": expires.isoformat(), "code": secrets.token_hex(4).upper(), "closed": False, "records": {}})
+                opened_at = datetime.now(timezone.utc)
+                students = read_json("students.json")
+                recent_sessions = read_json("sessions.json")
+                online_students = set()
+                for student_session in recent_sessions.values():
+                    if not isinstance(student_session, dict) or student_session.get("role") != "student":
+                        continue
+                    student_id = student_session.get("user_id")
+                    student = students.get(student_id)
+                    if not student or not student.get("active", True):
+                        continue
+                    try:
+                        expires_at = float(student_session.get("expires_at", 0))
+                    except (TypeError, ValueError):
+                        continue
+                    if expires_at > opened_at.timestamp():
+                        online_students.add(student_id)
+                records = {}
+                for student_id in enrollments.member_ids(course, students):
+                    if student_id not in online_students:
+                        continue
+                    if not enrollments.applies(course, student_id, {
+                        "lesson_at": lesson["starts_at"],
+                    }, "attendance", students):
+                        continue
+                    records[student_id] = {"status": "present", "checked_in_at": opened_at.isoformat(), "source": "lan-session"}
+                row.update({"event_id": lesson["id"], "lesson_at": lesson["starts_at"], "expires_at": expires.isoformat(), "code": secrets.token_hex(4).upper(), "closed": False, "attendance_method": "lan-online", "records": records})
                 data["attendance"].append(row)
+                response = {"ok": True, "id": row["id"], "auto_present_count": len(records)}
         elif action == "submit":
             if admin:
                 raise LearningError(403, "Chỉ tài khoản sinh viên được nộp bài.")
@@ -455,15 +620,13 @@ def mutate(session, action, form, files, ip):
         elif action == "attendance-record":
             row = find(data, "attendance", text(form, "session_id", 80))
             course = course_access(data, row["course_id"], session, write=True)
-            if row["closed"] or date_value(row["expires_at"]) <= datetime.now(timezone.utc):
-                raise LearningError(409, "Phiên đã kết thúc, không thể sửa điểm danh.")
             student_id = text(form, "student_id", 80)
             if student_id not in read_json("students.json") or (course["student_ids"] is not None and student_id not in course["student_ids"]):
                 raise LearningError(400, "Sinh viên không thuộc khóa học.")
             status = form.get("status")
-            if status not in {"present", "late", "absent"}:
+            if status not in {"present", "late", "early_departure", "absent"}:
                 raise LearningError(400, "Trạng thái điểm danh không hợp lệ.")
-            row["records"][student_id] = {"status": status, "checked_in_at": utc_now(), "reason": text(form, "reason", 1000)}
+            row["records"][student_id] = {"status": status, "checked_in_at": utc_now(), "reason": text(form, "reason", 1000, False)}
         elif action == "close-attendance":
             row = find(data, "attendance", text(form, "session_id", 80))
             course_access(data, row["course_id"], session, write=True)
@@ -545,8 +708,13 @@ def mutate(session, action, form, files, ip):
         else:
             raise LearningError(404, "Không tìm thấy thao tác học tập.")
         write_json("learning.json", data)
-        audit("learning." + action, sid, ip, {"id": row["id"]})
-        result = {"ok": True, "id": row["id"]}
+        details = {"id": row["id"]}
+        if response and "count" in response:
+            details.update(count=response["count"], skipped_count=response["skipped_count"])
+        if response and "auto_present_count" in response:
+            details["auto_present_count"] = response["auto_present_count"]
+        audit("learning." + action, sid, ip, details)
+        result = response or {"ok": True, "id": row["id"]}
         if action == "schedule-generate":
             result.update(created_sessions=created, updated_sessions=updated)
         if action == "session-content-save":

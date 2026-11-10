@@ -333,6 +333,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200,target.read_bytes(),"application/octet-stream",{"Content-Disposition":f"attachment; filename*=UTF-8''{filename}"})
             if path=="/api/student/workspace":
                 sess=self._auth(req,"student"); sid=sess["user_id"]; student=self._get_user_record(sess)
+                learning.record_student_presence(sid)
                 result=learning.snapshot(sess)
                 result.update({"student":{"student_id":sid,"full_name":student.get("full_name",sid),"must_change_password":student.get("must_change_password",False)},"exam":student_exam_snapshot(sid),"exam_submissions":read_json("submissions.json").get(sid,[]),"notifications":[n for n in read_json("notifications.json",[]) if n.get("student_id") in (None,sid)],"server_time":utc_now()})
                 result["notification_feed"]=student_notifications.feed(sid,result)
@@ -547,6 +548,8 @@ class Handler(BaseHTTPRequestHandler):
                     if role=="student":
                         current["last_ip"]=ip; current["last_seen"]=utc_now(); write_json("students.json",accounts)
                     audit("auth.login_success",username,ip,{"role":role})
+                if role=="student":
+                    learning.record_student_presence(username)
                 return self._redirect("/admin" if role=="admin" else attendance_return(f.get("next")) or "/",cookie=token)
             if path=="/logout":
                 sess=get_session(req)

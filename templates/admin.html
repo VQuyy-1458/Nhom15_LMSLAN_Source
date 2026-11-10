@@ -9,7 +9,7 @@
 {% if section in ['exam','courses'] %}<link rel="stylesheet" href="/static/css/admin-exams.css?v=20261031-4">{% endif %}
 {% if section == 'exam' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261030-8">{% endif %}
 <link rel="stylesheet" href="/static/css/activity-colors.css">
-{% if section == 'courses' %}<link rel="stylesheet" href="/static/css/course-schedule.css?v=20261031-2">{% endif %}
+{% if section == 'courses' %}<link rel="stylesheet" href="/static/css/course-schedule.css?v=20261110-1">{% endif %}
 <link rel="stylesheet" href="/static/css/admin-drafts.css?v=20261030-8">
 <div class="admin-shell admin-sidebar-unified {{ 'course-admin-shell' if section == 'courses' else '' }} {{ 'admin-redesign' if section not in ['monitor','notifications'] else '' }}" data-admin-section="{{ section|default('dashboard') }}" data-draft-owner="{{ session.user_id }}">
     <aside class="main-sidebar" aria-label="Điều hướng quản trị">
@@ -452,15 +452,14 @@
 {% if section == 'exam' %}<link rel="stylesheet" href="/static/css/exam-preflight.css?v=20261030-8"><script defer src="/static/js/exam-preflight.js?v=20261030-10"></script><script defer src="/static/js/exam-timing.js?v=20261030-9"></script><script defer src="/static/js/exam-test-csv.js"></script><script defer src="/static/js/programming.js?v=20261030-10"></script>{% endif %}
 {% if section in ['exam','courses'] %}<script defer src="/static/js/admin-exams.js?v=20261031-4"></script>{% endif %}
 {% if section == 'submissions' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261030-8"><link rel="stylesheet" href="/static/css/submission-archive.css"><script defer src="/static/js/programming.js?v=20261030-10"></script><script defer src="/static/js/submission-archive.js?v=20261031-1"></script>{% endif %}
-{% if section == 'dashboard' %}<script defer src="/static/js/admin-teacher-calendar.js"></script>{% endif %}
+{% if section == 'dashboard' %}<script defer src="/static/js/admin-teacher-calendar.js?v=20261110-1"></script>{% endif %}
 {% if section in ['dashboard','monitor','exam','submissions'] %}<script defer src="/static/js/admin-lms.js?v=20261030-10"></script>{% endif %}
 {% if section == 'courses' %}
 <script defer src="/static/vendor/zxing/zxing-browser.min.js"></script>
-<script defer src="/static/js/attendance-qr.js"></script>
 <script defer src="/static/js/file-preview.js"></script>
-<script defer src="/static/js/admin-courses-design.js?v=20261110-ends-2"></script>
-<script defer src="/static/js/admin-attendance.js?v=20261031-2"></script>
-<script defer src="/static/js/learning-admin.js?v=20261110-ends-2"></script>
+<script defer src="/static/js/admin-courses-design.js?v=20261111-merge-1"></script>
+<script defer src="/static/js/admin-attendance.js?v=20261111-merge-1"></script>
+<script defer src="/static/js/learning-admin.js?v=20261111-merge-1"></script>
 {% endif %}
 <script defer src="/static/js/admin-drafts.js?v=20261030-8"></script>
 {% endblock %}
