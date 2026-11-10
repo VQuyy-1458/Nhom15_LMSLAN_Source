@@ -7,7 +7,7 @@ Trong Cấu hình kỳ thi → Thi lập trình → Bài toán, chọn dạng b�
 - Method: nộp hàm hoặc phương thức; test code gọi hàm và in kết quả.
 - Template trống dùng khuôn mặc định. Template tùy chỉnh phải chứa `{{ STUDENT_ANSWER }}` và `{{ TEST.testcode }}`. Đây là phép thay thế văn bản một lượt, không chạy template engine trên máy chủ. Java tùy chỉnh cần tạo lớp Main.
 
-Java class mặc định giữ public class trong file đúng tên và tạo Main riêng. Không dùng package hoặc lớp tên Main. Java method được chèn vào Main và test chạy trong phương thức của đối tượng Main; không nộp cả lớp cho dạng method. C/C++ dùng hàm main do hệ thống tạo; Python ghép định nghĩa với mã gọi thử.
+Java class mặc định giữ public class trong file đúng tên và tạo Main riêng. Bài nộp có thể chứa các lớp phụ không public trong cùng một file, ví dụ `abstract class Person` và `public class Student extends Person`; bộ chấm biên dịch cả hai file nguồn. Không dùng package hoặc lớp tên Main. Java method được chèn vào Main và test chạy trong phương thức của đối tượng Main; không nộp cả lớp cho dạng method. C/C++ dùng hàm main do hệ thống tạo; Python ghép định nghĩa với mã gọi thử.
 
 ## Ví dụ Java method
 

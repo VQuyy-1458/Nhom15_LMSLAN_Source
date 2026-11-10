@@ -64,6 +64,10 @@ class TemplateDockerTests(unittest.TestCase):
     def test_java_class(self):
         self.run_case('java','class','public class Product { public int price(){return 7;} }','System.out.println(new Product().price());','7')
 
+    def test_java_inheritance_in_one_source_file(self):
+        source='abstract class Person { abstract String info(); } public class Student extends Person { String info(){return "ok";} }'
+        self.run_case('java','class',source,'Person p = new Student(); System.out.println(p.info());','ok')
+
     def test_java_method(self):
         self.run_case('java','method','int add(int a,int b){return a+b;}','System.out.println(add(2,3));','5')
 

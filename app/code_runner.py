@@ -190,6 +190,8 @@ def _judge_program(source, language, problem, progress=None, image=None, extra_s
         for name, content in (extra_sources or {}).items():
             (folder / name).write_bytes(content.removeprefix(b'\xef\xbb\xbf'))
         compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", "Main.java"]}.get(language)
+        if language == 'java' and extra_sources:
+            compile_command.extend(sorted(extra_sources))
         if compile_command:
             if progress: progress("compiling", 0, len(problem["tests"]))
             compiled = _container(folder, compile_command, memory=768, timeout=20, readonly=False, image=image)
