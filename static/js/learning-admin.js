@@ -62,6 +62,7 @@
     const top=c?courseHeader(c):'';
     if(!c){content.innerHTML=landing();return;}
     if(tab==='learning')tab='materials';
+    if(tab==='weekly'){tab='calendar';syncUrl(true);}
     const tabs=[['overview','Tổng quan','th-large'],['students','Sinh viên','users'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch & điểm danh','calendar'],['exams','Kỳ thi','shield'],['grades','Bảng điểm','bar-chart']];
     const parentTab=({material:'materials',assignment:'assignments',event:'calendar',attendance:'calendar'})[tab]||tab;
     if(!tabs.some(([key])=>key===parentTab))tab='overview';
@@ -116,6 +117,7 @@
     const week=e.target.closest('[data-week]');if(week){weekOffset=week.dataset.week==='0'?0:weekOffset+Number(week.dataset.week);render();return;}
     const chosen=e.target.closest('[data-course]');if(chosen){choose(chosen.dataset.course);return;}
     if(e.target.closest('[data-course-back]')){choose('');return;}
+    if(e.target.closest('[data-schedule-create], [data-tab="schedule"]')){if(course().status!=='completed')window.adminDesign.modal('Tạo lịch học đến hết kỳ',window.courseDesign.scheduleForm(course()));return;}
     const button=e.target.closest('[data-tab]');if(button){tab=button.dataset.tab;attendanceId='';attendancePage=1;attendanceQuery='';syncUrl();render();drawAttendanceQr();}
   });
   content.addEventListener('submit',async e=>{
@@ -136,7 +138,7 @@
     for(const name of ['starts_at','due_at','expires_at'])if(f.get(name)){f.set(name,new Date(String(f.get(name))+'+07:00').toISOString());}
     const file=f.get('file');if(file instanceof File&&file.size>20*1048576){window.cssToast('File vượt 20 MiB.','error');return;}
     busy=true;const button=form.querySelector('button[type="submit"],button:not([type])');button.disabled=true;
-    try{const result=await window.cssRequest(`/api/learning/${action}`,{method:'POST',body:f});window.adminDrafts?.saved(form);if(action==='course'||action==='import-course'){selected=result.id;tab='overview';attendanceId='';syncUrl();}if(action==='attendance'){attendanceId=result.id;tab='attendance';attendancePage=1;attendanceQuery='';syncUrl();}const message=action==='event'&&Number.isInteger(result.count)?result.skipped_count?(result.count?`Đã tạo ${result.count} buổi học, bỏ qua ${result.skipped_count} buổi trùng lịch.`:`Đã bỏ qua ${result.skipped_count} buổi trùng lịch; không tạo thêm buổi mới.`):`Đã tạo ${result.count} buổi học.`:action==='attendance'?`Đã mở điểm danh, tự ghi nhận ${result.auto_present_count||0} sinh viên đang hoạt động.`:'Đã lưu dữ liệu khóa học.';window.cssToast(message,'success');await load();}catch(error){$('learning-error').textContent=error.message;$('learning-error').classList.remove('hidden');window.adminDesign.formError(form,error.message);window.cssToast(error.message,'error');}finally{busy=false;button.disabled=false;}
+    try{const result=await window.cssRequest(`/api/learning/${action}`,{method:'POST',body:f});if((action==='schedule-generate'&&!Number.isInteger(result.updated_sessions))||(action==='session-content-save'&&f.has('end_time')&&!result.ends_at))throw new Error('Server đang chạy phiên bản cũ, chưa lưu giờ kết thúc. Hãy dừng server và khởi động lại, sau đó lưu lại lịch học.');window.adminDrafts?.saved(form);if(action==='course'||action==='import-course'){selected=result.id;tab='overview';attendanceId='';syncUrl();}if(action==='attendance'){attendanceId=result.id;tab='attendance';attendancePage=1;attendanceQuery='';syncUrl();}const message=action==='schedule-generate'?`Đã tạo ${result.created_sessions} buổi học, cập nhật giờ kết thúc ${result.updated_sessions} buổi.`:action==='event'&&Number.isInteger(result.count)?result.skipped_count?(result.count?`Đã tạo ${result.count} buổi học, bỏ qua ${result.skipped_count} buổi trùng lịch.`:`Đã bỏ qua ${result.skipped_count} buổi trùng lịch; không tạo thêm buổi mới.`):`Đã tạo ${result.count} buổi học.`:action==='attendance'?`Đã mở điểm danh, tự ghi nhận ${result.auto_present_count||0} sinh viên đang hoạt động.`:'Đã lưu dữ liệu khóa học.';window.cssToast(message,'success');await load();}catch(error){$('learning-error').textContent=error.message;$('learning-error').classList.remove('hidden');window.adminDesign.formError(form,error.message);window.cssToast(error.message,'error');}finally{busy=false;button.disabled=false;}
   });
   function syncWeekRange(form){
     const start=form.querySelector('[name="start_week"]'),end=form.querySelector('[name="end_week"]');

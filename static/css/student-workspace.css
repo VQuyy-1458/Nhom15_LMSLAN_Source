@@ -76,3 +76,22 @@
   .student-shell .sidebar-user small{line-height:13px;margin-top:1px}
   .student-shell .sidebar-footer{display:none}
 }
+.student-week-list{display:grid;gap:14px;margin-top:18px}
+.student-week{border:1px solid #dce5f1;border-radius:12px;overflow:hidden}
+.student-week.is-current-week{border-color:#9dbbeb;border-left:4px solid #3569d8}
+.student-week>summary{padding:16px;background:#f6f8fc;cursor:pointer;line-height:1.8}
+.student-week.is-current-week>summary{background:#edf3ff}
+.student-week-body{padding:18px;display:grid;gap:20px}
+.student-week-lesson{min-width:0;border-bottom:1px solid #e4eaf3;padding-bottom:18px}
+.student-week-lesson h3,.student-week-notice h3{font-size:16px;margin:0 0 8px}
+.student-week-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+.student-week-content>section{min-width:0;padding:16px;border:1px solid #e4eaf3;border-radius:10px;overflow-wrap:anywhere}
+.student-week-content h4{font-size:13px;margin:0 0 10px}
+.student-week-content .student-list-actions{margin-top:12px;flex-wrap:wrap}
+.student-week-notice{margin-top:12px;padding:16px;border:1px solid #e4eaf3;border-radius:10px;overflow-wrap:anywhere}
+@media(max-width:640px){.student-week-content{grid-template-columns:1fr}.student-week-body{padding:12px}.student-week>summary{padding:12px}}
+.student-week-filter{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:16px;margin-top:16px;background:#f6f8fc;border:1px solid #e0e7f1;border-radius:10px}
+.student-week-filter label{display:grid;gap:7px;flex:1;min-width:220px;font-size:13px;font-weight:600}
+.student-week-filter select{width:100%;min-height:40px}
+.student-week-filter>[role=status]{flex-basis:100%;font-size:12px}
+@media(max-width:640px){.student-week-filter label{min-width:0;flex-basis:100%}.student-week-filter>.btn{width:100%}}

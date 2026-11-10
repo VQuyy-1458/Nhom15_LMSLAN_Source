@@ -10,7 +10,7 @@ import secrets
 import threading
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import date as calendar_date, datetime, time as wall_time, timedelta, timezone
+from datetime import date, date as calendar_date, datetime, time, time as wall_time, timedelta, timezone
 from pathlib import Path
 
 from .config import BASE_DIR, RUNTIME_DIR
@@ -21,7 +21,7 @@ from . import submission_rate, enrollments
 FILES = RUNTIME_DIR / "learning-files"
 LOCK = threading.RLock()
 EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip", ".c", ".cpp", ".java", ".py", ".png", ".jpg", ".jpeg"}
-EMPTY = {"courses": [], "materials": [], "events": [], "assignments": [], "submissions": [], "attendance": [], "grades": []}
+EMPTY = {"courses": [], "session_contents": [], "materials": [], "events": [], "assignments": [], "submissions": [], "attendance": [], "grades": []}
 WEIGHTS = {"attendance": 10, "homework": 10, "midterm": 10, "final": 70}
 
 
@@ -258,7 +258,7 @@ def snapshot(session):
                 course.pop("student_ids", None)
                 course.pop("enrollments", None)
                 course.pop("enrollment_tracking_since", None)
-        for key in ("materials", "events", "assignments", "submissions", "attendance"):
+        for key in ("session_contents", "materials", "events", "assignments", "submissions", "attendance"):
             result[key] = [copy.deepcopy(r) for r in data[key] if r["course_id"] in ids and (key != "submissions" or admin or r["student_id"] == sid)]
         for key in ("materials", "assignments", "submissions"):
             for row in result[key]:
@@ -385,6 +385,79 @@ def mutate(session, action, form, files, ip):
             if policy not in {"false", "true"}:
                 raise LearningError(400, "Quy tắc tính nội dung trước khi tham gia không hợp lệ.")
             enrollments.update_members(row, read_json("students.json"), members, utc_now(), policy == "true")
+        elif action == "schedule-generate":
+            course_id = text(form, "course_id", 80)
+            course_access(data, course_id, session, write=True)
+            try:
+                first = date.fromisoformat(text(form, "start_date", 10))
+                last = date.fromisoformat(text(form, "end_date", 10))
+                weekday = integer(form, "weekday", 0, 0, 6)  # Monday=0
+                hh, mm = map(int, text(form, "start_time", 5).split(":"))
+                clock = time(hh, mm)
+                end_hh, end_mm = map(int, text(form, "end_time", 5).split(":"))
+                end_clock = time(end_hh, end_mm)
+            except (ValueError, TypeError):
+                raise LearningError(400, "Ngày, thứ hoặc giờ học không hợp lệ.")
+            if end_clock <= clock:
+                raise LearningError(400, "Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.")
+            if last < first or (last - first).days > 370:
+                raise LearningError(400, "Học kỳ phải có thời hạn từ 1 đến 371 ngày.")
+            title = text(form, "title", 200)
+            location = text(form, "location", 200, False)
+            # Reuse lessons at the same start instant, preserving content and attendance.
+            # Vietnam's current teaching schedules use UTC+7, with no DST.
+            # A fixed offset also works on Windows without an IANA tzdata package.
+            local_timezone = timezone(timedelta(hours=7))
+            current = first + timedelta(days=(weekday - first.weekday()) % 7)
+            created = 0
+            updated = 0
+            while current <= last:
+                starts = datetime.combine(current, clock, tzinfo=local_timezone).astimezone(timezone.utc).isoformat()
+                ends = datetime.combine(current, end_clock, tzinfo=local_timezone).astimezone(timezone.utc).isoformat()
+                existing = [e for e in data["events"] if e["course_id"] == course_id and e.get("kind") == "lesson" and date_value(e["starts_at"]) == date_value(starts)]
+                if not existing:
+                    event = {"id": secrets.token_hex(10), "created_at": utc_now(), "course_id": course_id,
+                             "title": title, "topic": "", "description": "", "starts_at": starts, "ends_at": ends,
+                             "location": location, "kind": "lesson", "recurring": True}
+                    data["events"].append(event)
+                    created += 1
+                else:
+                    for event in existing:
+                        if event.get("ends_at") != ends:
+                            event["ends_at"] = ends
+                            updated += 1
+                current += timedelta(days=7)
+            row.update({"course_id": course_id, "created_sessions": created, "updated_sessions": updated})
+        elif action == "session-content-save":
+            event = find(data, "events", text(form, "event_id", 80))
+            course_access(data, event["course_id"], session, write=True)
+            if event.get("kind") != "lesson":
+                raise LearningError(400, "Chỉ được gắn nội dung vào buổi học.")
+            if "end_time" in form:
+                try:
+                    hh, mm = map(int, text(form, "end_time", 5).split(":"))
+                    start = date_value(event["starts_at"])
+                    local_start = start.astimezone(timezone(timedelta(hours=7)))
+                    end = local_start.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                except (ValueError, TypeError):
+                    raise LearningError(400, "Giờ kết thúc không hợp lệ.")
+                if end <= start:
+                    raise LearningError(400, "Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.")
+                event["ends_at"] = end.astimezone(timezone.utc).isoformat()
+            material_id = text(form, "material_id", 80, False)
+            assignment_id = text(form, "assignment_id", 80, False)
+            for collection, item_id in (("materials", material_id), ("assignments", assignment_id)):
+                if item_id and find(data, collection, item_id)["course_id"] != event["course_id"]:
+                    raise LearningError(400, "Nội dung không thuộc khóa học.")
+            existing = next((r for r in data["session_contents"] if r["event_id"] == event["id"]), None)
+            row = existing if existing else row
+            row.update({"course_id": event["course_id"], "event_id": event["id"],
+                        "lesson_text": text(form, "lesson_text", 10000, False),
+                        "reading_text": text(form, "reading_text", 10000, False),
+                        "material_id": material_id, "assignment_id": assignment_id,
+                        "updated_at": utc_now()})
+            if not existing:
+                data["session_contents"].append(row)
         elif action in {"material", "event", "assignment", "attendance"}:
             course_id = text(form, "course_id", 80)
             course = course_access(data, course_id, session, write=True)
@@ -641,4 +714,9 @@ def mutate(session, action, form, files, ip):
         if response and "auto_present_count" in response:
             details["auto_present_count"] = response["auto_present_count"]
         audit("learning." + action, sid, ip, details)
-        return response or {"ok": True, "id": row["id"]}
+        result = response or {"ok": True, "id": row["id"]}
+        if action == "schedule-generate":
+            result.update(created_sessions=created, updated_sessions=updated)
+        if action == "session-content-save":
+            result["ends_at"] = event.get("ends_at")
+        return result

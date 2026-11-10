@@ -52,8 +52,8 @@
     const c=data.courses.find(c=>c.id===course());
     if(course()&&!c)return `<section class="panel">${empty('Không tìm thấy khóa học','Khóa học không tồn tại hoặc bạn chưa được cấp quyền.','lock')}</section>`;
     if(c){
-      const tab=new URLSearchParams(location.search).get('tab')||'materials';
-      const views={materials,calendar:calendarView,assignments:assignmentsView,exams:examsView,grades:gradesView};
+      const tab=new URLSearchParams(location.search).get('tab')||'weekly';
+      const views={weekly:()=>window.studentWorkspace.weekly(data,c.id,new URLSearchParams(location.search).get('week')||'all'),announcements:()=>window.studentWorkspace.announcements(data,c.id),materials,calendar:calendarView,assignments:assignmentsView,exams:examsView,grades:gradesView};
       return window.studentWorkspace.course(data,c,tab,(views[tab]||materials)());
     }
     const rows=window.listUi.view('student:courses',data.courses.filter(c=>(`${c.name} ${c.code} ${c.semester}`).toLocaleLowerCase('vi').includes(filters.q.toLocaleLowerCase('vi'))&&(!filters.status||c.status===filters.status)),'courses',{search:false,statusFilter:false});
@@ -129,7 +129,7 @@
     const url=new URL(location.href);if(url.pathname!=='/student/courses'||!url.searchParams.get('course'))return;
     const tab=url.searchParams.get('tab');
     if(tab==='attendance'){url.pathname='/student/attendance';url.searchParams.delete('tab');}
-    else if(!['materials','assignments','calendar','exams','grades'].includes(tab))url.searchParams.set('tab','materials');
+    else if(!['weekly','announcements','materials','assignments','calendar','exams','grades'].includes(tab))url.searchParams.set('tab','weekly');
     history.replaceState(null,'',url.pathname+url.search);
   }
   window.listUi.on('student',()=>{page=1;render();refreshDetail();});
@@ -207,10 +207,18 @@
       form.reset();delete form.dataset.requestId;await load();
     }catch(e){error(e);let inline=form.querySelector('[data-student-form-error]');if(!inline){inline=document.createElement('p');inline.dataset.studentFormError='';inline.setAttribute('role','alert');form.append(inline);}inline.textContent=e.message;window.cssToast(e.message,'error');}finally{submitting=false;if(button)button.disabled=false;}
   });
+  function selectStudyWeek(value){
+    const url=new URL(location.href);
+    if(value==='all')url.searchParams.delete('week');else url.searchParams.set('week',value);
+    history.pushState(null,'',url.pathname+url.search);render();
+    document.querySelector('[data-student-week-filter]')?.focus({preventScroll:true});
+  }
+  document.addEventListener('click',e=>{if(e.target.closest('[data-student-week-current]'))selectStudyWeek('current');});
   document.addEventListener('change',async e=>{
+    if(e.target.matches('[data-student-week-filter]')){selectStudyWeek(e.target.value);return;}
     if(e.target.matches('input[type=file]')&&e.target.form)delete e.target.form.dataset.requestId;
     if(e.target.closest('#filter-form')&&e.target.matches('select')){applyFilters(e.target.form);return;}
-    if(e.target.matches('[data-student-course-switch]')){const url=new URL(location.href);url.searchParams.set('course',e.target.value);url.searchParams.delete('assignment');url.searchParams.delete('exam');history.pushState(null,'',url.pathname+url.search);filters={q:'',status:'',course:'',session:''};page=1;render();return;}
+    if(e.target.matches('[data-student-course-switch]')){const url=new URL(location.href);url.searchParams.set('course',e.target.value);url.searchParams.delete('week');url.searchParams.delete('assignment');url.searchParams.delete('exam');history.pushState(null,'',url.pathname+url.search);filters={q:'',status:'',course:'',session:''};page=1;render();return;}
     if(e.target.type==='file'&&e.target.form)delete e.target.form.dataset.requestId;
 
   });
