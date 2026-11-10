@@ -2,7 +2,7 @@
 
 Trong Cấu hình kỳ thi → Thi lập trình → Bài toán, chọn dạng bài và ngôn ngữ mã kiểm thử. Program cũ tiếp tục hỗ trợ nhiều ngôn ngữ. Class/method và template tùy chỉnh dùng một ngôn ngữ cố định cho mỗi bài.
 
-- Program: nộp chương trình hoàn chỉnh, input được truyền vào stdin.
+- Program: nộp chương trình hoàn chỉnh, input được truyền vào stdin. Java nhận tên `public class` có `main`, ví dụ `J05005`; file nguồn được đặt theo tên lớp trước khi biên dịch.
 - Class: nộp lớp; test code tạo đối tượng và gọi phương thức. C không hỗ trợ class.
 - Method: nộp hàm hoặc phương thức; test code gọi hàm và in kết quả.
 - Template trống dùng khuôn mặc định. Template tùy chỉnh phải chứa `{{ STUDENT_ANSWER }}` và `{{ TEST.testcode }}`. Đây là phép thay thế văn bản một lượt, không chạy template engine trên máy chủ. Java tùy chỉnh cần tạo lớp Main.

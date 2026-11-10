@@ -68,6 +68,10 @@ class TemplateDockerTests(unittest.TestCase):
         source='abstract class Person { abstract String info(); } public class Student extends Person { String info(){return "ok";} }'
         self.run_case('java','class',source,'Person p = new Student(); System.out.println(p.info());','ok')
 
+    def test_complete_java_program_with_named_entry_class(self):
+        source='import java.util.*;\nclass Student { int value=7; }\npublic class J05005 { public static void main(String[] args){ System.out.println(new Student().value); } }'
+        self.run_case('java','program',source,'','7')
+
     def test_java_method(self):
         self.run_case('java','method','int add(int a,int b){return a+b;}','System.out.println(add(2,3));','5')
 

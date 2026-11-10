@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -185,11 +186,17 @@ def _judge_program(source, language, problem, progress=None, image=None, extra_s
     with tempfile.TemporaryDirectory(prefix="job-", dir=WORK) as directory:
         folder = Path(directory)
         folder.chmod(0o777)
-        filename = LANGUAGES[language]
+        java_entry = 'Main'
+        if language == 'java':
+            # A complete Java program may use any public entry class, e.g. J05005.
+            match = re.search(rb'(?m)^\s*public\s+(?:final\s+)?class\s+([A-Za-z_$][\w$]*)\b', source)
+            if match:
+                java_entry = match.group(1).decode('ascii')
+        filename = java_entry + '.java' if language == 'java' else LANGUAGES[language]
         (folder / filename).write_bytes(source.removeprefix(b"\xef\xbb\xbf"))
         for name, content in (extra_sources or {}).items():
             (folder / name).write_bytes(content.removeprefix(b'\xef\xbb\xbf'))
-        compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", "Main.java"]}.get(language)
+        compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", filename]}.get(language)
         if language == 'java' and extra_sources:
             compile_command.extend(sorted(extra_sources))
         if compile_command:
@@ -199,7 +206,7 @@ def _judge_program(source, language, problem, progress=None, image=None, extra_s
             if compiled["exit"] or compiled["overflow"]:
                 return {"verdict": "CE", "score": 0, "passed": 0, "total": len(problem["tests"]), "compile_log": (compiled["stderr"] or compiled["stdout"])[:16000], "tests": []}
         memory = problem["memory_limit_mb"]
-        run_command = {"c": ["./program"], "cpp": ["./program"], "java": ["java", f"-Xmx{max(8, memory-64)}m", "-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:ReservedCodeCacheSize=16m", "Main"], "python": ["python3", "-I", "-B", "main.py"]}[language]
+        run_command = {"c": ["./program"], "cpp": ["./program"], "java": ["java", f"-Xmx{max(8, memory-64)}m", "-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:ReservedCodeCacheSize=16m", java_entry], "python": ["python3", "-I", "-B", "main.py"]}[language]
         results = []
         if progress: progress("judging", 0, len(problem["tests"]))
         deadline = time.monotonic() + MAX_JOB_SECONDS
