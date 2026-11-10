@@ -5,11 +5,12 @@ import copy
 from contextlib import ExitStack
 import hashlib
 import math
+import re
 import secrets
 import threading
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import date as calendar_date, datetime, time as wall_time, timedelta, timezone
 from pathlib import Path
 
 from .config import BASE_DIR, RUNTIME_DIR
@@ -117,6 +118,53 @@ def date_value(value):
         return result.astimezone(timezone.utc)
     except (ValueError, TypeError):
         raise LearningError(400, "Thời gian không hợp lệ hoặc thiếu múi giờ.")
+
+
+def lesson_schedule(form):
+    def iso_week(value):
+        match = re.fullmatch(r"(\d{4})-W(\d{2})", value or "")
+        if not match:
+            raise LearningError(400, "Tuần bắt đầu và tuần kết thúc không hợp lệ.")
+        try:
+            return calendar_date.fromisocalendar(int(match.group(1)), int(match.group(2)), 1)
+        except ValueError:
+            raise LearningError(400, "Tuần bắt đầu hoặc tuần kết thúc không tồn tại.")
+
+    first_monday, last_monday = iso_week(form.get("start_week")), iso_week(form.get("end_week"))
+    weeks = (last_monday - first_monday).days // 7 + 1
+    if weeks < 1:
+        raise LearningError(400, "Tuần kết thúc phải bằng hoặc sau tuần bắt đầu.")
+    if weeks > 53:
+        raise LearningError(400, "Mỗi lần tạo lịch chỉ được chọn tối đa 53 tuần.")
+
+    if not re.fullmatch(r"\d{2}:\d{2}", form.get("start_time", "")) or not re.fullmatch(r"\d{2}:\d{2}", form.get("end_time", "")):
+        raise LearningError(400, "Giờ bắt đầu hoặc kết thúc không hợp lệ.")
+    try:
+        starts = wall_time.fromisoformat(form["start_time"])
+        ends = wall_time.fromisoformat(form["end_time"])
+    except ValueError:
+        raise LearningError(400, "Giờ bắt đầu hoặc kết thúc không hợp lệ.")
+    if starts >= ends:
+        raise LearningError(400, "Giờ kết thúc phải sau giờ bắt đầu trong cùng ngày.")
+
+    raw_weekdays = form.get("weekdays", "")
+    try:
+        weekdays = sorted({int(value) for value in raw_weekdays.split(",") if value})
+    except ValueError:
+        raise LearningError(400, "Thứ trong tuần không hợp lệ.")
+    if not weekdays or any(day < 1 or day > 7 for day in weekdays):
+        raise LearningError(400, "Hãy chọn ít nhất một thứ trong tuần hợp lệ.")
+
+    vietnam_tz = timezone(timedelta(hours=7))
+    occurrences = []
+    for week in range(weeks):
+        monday = first_monday + timedelta(weeks=week)
+        for weekday in weekdays:
+            day = monday + timedelta(days=weekday - 1)
+            starts_at = datetime.combine(day, starts, vietnam_tz)
+            ends_at = datetime.combine(day, ends, vietnam_tz)
+            occurrences.append((starts_at.isoformat(), ends_at.isoformat()))
+    return occurrences
 
 
 def find(data, collection, item_id):
@@ -266,6 +314,7 @@ def mutate(session, action, form, files, ip):
         data = load()
         admin = session["role"] == "admin"
         sid = session["user_id"]
+        response = None
         if action != "submit" and action != "check-in" and not admin:
             raise LearningError(403, "Chỉ giảng viên được quản lý nội dung học tập.")
         row = {"id": secrets.token_hex(10), "created_at": utc_now()}
@@ -291,6 +340,8 @@ def mutate(session, action, form, files, ip):
         elif action in {"material", "event", "assignment", "attendance"}:
             course_id = text(form, "course_id", 80)
             course_access(data, course_id, session, write=True)
+            kind = form.get("kind", "lesson") if action == "event" else None
+            bulk_lesson = action == "event" and kind == "lesson" and any(form.get(key) for key in ("start_week", "end_week", "start_time", "end_time"))
             lesson = None
             if action == "attendance":
                 lesson = find(data, "events", text(form, "event_id", 80))
@@ -299,16 +350,55 @@ def mutate(session, action, form, files, ip):
                 existing = next((s for s in data["attendance"] if s.get("event_id") == lesson["id"]), None)
                 if existing:
                     return {"ok": True, "id": existing["id"]}
-            row.update({"course_id": course_id, "title": lesson["title"] if lesson else text(form, "title"), "topic": text(form, "topic", 200, False), "description": text(form, "description", 10000, False)})
+            title = lesson["title"] if lesson else "" if bulk_lesson else text(form, "title")
+            row.update({"course_id": course_id, "title": title, "topic": text(form, "topic", 200, False), "description": text(form, "description", 10000, False)})
             if action == "material":
                 row.update(save_file(files.get("file")))
                 data["materials"].append(row)
             elif action == "event":
-                starts = date_value(form.get("starts_at"))
-                row.update({"starts_at": starts.isoformat(), "location": text(form, "location", 200, False), "kind": form.get("kind", "lesson")})
-                if row["kind"] not in {"lesson", "announcement", "exam"}:
+                if kind not in {"lesson", "announcement", "exam"}:
                     raise LearningError(400, "Loại lịch không hợp lệ.")
-                data["events"].append(row)
+                location = text(form, "location", 200, False)
+                if bulk_lesson:
+                    occurrences = lesson_schedule(form)
+                    created_events = []
+                    existing_slots = {
+                        (event["course_id"], date_value(event["starts_at"]), date_value(event["ends_at"]))
+                        for event in data["events"]
+                        if event.get("kind") == "lesson" and event.get("ends_at")
+                    }
+                    skipped_count = 0
+                    for starts_at, ends_at in occurrences:
+                        slot = (course_id, date_value(starts_at), date_value(ends_at))
+                        if slot in existing_slots:
+                            skipped_count += 1
+                            continue
+                        lesson_date = datetime.fromisoformat(starts_at).strftime("%d/%m/%Y")
+                        event = {
+                            **row,
+                            "id": secrets.token_hex(10),
+                            "created_at": utc_now(),
+                            "title": f"Buổi học ngày {lesson_date}",
+                            "starts_at": starts_at,
+                            "ends_at": ends_at,
+                            "location": location,
+                            "kind": kind,
+                        }
+                        data["events"].append(event)
+                        created_events.append(event)
+                        existing_slots.add(slot)
+                    if created_events:
+                        row = created_events[0]
+                    response = {"ok": True, "ids": [event["id"] for event in created_events], "count": len(created_events), "skipped_count": skipped_count}
+                else:
+                    starts = date_value(form.get("starts_at"))
+                    row.update({"starts_at": starts.isoformat(), "location": location, "kind": kind})
+                    if form.get("ends_at"):
+                        ends = date_value(form["ends_at"])
+                        if ends <= starts:
+                            raise LearningError(400, "Thời gian kết thúc phải sau thời gian bắt đầu.")
+                        row["ends_at"] = ends.isoformat()
+                    data["events"].append(row)
             elif action == "assignment":
                 due = date_value(form.get("due_at"))
                 if due <= datetime.now(timezone.utc):
@@ -472,5 +562,8 @@ def mutate(session, action, form, files, ip):
         else:
             raise LearningError(404, "Không tìm thấy thao tác học tập.")
         write_json("learning.json", data)
-        audit("learning." + action, sid, ip, {"id": row["id"]})
-        return {"ok": True, "id": row["id"]}
+        details = {"id": row["id"]}
+        if response and "count" in response:
+            details.update(count=response["count"], skipped_count=response["skipped_count"])
+        audit("learning." + action, sid, ip, details)
+        return response or {"ok": True, "id": row["id"]}

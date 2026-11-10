@@ -26,7 +26,7 @@ def export_course(course_id, session):
             if total > LIMIT:
                 raise learning.LearningError(413, "Tổng học liệu vượt 15 MiB cho một gói chuyển khóa.")
             package["materials"].append({**{k: row.get(k, "") for k in ("title", "topic", "description")}, "filename": filename, "data_base64": base64.b64encode(path.read_bytes()).decode("ascii")})
-        for key, fields in (("assignments", ("title", "description", "topic", "due_at", "max_attempts")), ("events", ("title", "description", "kind", "starts_at", "location"))):
+        for key, fields in (("assignments", ("title", "description", "topic", "due_at", "max_attempts")), ("events", ("title", "description", "kind", "starts_at", "ends_at", "location"))):
             package[key] = [{k: row.get(k, "") for k in fields} for row in data[key] if row["course_id"] == course_id]
         for source, exported in zip([r for r in data["assignments"] if r["course_id"] == course_id], package["assignments"]):
             if source.get("stored_name"):
@@ -102,7 +102,14 @@ def import_course(file, session, ip):
     for row in package.get("events", []):
         if row.get("kind") not in {"lesson", "announcement", "exam"}:
             raise learning.LearningError(400, "Loại lịch trong gói không hợp lệ.")
-        staged["events"].append({"id": secrets.token_hex(10), "created_at": now, "course_id": cid, "title": field(row, "title"), "description": field(row, "description", 10000, False), "kind": row["kind"], "starts_at": learning.date_value(row.get("starts_at")).isoformat(), "location": field(row, "location", 200, False)})
+        starts_at = learning.date_value(row.get("starts_at"))
+        event = {"id": secrets.token_hex(10), "created_at": now, "course_id": cid, "title": field(row, "title"), "description": field(row, "description", 10000, False), "kind": row["kind"], "starts_at": starts_at.isoformat(), "location": field(row, "location", 200, False)}
+        if row.get("ends_at"):
+            ends_at = learning.date_value(row["ends_at"])
+            if ends_at <= starts_at:
+                raise learning.LearningError(400, "Thời gian kết thúc của hoạt động phải sau thời gian bắt đầu.")
+            event["ends_at"] = ends_at.isoformat()
+        staged["events"].append(event)
     written = []
     with learning.LOCK:
         data = learning.load()
