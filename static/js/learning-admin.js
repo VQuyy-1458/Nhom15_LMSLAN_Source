@@ -29,7 +29,7 @@
     const lesson=data.events.find(r=>r.id===id&&r.course_id===selected&&r.kind==='lesson');if(!lesson)return;
     const session=data.attendance.find(r=>r.event_id===id),closed=course().status==='completed';
     const timeRange=`${date(lesson.starts_at)}${lesson.ends_at?' – '+new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',timeStyle:'short'}).format(new Date(lesson.ends_at)):''}`;
-    const dialog=window.adminDesign.modal('Buổi học & điểm danh',`<h3>${esc(lesson.title)}</h3><p class="muted">${timeRange} · ${esc(lesson.location||'Chưa đặt địa điểm')}</p><p>${esc(lesson.description||'')}</p>${session?`<p>${session.open?'Điểm danh đang mở':'Phiên điểm danh đã kết thúc'}.</p><button type="button" class="btn btn-primary" data-lesson-attendance="${session.id}">Xem chi tiết điểm danh</button>`:closed?'<p class="muted">Khóa học đã tổng kết.</p>':`<form class="stack-form" data-action="attendance"><input type="hidden" name="course_id" value="${selected}"><input type="hidden" name="event_id" value="${id}"><label>Thời gian mở mã QR<select name="duration_minutes"><option value="5">5 phút</option><option value="10">10 phút</option><option value="15" selected>15 phút</option><option value="30">30 phút</option><option value="60">60 phút</option></select></label><p class="muted">Điểm danh gắn với buổi học này. Sinh viên quét QR để ghi nhận có mặt.</p><button class="btn btn-primary">Mở điểm danh buổi học</button></form>`}`);
+    const dialog=window.adminDesign.modal('Buổi học & điểm danh',`<h3>${esc(lesson.title)}</h3><p class="muted">${timeRange} · ${esc(lesson.location||'Chưa đặt địa điểm')}</p><p>${esc(lesson.description||'')}</p>${session?`<p>${session.open?'Điểm danh đang mở':'Phiên điểm danh đã kết thúc'}.</p><button type="button" class="btn btn-primary" data-lesson-attendance="${session.id}">Xem chi tiết điểm danh</button>`:closed?'<p class="muted">Khóa học đã tổng kết.</p>':`<form class="stack-form" data-action="attendance"><input type="hidden" name="course_id" value="${selected}"><input type="hidden" name="event_id" value="${id}"><label>Thời lượng điểm danh<select name="duration_minutes"><option value="5">5 phút</option><option value="10">10 phút</option><option value="15" selected>15 phút</option><option value="30">30 phút</option><option value="60">60 phút</option></select></label><button class="btn btn-primary">Bắt đầu điểm danh</button></form>`}`);
     dialog.querySelector('[data-lesson-attendance]')?.addEventListener('click',()=>{dialog.close();openAttendance(session.id);});
   }
   function landing(){return window.courseDesign.landing(data,{search,status:statusFilter});}
@@ -83,12 +83,6 @@
     window.listUi.preserveTable('course:gradebook:'+selected,content.querySelector('.editable-gradebook'));
     window.classroomPreview.decorate(content);
     if(tab==='attendance'&&attendanceId)window.classroomAttendance.decorate(content,data,course(),attendanceId);
-    content.querySelectorAll('[data-qr-session]').forEach(el=>{
-      const row=data.attendance.find(r=>r.id===el.dataset.qrSession);
-      const url=new URL('/student/attendance',location.origin);url.searchParams.set('session',row.id);url.searchParams.set('code',row.code);
-      window.classroomQr.draw(el,url.href);
-      const note=document.createElement('p');note.className='muted';note.textContent='Sinh viên quét QR bằng điện thoại hoặc chọn ảnh trong trang Điểm danh. Khi dùng điện thoại trong lớp, hãy mở trang quản trị bằng địa chỉ LAN của server.';el.after(note);
-    });
   }
   async function load(){try{data=await window.cssRequest('/api/admin/workspace');window.submissionDeadlines.sync(data.server_time);$('learning-error').classList.add('hidden');render();drawAttendanceQr();const url=new URL(location.href),lesson=url.searchParams.get('lesson');if(lesson){url.searchParams.delete('lesson');history.replaceState(null,'',url.pathname+url.search);openLesson(lesson);}}catch(e){$('learning-error').textContent=e.message;$('learning-error').classList.remove('hidden');}}
   content.addEventListener('click',e=>{
@@ -104,7 +98,7 @@
       if(record?.status===value)return;
       const body=new FormData();
       body.set('session_id',sessionId);body.set('student_id',studentId);body.set('status',value);
-      body.set('reason',value==='present'?'Điểm danh thủ công: Có mặt':'Điểm danh thủ công: Đến muộn');
+      body.set('reason',`Điểm danh thủ công: ${{present:'Có mặt',late:'Đến muộn',early_departure:'Về sớm',absent:'Vắng'}[value]}`);
       busy=true;choice.closest('.attendance-choices').querySelectorAll('button').forEach(button=>button.disabled=true);
       window.cssRequest('/api/learning/attendance-record',{method:'POST',body}).then(async()=>{window.cssToast('Đã cập nhật điểm danh.','success');await load();}).catch(async error=>{window.cssToast(error.message,'error');await load();}).finally(()=>{busy=false;});
       return;
@@ -138,14 +132,20 @@
     }
     if(action==='course-members'&&(f.has('add_student_id')||f.has('append_ids'))){const added=String(f.get('add_student_id')||f.get('append_ids')||'').replaceAll(',',' ').split(/\s+/).filter(Boolean);f.set('student_ids',[...new Set([...members(course()).map(s=>s.student_id),...added])].join(','));}
     if(action==='complete-course'&&!window.confirm('Tổng kết khóa học? Sau khi chốt chỉ có thể xem, không thể đăng nội dung hoặc chấm điểm.'))return;
-    if(action==='close-attendance'&&!window.confirm('Kết thúc điểm danh? Phiên đã đóng không thể sửa.'))return;
+    if(action==='close-attendance'&&!window.confirm('Kết thúc điểm danh? Bạn vẫn có thể chỉnh trạng thái sinh viên sau khi kết thúc.'))return;
     for(const name of ['starts_at','due_at','expires_at'])if(f.get(name)){f.set(name,new Date(String(f.get(name))+'+07:00').toISOString());}
     const file=f.get('file');if(file instanceof File&&file.size>20*1048576){window.cssToast('File vượt 20 MiB.','error');return;}
     busy=true;const button=form.querySelector('button[type="submit"],button:not([type])');button.disabled=true;
-    try{const result=await window.cssRequest(`/api/learning/${action}`,{method:'POST',body:f});window.adminDrafts?.saved(form);if(action==='course'||action==='import-course'){selected=result.id;tab='overview';attendanceId='';syncUrl();}if(action==='attendance'){attendanceId=result.id;tab='attendance';attendancePage=1;attendanceQuery='';syncUrl();}const message=action==='event'&&Number.isInteger(result.count)?result.skipped_count?(result.count?`Đã tạo ${result.count} buổi học, bỏ qua ${result.skipped_count} buổi trùng lịch.`:`Đã bỏ qua ${result.skipped_count} buổi trùng lịch; không tạo thêm buổi mới.`):`Đã tạo ${result.count} buổi học.`:'Đã lưu dữ liệu khóa học.';window.cssToast(message,'success');await load();}catch(error){$('learning-error').textContent=error.message;$('learning-error').classList.remove('hidden');window.adminDesign.formError(form,error.message);window.cssToast(error.message,'error');}finally{busy=false;button.disabled=false;}
+    try{const result=await window.cssRequest(`/api/learning/${action}`,{method:'POST',body:f});window.adminDrafts?.saved(form);if(action==='course'||action==='import-course'){selected=result.id;tab='overview';attendanceId='';syncUrl();}if(action==='attendance'){attendanceId=result.id;tab='attendance';attendancePage=1;attendanceQuery='';syncUrl();}const message=action==='event'&&Number.isInteger(result.count)?result.skipped_count?(result.count?`Đã tạo ${result.count} buổi học, bỏ qua ${result.skipped_count} buổi trùng lịch.`:`Đã bỏ qua ${result.skipped_count} buổi trùng lịch; không tạo thêm buổi mới.`):`Đã tạo ${result.count} buổi học.`:action==='attendance'?`Đã mở điểm danh, tự ghi nhận ${result.auto_present_count||0} sinh viên đang hoạt động.`:'Đã lưu dữ liệu khóa học.';window.cssToast(message,'success');await load();}catch(error){$('learning-error').textContent=error.message;$('learning-error').classList.remove('hidden');window.adminDesign.formError(form,error.message);window.cssToast(error.message,'error');}finally{busy=false;button.disabled=false;}
   });
-  function updateEventFields(form){const lesson=form.querySelector('[data-event-kind]')?.value==='lesson';for(const panel of form.querySelectorAll('[data-event-lesson],[data-event-single]')){const visible=panel.hasAttribute('data-event-lesson')===lesson;panel.hidden=!visible;for(const input of panel.querySelectorAll('input,textarea,select')){input.disabled=!visible;if(input.hasAttribute('data-event-required'))input.required=visible;}}}
-  content.addEventListener('change',e=>{if(e.target.matches('[data-event-kind]'))updateEventFields(e.target.form);if(e.target.id==='design-course-status'){statusFilter=e.target.value;render();}if(e.target.id==='design-switch-course'){selected=e.target.value;attendanceId='';syncUrl();render();drawAttendanceQr();}});
+  function syncWeekRange(form){
+    const start=form.querySelector('[name="start_week"]'),end=form.querySelector('[name="end_week"]');
+    if(!start||!end)return;
+    end.min=start.value;
+    if(start.value&&end.value&&end.value<start.value)end.value=start.value;
+  }
+  function updateEventFields(form){const lesson=form.querySelector('[data-event-kind]')?.value==='lesson';for(const panel of form.querySelectorAll('[data-event-lesson],[data-event-single]')){const visible=panel.hasAttribute('data-event-lesson')===lesson;panel.hidden=!visible;for(const input of panel.querySelectorAll('input,textarea,select')){input.disabled=!visible;if(input.hasAttribute('data-event-required'))input.required=visible;}}syncWeekRange(form);}
+  content.addEventListener('change',e=>{if(e.target.matches('[data-event-kind]'))updateEventFields(e.target.form);if(e.target.matches('[name="start_week"]'))syncWeekRange(e.target.form);if(e.target.id==='design-course-status'){statusFilter=e.target.value;render();}if(e.target.id==='design-switch-course'){selected=e.target.value;attendanceId='';syncUrl();render();drawAttendanceQr();}});
   content.addEventListener('input',e=>{if(e.target.matches('[data-grade-component]')){updateGradeTotal(e.target.closest('tr'));return;}if(e.target.id==='design-member-search'){const q=e.target.value.toLocaleLowerCase('vi');content.querySelectorAll('[data-member-search]').forEach(row=>row.hidden=!row.dataset.memberSearch.includes(q));}if(e.target.id==='design-course-search'){const position=e.target.selectionStart;search=e.target.value;render();const input=$('design-course-search');input.focus();input.setSelectionRange(position,position);}});
   window.addEventListener('popstate',()=>{selected=new URLSearchParams(location.search).get('course')||'';tab=new URLSearchParams(location.search).get('tab')||'overview';attendanceId=new URLSearchParams(location.search).get('session')||'';attendancePage=1;attendanceQuery='';if(data){render();drawAttendanceQr();}});
   let attendancePolling=false;

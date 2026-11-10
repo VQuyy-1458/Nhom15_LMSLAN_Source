@@ -297,10 +297,61 @@ class LearningTests(unittest.TestCase):
         row = learning.load()["attendance"][0]
         self.assertEqual(row["title"],"Scheduled lesson")
         self.assertEqual(row["lesson_at"],self.future)
+        self.assertEqual(row["attendance_method"],"lan-online")
+        self.assertEqual(row["records"]["s1"]["status"],"present")
+        self.assertEqual(row["records"]["s1"]["source"],"lan-session")
         self.assertEqual(self.request("/api/learning/check-in","s1",{"session_id":session,"code":row["code"]})[0],200)
         self.assertEqual(self.create("attendance",course_id=course,event_id=lesson),session)
         self.assertEqual(len(learning.load()["attendance"]),1)
         self.assertEqual(learning.load()["attendance"][0]["records"]["s1"]["status"],"present")
+
+    def test_attendance_auto_marks_only_enrolled_students_with_live_sessions(self):
+        course = self.course("s1,s2")
+        sessions = storage.read_json("sessions.json")
+        for item in sessions.values():
+            if item["user_id"] == "s1":
+                item["expires_at"] = 0
+        storage.write_json("sessions.json", sessions)
+        lesson = self.create("event", course_id=course, title="Scheduled lesson", starts_at=self.future, kind="lesson")
+        code, result = self.request("/api/learning/attendance", form={
+            "course_id": course,
+            "event_id": lesson,
+            "duration_minutes": "15",
+        })
+        self.assertEqual(code, 200, result)
+        self.assertEqual(result["auto_present_count"], 1)
+        record = learning.load()["attendance"][0]["records"]
+        self.assertNotIn("s1", record)
+        self.assertEqual(record["s2"]["status"], "present")
+
+    def test_student_login_is_recorded_in_an_already_open_attendance_session(self):
+        course = self.course("s1,s2")
+        sessions = storage.read_json("sessions.json")
+        sessions = {key: item for key, item in sessions.items() if item["user_id"] != "s2"}
+        storage.write_json("sessions.json", sessions)
+        attendance_id = self.create("attendance", course_id=course, title="Open session", expires_at=self.future)
+        self.assertNotIn("s2", learning.find(learning.load(), "attendance", attendance_id)["records"])
+
+        code, _ = self.request("/login", "s2", {"username": "s2", "password": "student-pass"})
+        self.assertEqual(code, 303)
+        record = learning.find(learning.load(), "attendance", attendance_id)["records"]["s2"]
+        self.assertEqual(record["status"], "present")
+        self.assertEqual(record["source"], "lan-session")
+
+    def test_student_workspace_poll_records_student_joining_open_attendance(self):
+        course = self.course("s1,s2")
+        sessions = storage.read_json("sessions.json")
+        sessions = {key: item for key, item in sessions.items() if item["role"] != "student"}
+        storage.write_json("sessions.json", sessions)
+        attendance_id = self.create("attendance", course_id=course, title="Open session", expires_at=self.future)
+        self.assertEqual(learning.find(learning.load(), "attendance", attendance_id)["records"], {})
+
+        self.tokens["s2"] = new_session("s2", "student", "127.0.0.1", "test")
+        code, _ = self.request("/api/student/workspace", "s2")
+        self.assertEqual(code, 200)
+        record = learning.find(learning.load(), "attendance", attendance_id)["records"]["s2"]
+        self.assertEqual(record["status"], "present")
+        self.assertEqual(record["source"], "lan-session")
 
     def test_bulk_lesson_creation_generates_selected_weekdays_and_saves_end_time(self):
         course = self.course()
@@ -866,7 +917,7 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(self.request("/api/learning/event", form={"course_id": c, "title": "New", "starts_at": self.future})[0], 409)
         self.assertEqual(self.request("/api/student/workspace", "s1")[0], 200)
 
-    def test_attendance_code_is_private_and_closed_is_final(self):
+    def test_attendance_code_is_private_and_records_remain_editable_after_close(self):
         c = self.course()
         aid = self.create("attendance", course_id=c, title="Lesson", expires_at=self.future)
         admin = self.request("/api/learning")[1]["attendance"][0]
@@ -882,7 +933,24 @@ class LearningTests(unittest.TestCase):
         repeated=self.request("/api/learning/check-in", "s1", {"session_id": aid, "code": admin["code"]})
         self.assertEqual(repeated[0],200)
         self.assertTrue(repeated[1]["already_checked_in"])
-        self.assertEqual(self.request("/api/learning/attendance-record", form={"session_id": aid, "student_id": "s1", "status": "late", "reason": "reason"})[0], 409)
+        for status in ("present", "late", "early_departure", "absent"):
+            code, _ = self.request("/api/learning/attendance-record", form={
+                "session_id": aid,
+                "student_id": "s1",
+                "status": status,
+                "reason": "teacher correction",
+            })
+            self.assertEqual(code, 200)
+            self.assertEqual(learning.load()["attendance"][0]["records"]["s1"]["status"], status)
+
+    def test_early_departure_counts_as_attendance(self):
+        course = self.course()
+        self.create("course-weights", course_id=course, attendance="100", homework="0", midterm="0", final="0")
+        aid = self.create("attendance", course_id=course, title="Lesson", expires_at=self.future)
+        self.create("attendance-record", session_id=aid, student_id="s1", status="early_departure")
+        self.create("close-attendance", session_id=aid)
+        book = self.request("/api/learning")[1]["gradebooks"][0]
+        self.assertEqual(book["items"][0]["attendance"], 10)
 
     def test_qr_checkin_reports_session_and_preserves_teacher_override(self):
         c=self.course()

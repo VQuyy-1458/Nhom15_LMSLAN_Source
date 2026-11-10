@@ -65,7 +65,7 @@ def gradebook(data, course, student_ids):
     task_due = {task["id"]:date_value(task["due_at"]) <= now for task in tasks}
     rows = []
     for sid in student_ids:
-        absent = sum(a["records"].get(sid, {}).get("status") not in {"present", "late"}
+        absent = sum(a["records"].get(sid, {}).get("status") not in {"present", "late", "early_departure"}
                      for a in closed if enrollments.applies(course, sid, a, "attendance", students))
         values = {"attendance": max(0, 10 - absent), "homework": None, "midterm": None, "final": None}
         homework = []
@@ -181,6 +181,54 @@ def course_access(data, course_id, session, write=False):
     if write and course["status"] == "completed":
         raise LearningError(409, "Khóa học đã tổng kết, chỉ được xem dữ liệu.")
     return course
+
+
+def record_student_presence(student_id):
+    """Add an active student to every applicable attendance session still open."""
+    with LOCK, atomic_transaction():
+        data = load()
+        students = read_json("students.json")
+        student = students.get(student_id)
+        if not student or not student.get("active", True):
+            return 0
+        now = datetime.now(timezone.utc)
+        sessions = read_json("sessions.json")
+        logged_in = False
+        for item in sessions.values():
+            if not isinstance(item, dict) or item.get("role") != "student" or item.get("user_id") != student_id:
+                continue
+            try:
+                expires_at = float(item.get("expires_at", 0))
+            except (TypeError, ValueError):
+                continue
+            if expires_at > now.timestamp():
+                logged_in = True
+                break
+        if not logged_in:
+            return 0
+
+        updated = []
+        courses = {course["id"]: course for course in data["courses"]}
+        for attendance in data["attendance"]:
+            if attendance.get("closed") or date_value(attendance.get("expires_at")) <= now or student_id in attendance.get("records", {}):
+                continue
+            course = courses.get(attendance.get("course_id"))
+            if not course or course.get("status") == "completed":
+                continue
+            if student_id not in enrollments.member_ids(course, students):
+                continue
+            if not enrollments.applies(course, student_id, {"lesson_at": attendance.get("lesson_at")}, "attendance", students):
+                continue
+            attendance.setdefault("records", {})[student_id] = {
+                "status": "present",
+                "checked_in_at": now.isoformat(),
+                "source": "lan-session",
+            }
+            updated.append(attendance["id"])
+        if updated:
+            write_json("learning.json", data)
+            audit("learning.attendance_auto_checkin", student_id, student.get("last_ip", "127.0.0.1"), {"sessions": updated})
+        return len(updated)
 
 
 def own_submission(data, submission_id, session):
@@ -339,7 +387,7 @@ def mutate(session, action, form, files, ip):
             enrollments.update_members(row, read_json("students.json"), members, utc_now(), policy == "true")
         elif action in {"material", "event", "assignment", "attendance"}:
             course_id = text(form, "course_id", 80)
-            course_access(data, course_id, session, write=True)
+            course = course_access(data, course_id, session, write=True)
             kind = form.get("kind", "lesson") if action == "event" else None
             bulk_lesson = action == "event" and kind == "lesson" and any(form.get(key) for key in ("start_week", "end_week", "start_time", "end_time"))
             lesson = None
@@ -411,8 +459,35 @@ def mutate(session, action, form, files, ip):
                 expires = date_value(form["expires_at"]) if form.get("expires_at") else datetime.now(timezone.utc) + timedelta(minutes=integer(form, "duration_minutes", 15, 1, 240))
                 if expires <= datetime.now(timezone.utc):
                     raise LearningError(400, "Thời hạn điểm danh phải ở tương lai.")
-                row.update({"event_id": lesson["id"], "lesson_at": lesson["starts_at"], "expires_at": expires.isoformat(), "code": secrets.token_hex(4).upper(), "closed": False, "records": {}})
+                opened_at = datetime.now(timezone.utc)
+                students = read_json("students.json")
+                recent_sessions = read_json("sessions.json")
+                online_students = set()
+                for student_session in recent_sessions.values():
+                    if not isinstance(student_session, dict) or student_session.get("role") != "student":
+                        continue
+                    student_id = student_session.get("user_id")
+                    student = students.get(student_id)
+                    if not student or not student.get("active", True):
+                        continue
+                    try:
+                        expires_at = float(student_session.get("expires_at", 0))
+                    except (TypeError, ValueError):
+                        continue
+                    if expires_at > opened_at.timestamp():
+                        online_students.add(student_id)
+                records = {}
+                for student_id in enrollments.member_ids(course, students):
+                    if student_id not in online_students:
+                        continue
+                    if not enrollments.applies(course, student_id, {
+                        "lesson_at": lesson["starts_at"],
+                    }, "attendance", students):
+                        continue
+                    records[student_id] = {"status": "present", "checked_in_at": opened_at.isoformat(), "source": "lan-session"}
+                row.update({"event_id": lesson["id"], "lesson_at": lesson["starts_at"], "expires_at": expires.isoformat(), "code": secrets.token_hex(4).upper(), "closed": False, "attendance_method": "lan-online", "records": records})
                 data["attendance"].append(row)
+                response = {"ok": True, "id": row["id"], "auto_present_count": len(records)}
         elif action == "submit":
             if admin:
                 raise LearningError(403, "Chỉ tài khoản sinh viên được nộp bài.")
@@ -472,15 +547,13 @@ def mutate(session, action, form, files, ip):
         elif action == "attendance-record":
             row = find(data, "attendance", text(form, "session_id", 80))
             course = course_access(data, row["course_id"], session, write=True)
-            if row["closed"] or date_value(row["expires_at"]) <= datetime.now(timezone.utc):
-                raise LearningError(409, "Phiên đã kết thúc, không thể sửa điểm danh.")
             student_id = text(form, "student_id", 80)
             if student_id not in read_json("students.json") or (course["student_ids"] is not None and student_id not in course["student_ids"]):
                 raise LearningError(400, "Sinh viên không thuộc khóa học.")
             status = form.get("status")
-            if status not in {"present", "late", "absent"}:
+            if status not in {"present", "late", "early_departure", "absent"}:
                 raise LearningError(400, "Trạng thái điểm danh không hợp lệ.")
-            row["records"][student_id] = {"status": status, "checked_in_at": utc_now(), "reason": text(form, "reason", 1000)}
+            row["records"][student_id] = {"status": status, "checked_in_at": utc_now(), "reason": text(form, "reason", 1000, False)}
         elif action == "close-attendance":
             row = find(data, "attendance", text(form, "session_id", 80))
             course_access(data, row["course_id"], session, write=True)
@@ -565,5 +638,7 @@ def mutate(session, action, form, files, ip):
         details = {"id": row["id"]}
         if response and "count" in response:
             details.update(count=response["count"], skipped_count=response["skipped_count"])
+        if response and "auto_present_count" in response:
+            details["auto_present_count"] = response["auto_present_count"]
         audit("learning." + action, sid, ip, details)
         return response or {"ok": True, "id": row["id"]}
