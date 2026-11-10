@@ -47,7 +47,16 @@ def _index():
             activity = "file:"+(row.get("release_id") or str(row.get("course_id"))+":"+str(row.get("exam_title")))
             add(key, "file", row, sid, activity, row.get("exam_title") or "Kỳ thi nộp file cũ", submissions.UPLOAD_DIR / row["filename"], submissions.UPLOAD_DIR, row.get("submitted_at", ""), row.get("attempt"))
     for row in programming.rows():
-        add("code:"+row["id"], "code", row, row["student_id"], "code:"+row["exam_id"]+":"+str(row["problem_index"]), row["exam_title"]+" · "+row["problem_title"], programming.FILES / row["id"] / "source", programming.FILES, row["submitted_at"])
+        if row.get("assignment_id"):
+            activity = "code-assignment:" + row["assignment_id"]
+            title = row.get("assignment_title") or tasks.get(row["assignment_id"], {}).get("title") or row.get("problem_title") or "Bài tập lập trình"
+        elif row.get("practice_question_id"):
+            activity = "code-practice:" + row["practice_question_id"]
+            title = row.get("problem_title") or "Bài luyện tập lập trình"
+        else:
+            activity = "code:" + str(row.get("exam_id", "")) + ":" + str(row.get("problem_index", 0))
+            title = " · ".join(part for part in (row.get("exam_title"), row.get("problem_title")) if part) or "Bài thi lập trình"
+        add("code:"+row["id"], "code", row, row["student_id"], activity, title, programming.FILES / row["id"] / "source", programming.FILES, row["submitted_at"])
     groups = {}
     for row in rows: groups.setdefault((row["student_id"],row["activity_id"]), []).append(row)
     for group in groups.values():

@@ -400,6 +400,20 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(self.request("/api/admin/archive/download?id="+encoded)[0],404)
         self.assertEqual(missing["grading_history"][0]["score"],7)
 
+    def test_archive_accepts_code_assignment_without_exam_title(self):
+        course=self.course()
+        storage.write_json("programming_submissions.json", [{
+            "id":"legacy-code-assignment","student_id":"s1","course_id":course,
+            "assignment_id":"old-assignment","assignment_title":"Bài thực hành code",
+            "exam_id":"","problem_index":0,"problem_title":"Tổng hai số",
+            "submitted_at":storage.utc_now(),"state":"done",
+        }])
+        code,response=self.request("/api/admin/archive/list")
+        self.assertEqual(code,200)
+        self.assertEqual(response["total"],1)
+        self.assertEqual(response["rows"][0]["activity_id"],"code-assignment:old-assignment")
+        self.assertEqual(response["rows"][0]["title"],"Bài thực hành code")
+
     def test_concurrent_submission_limit_has_six_slots_and_persistent_history(self):
         from concurrent.futures import ThreadPoolExecutor
         course=self.course()
