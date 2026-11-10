@@ -17,7 +17,7 @@ def maybe_refresh():
     names = ("learning.json", "settings.json", "assignments.json", "exam_catalog.json", "programming_attempts.json")
     def signature():
         result = []
-        for name in ("lms.sqlite3", *[n for n in names if n not in storage.SQLITE_DOCUMENTS]):
+        for name in names:
             try:
                 stat = (storage.DATA_DIR / name).stat()
                 result.append((stat.st_mtime_ns, stat.st_size, stat.st_ino))

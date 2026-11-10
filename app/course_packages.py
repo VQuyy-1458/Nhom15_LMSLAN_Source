@@ -25,13 +25,9 @@ def export_course(course_id, session):
             total += path.stat().st_size
             if total > LIMIT:
                 raise learning.LearningError(413, "Tổng học liệu vượt 15 MiB cho một gói chuyển khóa.")
-            package["materials"].append({**{k: row.get(k, "") for k in ("title", "topic", "description")}, "lesson_id": row.get("lesson_id"), "filename": filename, "data_base64": base64.b64encode(path.read_bytes()).decode("ascii")})
+            package["materials"].append({**{k: row.get(k, "") for k in ("title", "topic", "description")}, "filename": filename, "data_base64": base64.b64encode(path.read_bytes()).decode("ascii")})
         for key, fields in (("assignments", ("title", "description", "topic", "due_at", "max_attempts")), ("events", ("title", "description", "kind", "starts_at", "location"))):
             package[key] = [{k: row.get(k, "") for k in fields} for row in data[key] if row["course_id"] == course_id]
-        for source, exported in zip([r for r in data["assignments"] if r["course_id"] == course_id], package["assignments"]):
-            exported["lesson_id"] = source.get("lesson_id")
-        for source, exported in zip([r for r in data["events"] if r["course_id"] == course_id], package["events"]):
-            exported["source_id"] = source["id"]
         for source, exported in zip([r for r in data["assignments"] if r["course_id"] == course_id], package["assignments"]):
             if source.get("stored_name"):
                 path, filename = learning.file_for("assignments", source["id"], session)
@@ -107,21 +103,6 @@ def import_course(file, session, ip):
         if row.get("kind") not in {"lesson", "announcement", "exam"}:
             raise learning.LearningError(400, "Loại lịch trong gói không hợp lệ.")
         staged["events"].append({"id": secrets.token_hex(10), "created_at": now, "course_id": cid, "title": field(row, "title"), "description": field(row, "description", 10000, False), "kind": row["kind"], "starts_at": learning.date_value(row.get("starts_at")).isoformat(), "location": field(row, "location", 200, False)})
-    lesson_ids = {}
-    for source, imported in zip(package.get("events", []), staged["events"]):
-        old_id = source.get("source_id")
-        if old_id is not None:
-            if not isinstance(old_id, str) or old_id in lesson_ids:
-                raise learning.LearningError(400, "Mã buổi học trong gói không hợp lệ.")
-            if imported["kind"] == "lesson":
-                lesson_ids[old_id] = imported["id"]
-    for key in ("materials", "assignments"):
-        for source, imported in zip(package.get(key, []), staged[key]):
-            old_id = source.get("lesson_id")
-            if old_id is not None:
-                if not isinstance(old_id, str) or old_id not in lesson_ids:
-                    raise learning.LearningError(400, "Liên kết buổi học trong gói không hợp lệ.")
-                imported["lesson_id"] = lesson_ids[old_id]
     written = []
     with learning.LOCK:
         data = learning.load()

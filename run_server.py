@@ -1,4 +1,4 @@
-"""Run LAN-LMS without FastAPI/Uvicorn/Pydantic."""
+"""Run Classroom Submission Server without FastAPI/Uvicorn/Pydantic."""
 from app.main import main
 
 if __name__ == "__main__":

@@ -48,9 +48,6 @@ def reference_issues(locations, metadata):
         require("programming-submissions",row["id"]+"/source")
         require("programming-submissions",row["id"]+"/problem.json")
     settings=metadata.get("settings.json",{})
-    for paper in metadata.get("exam_papers.json", []):
-        for name in paper.get("generated_files", []):
-            require("de-thi", name)
     if settings.get("exam_state") in {"distributed","started"}:
         for row in metadata.get("assignments.json",{}).values():
             if row.get("release_id")==settings.get("exam_release_id") and row.get("exam_file"):require("de-thi",row["exam_file"])
@@ -58,7 +55,6 @@ def reference_issues(locations, metadata):
 
 
 def snapshot(destination=None, prefix="manual"):
-    storage.initialize()
     destination = Path(destination) if destination else RUNTIME_DIR/"backups"
     destination.mkdir(parents=True,exist_ok=True)
     snapshot_name=prefix+"-"+datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")+"-"+uuid.uuid4().hex[:8]
@@ -67,7 +63,7 @@ def snapshot(destination=None, prefix="manual"):
     try:
         with learning.LOCK, storage.transaction():
             locations=roots()
-            metadata={name:storage.read_json(name) for name in storage.document_names()}
+            metadata={p.name:storage.read_json(p.name) for p in storage.DATA_DIR.glob("*.json") if not p.name.startswith(".")}
             payloads=[]
             for category,root in locations.items():
                 if category=="data" or not root.exists():continue
@@ -133,12 +129,11 @@ def restore_copy(folder,target):
 
 
 def doctor(execute=False):
-    storage.initialize()
     issues=[]
     with storage.transaction():
         metadata={}
-        for name in storage.document_names():
-            metadata[name]=storage.read_json(name)
+        for path in storage.DATA_DIR.glob("*.json"):
+            if not path.name.startswith("."):metadata[path.name]=storage.read_json(path.name)
         issues.extend(reference_issues(roots(),metadata))
     if shutil.disk_usage(storage.DATA_DIR).free < 512*1024*1024:issues.append("Dung lượng đĩa trống dưới 512 MiB.")
     if not (STATIC_DIR/"css"/"tailwind.css").is_file():issues.append("Thiếu CSS đã build.")

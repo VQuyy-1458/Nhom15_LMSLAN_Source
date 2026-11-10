@@ -18,15 +18,12 @@ khác bằng biến `CSS_JUDGE_IMAGE` khi khởi động server.
 2. Thêm bài toán, điểm tối đa, ngôn ngữ, thời gian/bộ nhớ và test (nhập tay/CSV).
 3. Bấm Lưu và mở kỳ thi. Mỗi bài phải có ít nhất một test. Cấu hình và bộ test
    được khóa khi mở thi. Danh sách dự thi lấy từ thành viên đang hoạt động.
-4. Sinh viên vào Kỳ thi, bấm Bắt đầu để vào làm. Hạn chung của cả lớp được
-   tính từ lúc giảng viên mở kỳ thi.
+4. Sinh viên vào Kỳ thi, bấm Bắt đầu thi lập trình để tính thời lượng riêng.
    Chỉ đề và test mẫu được gửi xuống trình duyệt sau khi bắt đầu.
 5. Nộp một file mã nguồn UTF-8 cho từng bài: .c, .cpp, .java hoặc .py, tối đa
-   100.000 byte. Bài stdin Java dùng lớp public Main; bài class/method có thể
-   dùng tên lớp public theo yêu cầu đề, không khai báo package.
-6. Server xếp hàng và chấm tự động. Bài program nhận input qua stdin; bài
-   class/method chạy mã kiểm thử của từng test. Cả hai so stdout với output
-   mong đợi.
+   100.000 byte. Java dùng lớp public Main, không khai báo package.
+6. Server xếp hàng và chấm tự động. Input mỗi test đưa vào stdin; stdout so
+   với output mong đợi. Chương trình không nên in lời nhắc nhập dữ liệu.
 7. Sinh viên xem trạng thái, điểm, số test đạt. Chi tiết input/output/stderr
    chỉ có ở test mẫu; test ẩn không trả dữ liệu đó cho tài khoản sinh viên.
    Admin xem được toàn bộ và tải mã nguồn/chấm lại ngay trong trang cấu hình.
@@ -34,7 +31,7 @@ khác bằng biến `CSS_JUDGE_IMAGE` khi khởi động server.
    tổng kết khóa học trong lúc kỳ thi lập trình còn mở.
 
 Có thể nộp lại khi còn thời gian. Giao diện hiển thị điểm cao nhất từng bài;
-điểm thi giữa kỳ/cuối kỳ tự đưa vào bảng điểm khóa học. Kỳ test không tính điểm.
+điểm thi chưa tự ghi đè điểm thành phần của bảng điểm khóa học.
 
 File gốc được giữ nguyên byte, kể cả UTF-8 BOM; bộ chấm chỉ bỏ BOM ở bản sao
 biên dịch tạm. Mỗi lần chấm có ID, thời điểm, kết quả và người yêu cầu riêng
@@ -59,8 +56,7 @@ nộp mới của sinh viên.
 
 ## Môi trường chạy
 
-Với bài stdin, biên dịch một lần trong container riêng rồi chạy mỗi test trong
-container mới. Với bài class/method, biên dịch driver riêng theo từng test.
+Biên dịch một lần trong container riêng, sau đó mỗi test chạy container mới.
 Các [tùy chọn Docker](https://docs.docker.com/engine/containers/run/) gồm:
 network none, user không phải root, drop toàn bộ capabilities, no-new-privileges,
 root filesystem chỉ đọc, CPU 1, giới hạn RAM/swap và số tiến trình. Container
@@ -72,29 +68,13 @@ Giới hạn: 100 test/bài; stdout tối đa 1 MiB và stderr 64 KiB mỗi test
 tối đa 16.000 ký tự output/4.000 ký tự stderr để xem). Thời gian thi khác giới
 hạn chạy từng test. Bộ nhớ tính trên toàn container, bao gồm trình thông dịch
 hoặc JVM; Java nên có ít nhất 128–256 MB. Toàn lượt chạy test có ngân sách
-300 giây; quá ngân sách được báo lỗi hạ tầng để điều chỉnh cấu hình/chấm lại.
+180 giây; quá ngân sách được báo lỗi hạ tầng để điều chỉnh cấu hình/chấm lại.
 
 Hai bài được chấm đồng thời. Hàng đợi tối đa 50 bài, mỗi sinh viên tối đa hai
 bài đang chờ/chấm. Mã nguồn và bản sao bộ test của từng lần nộp nằm trong
-`programming-submissions/`, kết quả/attempt trong `data/lms.sqlite3`.
+`programming-submissions/`, kết quả/attempt trong `data/programming_*.json`.
 Chấm lại dùng đúng bản sao test lúc nộp. Bài đang chờ/chấm khi server bị tắt
 được xếp lại khi khởi động bằng `run_server.py`.
-
-## Bài class/method và bài tập code
-
-Bài toán có `execution_mode = harness` dùng `test_code` cho từng test. Bộ chấm
-chạy mã kiểm thử do giảng viên viết cùng mã nguồn sinh viên trong container
-Docker giới hạn tài nguyên, sau đó so stdout với output mong đợi. Python nạp
-định nghĩa từ `main.py`; Java biên dịch mã sinh viên cùng `JudgeHarness.java`;
-C/C++ biên dịch driver có `main()` gọi class/hàm của sinh viên. Test ẩn chỉ trả
-verdict cho sinh viên; mã kiểm thử và input/output của test ẩn chỉ giảng viên
-thấy. Bài tập code và câu luyện tập dùng cùng bộ chấm, lưu mỗi lần nộp cùng
-bản sao test; chỉ bài tập được tính vào điểm thực hành.
-
-CSV bài stdin dùng cột `input,output,sample`. CSV bài class/method dùng
-`test_code,output,sample`; cột `input` có thể để trống hoặc bỏ qua. Cột
-`sample` là tùy chọn. File mẫu trong giao diện dùng Python; viết `test_code`
-theo ngôn ngữ và chữ ký class/method của từng bài.
 
 ## Kiểm tra thật qua Docker
 

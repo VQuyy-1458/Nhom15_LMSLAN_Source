@@ -1,4 +1,4 @@
-"""SQLite business documents with transactional writes and legacy JSON migration."""
+"""Small JSON/JSONL persistence layer with atomic replacement and a process lock."""
 from __future__ import annotations
 import json
 import copy
@@ -6,7 +6,6 @@ import logging
 import functools
 import tempfile
 import os
-import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -18,53 +17,6 @@ _LOCK = threading.RLock()
 _LOCAL = threading.local()
 _CACHE = {}
 logger = logging.getLogger(__name__)
-
-# Authentication/session state stays in small JSON files; durable teaching and
-# submission records live in SQLite. Existing JSON files are imported once.
-SQLITE_DOCUMENTS = frozenset({
-    "learning.json", "settings.json", "assignments.json", "submissions.json",
-    "exam_catalog.json", "programming_attempts.json", "programming_submissions.json",
-    "notifications.json", "question_bank.json", "exam_papers.json",
-})
-
-
-def sqlite_path():
-    return DATA_DIR / "lms.sqlite3"
-
-
-@contextmanager
-def _db():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(sqlite_path(), timeout=20)
-    try:
-        connection.execute("PRAGMA busy_timeout=20000")
-        connection.execute("CREATE TABLE IF NOT EXISTS documents (name TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)")
-        with connection:
-            yield connection
-    finally:
-        connection.close()
-
-
-def _sqlite_write(writes):
-    if not writes:
-        return
-    with _db() as connection:
-        for name, value in writes.items():
-            if value is _MISSING:
-                connection.execute("DELETE FROM documents WHERE name=?", (name,))
-            else:
-                connection.execute("INSERT INTO documents(name,value,updated_at) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (name, json.dumps(value, ensure_ascii=False), utc_now()))
-
-
-_MISSING = object()
-
-
-def document_names():
-    with _LOCK:
-        names = {p.name for p in DATA_DIR.glob("*.json") if not p.name.startswith(".")}
-        with _db() as connection:
-            names.update(row[0] for row in connection.execute("SELECT name FROM documents"))
-        return sorted(names)
 
 
 def _journal_path():
@@ -78,17 +30,13 @@ def _recover():
         return
     journal = json.loads(path.read_text(encoding="utf-8"))
     if journal.get("state") == "prepared":
-        sqlite_before = {}
         for name, previous in journal["before"].items():
             if Path(name).name != name or not name.endswith(".json"):
                 raise RuntimeError("Invalid transaction journal document")
-            if name in SQLITE_DOCUMENTS:
-                sqlite_before[name] = previous["value"] if previous["exists"] else _MISSING
-            elif previous["exists"]:
+            if previous["exists"]:
                 atomic_write(_path(name), previous["value"])
             else:
                 _path(name).unlink(missing_ok=True)
-        _sqlite_write(sqlite_before)
         audit_path = _path("audit.jsonl")
         if audit_path.exists():
             with audit_path.open("r+b") as output:
@@ -130,24 +78,16 @@ def _commit(batch):
     if not writes and not records:
         return
     before = {}
-    sqlite_writes = {name: value for name, value in writes.items() if name in SQLITE_DOCUMENTS}
     for name in writes:
-        if name in SQLITE_DOCUMENTS:
-            with _db() as connection:
-                previous = connection.execute("SELECT value FROM documents WHERE name=?", (name,)).fetchone()
-            before[name] = {"exists": previous is not None, "value": json.loads(previous[0]) if previous else None}
-        else:
-            path = _path(name)
-            before[name] = {"exists":path.exists(), "value":json.loads(path.read_text(encoding="utf-8")) if path.exists() else None}
+        path = _path(name)
+        before[name] = {"exists":path.exists(), "value":json.loads(path.read_text(encoding="utf-8")) if path.exists() else None}
     audit_path = _path("audit.jsonl")
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     journal = {"state":"prepared", "before":before, "audit_offset":audit_path.stat().st_size if audit_path.exists() else 0}
     atomic_write(_journal_path(), journal)
     try:
-        _sqlite_write(sqlite_writes)
         for name, value in writes.items():
-            if name not in SQLITE_DOCUMENTS:
-                atomic_write(_path(name), value)
+            atomic_write(_path(name), value)
         if records:
             with audit_path.open("a", encoding="utf-8", newline="\n") as output:
                 for record in records:
@@ -269,31 +209,7 @@ def initialize() -> None:
         DATA_DIR.mkdir(parents=True,exist_ok=True)
         LOG_DIR.mkdir(parents=True,exist_ok=True)
         _recover()
-        with _db() as connection:
-            for name in SQLITE_DOCUMENTS:
-                if connection.execute("SELECT 1 FROM documents WHERE name=?", (name,)).fetchone():
-                    continue
-                path = _path(name)
-                if path.exists():
-                    value = json.loads(path.read_text(encoding="utf-8"))
-                elif name in DEFAULTS:
-                    value = copy.deepcopy(DEFAULTS[name])
-                else:
-                    continue
-                connection.execute("INSERT INTO documents(name,value,updated_at) VALUES(?,?,?)", (name, json.dumps(value, ensure_ascii=False), utc_now()))
         for name, default in DEFAULTS.items():
-            if name in SQLITE_DOCUMENTS:
-                if name == "settings.json":
-                    current = read_json(name)
-                    missing = {key: value for key, value in default.items() if key not in current}
-                    if "exam_state" not in current:
-                        current["exam_state"] = "started" if current.get("exam_released") else "idle"
-                        missing.pop("exam_state", None)
-                    if missing:
-                        current.update(missing)
-                    if missing or "exam_state" not in read_json(name):
-                        write_json(name, current)
-                continue
             p = _path(name)
             if not p.exists():
                 atomic_write(p, default)
@@ -334,14 +250,6 @@ def read_json(name: str, default: Any = None) -> Any:
             return copy.deepcopy(batch["writes"][name])
         if batch is None:
             _recover()
-        if name in SQLITE_DOCUMENTS:
-            with _db() as connection:
-                record = connection.execute("SELECT value FROM documents WHERE name=?", (name,)).fetchone()
-            if record is not None:
-                return json.loads(record[0])
-            if default is not None:
-                return copy.deepcopy(default)
-            return copy.deepcopy(DEFAULTS.get(name, {}))
         p = _path(name)
         if not p.exists():
             if default is not None:
@@ -369,11 +277,8 @@ def write_json(name: str, value: Any) -> None:
             batch["writes"][name] = copy.deepcopy(value)
             return
         _recover()
-        if name in SQLITE_DOCUMENTS:
-            _sqlite_write({name: value})
-        else:
-            atomic_write(_path(name), value)
-            _CACHE.pop(str(_path(name).resolve()), None)
+        atomic_write(_path(name), value)
+        _CACHE.pop(str(_path(name).resolve()), None)
 
 def update_json(name: str, mutator):
     with _LOCK:

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from app import learning, main, storage, submissions, exams, programming, code_runner, submission_rate, submission_archive, deadlines, exam_preflight, exam_timing, question_bank
+from app import learning, main, storage, submissions, exams, programming, code_runner, submission_rate, submission_archive, deadlines, exam_preflight, exam_timing
 from app.security import hash_password, new_session, verify_password
 
 
@@ -83,164 +83,6 @@ class LearningTests(unittest.TestCase):
     def course(self, members="s1"):
         return self.create("course", name="Course", code="CS1", semester="2026", student_ids=members)
 
-    def test_question_bank_paper_random_subset_and_code_assignment(self):
-        course = self.course(members="s1 s2")
-        ids = []
-        for index in range(3):
-            problem = {"title": f"Bài {index}", "statement": "Viết hàm tính tổng", "points": 10, "execution_mode": "harness", "tests": [{"input": "", "test_code": "print(Solution().sum(2, 3))", "output": "5", "sample": index == 0}, {"input": "", "test_code": "print(Solution().sum(40, 2))", "output": "42", "sample": False}]}
-            code, saved = self.request("/api/admin/questions/save", form={"course_id": course, "category": "exam", "kind": "code", "problem": json.dumps(problem)})
-            self.assertEqual(code, 200, saved)
-            ids.append(saved["question"]["id"])
-        code, paper = self.request("/api/admin/papers/save", form={"course_id": course, "kind": "code", "title": "Bộ đề", "question_ids": " ".join(ids), "question_count": "2"})
-        self.assertEqual(code, 200, paper)
-        fields = {"course_id": course, "type": "programming", "title": "Thi ngẫu nhiên", "languages": "python", "paper_id": paper["paper"]["id"]}
-        code, exam = self.request("/api/admin/exam-configurations/save", form=fields)
-        self.assertEqual(code, 200, exam)
-        row = next(e for e in storage.read_json("exam_catalog.json", []) if e["id"] == exam["id"])
-        self.assertEqual((len(row["programming"]["problems"]), row["programming"]["question_count"]), (3, 2))
-        with patch.object(code_runner, "ready", return_value=True), patch.object(programming, "schedule"):
-            self.assertEqual(self.request("/api/admin/programming/control", form={"exam_id": exam["id"], "action": "start"})[0], 200)
-            self.assertEqual(self.request("/api/student/programming/start", role="s1", form={"exam_id": exam["id"]})[0], 200)
-            attempt = storage.read_json("programming_attempts.json")[exam["id"] + ":s1"]
-            self.assertEqual(len(set(attempt["problem_indices"])), 2)
-            feed = self.request("/api/student/workspace", role="s1")[1]
-            self.assertEqual(len(feed["programming"]["exams"][0]["problems"]), 2)
-            self.assertTrue(all(test["sample"] for problem in feed["programming"]["exams"][0]["problems"] for test in problem["samples"]))
-            lab_problem = copy.deepcopy(row["programming"]["problems"][0])
-            code, lab = self.request("/api/admin/questions/save", form={"course_id": course, "category": "lab", "kind": "code", "problem": json.dumps(lab_problem)})
-            self.assertEqual(code, 200, lab)
-            assignment_id = self.create("assignment", course_id=course, title="Thực hành code", question_id=lab["question"]["id"], due_at=self.future)
-            visible = self.request("/api/student/workspace", role="s1")[1]
-            assignment = next(a for a in visible["assignments"] if a["id"] == assignment_id)
-            self.assertEqual(assignment["kind"], "code")
-            self.assertEqual([test["output"] for test in assignment["problem"]["samples"]], ["5"])
-            code, submission = self.request("/api/student/assignments/code", role="s1", form={"assignment_id": assignment_id, "language": "python", "source": "class Solution:\n def sum(self,a,b): return a+b", "request_id": "code-one"})
-            self.assertEqual(code, 200, submission)
-            record_id = submission["submission"]["id"]
-            with patch.object(code_runner, "judge", return_value={"verdict": "AC", "score": 10, "passed": 2, "total": 2, "compile_log": "", "tests": [{"index": 1, "sample": True, "verdict": "AC", "input": "", "test_code": "print(Solution().sum(2, 3))", "expected": "5", "actual": "5", "stderr": ""}, {"index": 2, "sample": False, "verdict": "AC", "input": "", "test_code": "print(Solution().sum(40, 2))", "expected": "42", "actual": "42", "stderr": ""}]}):
-                programming._work(record_id)
-            student = self.request("/api/student/workspace", role="s1")[1]
-            for grade in [student["code_assignments"][0]["result"], *[history["result"] for history in student["code_assignments"][0]["grading_history"]]]:
-                self.assertEqual(set(grade["tests"][1]), {"index", "sample", "verdict"})
-            row = next(book for book in student["gradebooks"] if book["course_id"] == course)["items"][0]
-            self.assertEqual(row["homework"], 10)
-
-    def test_sqlite_imports_legacy_learning_document(self):
-        legacy = {"courses": [{"id": "old", "name": "Lớp cũ"}], "materials": [], "events": [], "assignments": [], "submissions": [], "attendance": [], "grades": []}
-        storage.atomic_write(storage.DATA_DIR / "learning.json", legacy)
-        storage.initialize()
-        self.assertEqual(storage.read_json("learning.json"), legacy)
-        self.assertTrue(storage.sqlite_path().is_file())
-
-    def test_file_paper_generates_variants_and_distribution_uses_them(self):
-        course = self.course(members="s1 s2")
-        directory = Path(self.temp.name) / "paper-files"
-        directory.mkdir()
-        with patch.object(question_bank, "EXAM_DIR", directory), patch.object(exams, "EXAM_DIR", directory):
-            ids = []
-            for number in range(2):
-                code, saved = self.request("/api/admin/questions/save", form={"course_id": course, "category": "exam", "kind": "file", "problem": json.dumps({"title": f"Câu {number}", "statement": f"Yêu cầu {number}"})})
-                self.assertEqual(code, 200, saved)
-                ids.append(saved["question"]["id"])
-            code, result = self.request("/api/admin/papers/save", form={"course_id": course, "kind": "file", "title": "Đề file", "question_ids": " ".join(ids), "question_count": "1"})
-            self.assertEqual(code, 200, result)
-            paper = result["paper"]
-            self.assertEqual(len(paper["generated_files"]), 2)
-            self.assertTrue(all((directory / name).is_file() for name in paper["generated_files"]))
-            code, created = self.request("/api/admin/exam-configurations/save", form={"course_id": course, "type": "file", "title": "Thi file", "paper_id": paper["id"], "duration_minutes": "30"})
-            self.assertEqual(code, 200, created)
-            self.assertEqual(self.request("/api/admin/exam-configurations/activate", form={"id": created["id"]})[0], 200)
-            code, assigned = self.request("/api/admin/distribute", form={"mode": "random"})
-            self.assertEqual(code, 200, assigned)
-            file_names = {item["exam_file"] for item in storage.read_json("assignments.json").values()}
-            self.assertTrue(file_names.issubset(set(paper["generated_files"])))
-
-    def test_harness_judge_builds_python_and_java_drivers_in_sandbox(self):
-        problem = {"points": 10, "time_limit_ms": 1000, "memory_limit_mb": 256, "checker": "tokens", "execution_mode": "harness", "tests": [{"input": "", "test_code": "print(Solution().add(2, 3))", "output": "5", "sample": True}]}
-        def container(folder, command, **kwargs):
-            if command[0] == "javac":
-                self.assertIn("Solution.java", command)
-                self.assertIn("JudgeHarness.java", command)
-                self.assertIn("new Solution", (folder / "JudgeHarness.java").read_text(encoding="utf-8"))
-            if command[0] == "python3":
-                self.assertIn("runpy.run_path", (folder / "judge_harness.py").read_text(encoding="utf-8"))
-            return {"system_error": False, "exit": 0, "overflow": False, "oom": False, "timed_out": False, "stdout": "5\n" if command[0] != "javac" else "", "stderr": "", "time_ms": 1}
-        with patch.object(code_runner, "ready", return_value=True), patch.object(code_runner, "_container", side_effect=container), patch.object(code_runner, "WORK", Path(self.temp.name) / "judge"):
-            self.assertEqual(code_runner.judge(b"class Solution:\n def add(self,a,b): return a+b", "python", problem)["verdict"], "AC")
-            self.assertEqual(code_runner.judge(b"public class Solution { int add(int a,int b) { return a+b; } }", "java", {**problem, "tests": [{**problem["tests"][0], "test_code": "System.out.println(new Solution().add(2, 3));"}]})["verdict"], "AC")
-
-    def test_published_practice_is_visible_and_does_not_change_grades(self):
-        course = self.course()
-        problem = {"title": "Cộng hai số", "statement": "Đọc hai số", "points": 10, "tests": [{"input": "2 3", "output": "5", "sample": True}, {"input": "40 2", "output": "42", "sample": False}]}
-        code, saved = self.request("/api/admin/questions/save", form={"course_id": course, "kind": "code", "category": "practice", "published": "true", "problem": json.dumps(problem)})
-        self.assertEqual(code, 200, saved)
-        qid = saved["question"]["id"]
-        feed = self.request("/api/student/workspace", role="s1")[1]
-        self.assertEqual(feed["practice_questions"][0]["id"], qid)
-        self.assertEqual([test["output"] for test in feed["practice_questions"][0]["problem"]["samples"]], ["5"])
-        with patch.object(code_runner, "ready", return_value=True), patch.object(programming, "schedule"):
-            code, result = self.request("/api/student/practice/code", role="s1", form={"question_id": qid, "language": "python", "source": "print(5)"})
-            self.assertEqual(code, 200, result)
-            self.assertEqual(result["submission"]["practice_question_id"], qid)
-        feed = self.request("/api/student/workspace", role="s1")[1]
-        self.assertEqual(len(feed["practice_submissions"]), 1)
-        self.assertIsNone(feed["gradebooks"][0]["items"][0]["homework"])
-
-    def test_weekly_content_links_to_own_lesson_and_survives_course_export(self):
-        from app import course_packages
-        course_id = self.course()
-        other_id = self.course()
-        lesson_id = self.create("event", course_id=course_id, title="Week one", kind="lesson", starts_at=self.future)
-        other_lesson = self.create("event", course_id=other_id, title="Other course", kind="lesson", starts_at=self.future)
-        code, material = self.request("/api/learning/material", form={"course_id": course_id, "title": "Reading", "lesson_id": lesson_id}, file=("reading.txt", b"Read me"))
-        self.assertEqual(code, 200, material)
-        assignment_id = self.create("assignment", course_id=course_id, title="Exercise", lesson_id=lesson_id, due_at=self.future)
-        data = learning.snapshot({"role": "student", "user_id": "s1"})
-        self.assertEqual(next(row for row in data["materials"] if row["id"] == material["id"])["lesson_id"], lesson_id)
-        self.assertEqual(next(row for row in data["assignments"] if row["id"] == assignment_id)["lesson_id"], lesson_id)
-        self.assertEqual(self.request("/api/learning/link-content", form={"course_id": course_id, "kind": "materials", "item_id": material["id"], "lesson_id": other_lesson})[0], 400)
-        self.assertEqual(self.request("/api/learning/assignment", form={"course_id": course_id, "title": "Invalid", "lesson_id": other_lesson, "due_at": self.future})[0], 400)
-        self.assertEqual(self.request("/api/learning/link-content", form={"course_id": course_id, "kind": "materials", "item_id": material["id"], "lesson_id": ""})[0], 200)
-        self.assertIsNone(next(row for row in learning.load()["materials"] if row["id"] == material["id"])["lesson_id"])
-        self.assertEqual(self.request("/api/learning/link-content", form={"course_id": course_id, "kind": "materials", "item_id": material["id"], "lesson_id": lesson_id})[0], 200)
-        package = course_packages.export_course(course_id, {"role": "admin", "user_id": "teacher"})
-        imported = course_packages.import_course({"data": json.dumps(package).encode()}, {"role": "admin", "user_id": "teacher"}, "127.0.0.1")
-        copied = learning.load()
-        new_lesson = next(row for row in copied["events"] if row["course_id"] == imported["id"] and row["kind"] == "lesson")
-        self.assertEqual(next(row for row in copied["materials"] if row["course_id"] == imported["id"])["lesson_id"], new_lesson["id"])
-        self.assertEqual(next(row for row in copied["assignments"] if row["course_id"] == imported["id"])["lesson_id"], new_lesson["id"])
-
-    def test_schedule_lessons_creates_repeating_weekdays_without_duplicates(self):
-        course_id = self.course()
-        fields = {"course_id": course_id, "title": "Network lab", "start_date": "2026-11-02", "end_date": "2026-11-23", "weekday": "2", "start_time": "07:30", "end_time": "10:00", "location": "Lab 1"}
-        code, result = self.request("/api/learning/schedule-lessons", form=fields)
-        self.assertEqual(code, 200, result)
-        self.assertEqual(result["created"], 3)
-        lessons = [row for row in learning.load()["events"] if row["course_id"] == course_id]
-        self.assertEqual(len(lessons), 3)
-        self.assertEqual({row["starts_at"] for row in lessons}, {"2026-11-04T00:30:00+00:00", "2026-11-11T00:30:00+00:00", "2026-11-18T00:30:00+00:00"})
-        self.assertEqual(self.request("/api/learning/schedule-lessons", form=fields)[0], 409)
-
-    def test_lan_attendance_records_recent_sessions_and_allows_later_correction(self):
-        course_id = self.course(members="s1 s2")
-        lesson_id = self.create("event", course_id=course_id, title="LAN lesson", kind="lesson", starts_at=self.future)
-        sessions = storage.read_json("sessions.json")
-        for item in sessions.values():
-            if item["user_id"] == "s2":
-                item["last_seen"] = "2000-01-01T00:00:00+00:00"
-        storage.write_json("sessions.json", sessions)
-        attendance_id = self.create("attendance", course_id=course_id, event_id=lesson_id)
-        records = next(row for row in learning.load()["attendance"] if row["id"] == attendance_id)["records"]
-        self.assertEqual(records["s1"]["status"], "present")
-        self.assertNotIn("s2", records)
-        self.assertEqual(self.request("/login", form={"username": "s2", "password": "student-pass"})[0], 303)
-        records = next(row for row in learning.load()["attendance"] if row["id"] == attendance_id)["records"]
-        self.assertEqual(records["s2"]["status"], "present")
-        self.assertEqual(self.request("/api/learning/close-attendance", form={"session_id": attendance_id})[0], 200)
-        self.assertEqual(self.request("/api/learning/attendance-record", form={"session_id": attendance_id, "student_id": "s2", "status": "left_early", "reason": "Giảng viên điều chỉnh"})[0], 200)
-        records = next(row for row in learning.load()["attendance"] if row["id"] == attendance_id)["records"]
-        self.assertEqual(records["s2"]["status"], "left_early")
-
     def test_admin_reset_password_clears_lockout_and_revokes_only_target_sessions(self):
         for _ in range(3):
             self.request("/login", role="s1", form={"username": "s1", "password": "wrong"})
@@ -255,15 +97,6 @@ class LearningTests(unittest.TestCase):
         self.assertFalse(any(s["user_id"] == "s1" for s in sessions))
         self.assertTrue(any(s["user_id"] == "s2" for s in sessions))
         self.assertEqual(self.request("/login", role="s1", form={"username": "s1", "password": "replacement-pass"})[0], 303)
-
-    def test_admin_bad_password_never_locks_admin_account(self):
-        for _ in range(4):
-            self.assertEqual(self.request("/login", form={"username": "teacher", "password": "wrong"})[0], 401)
-        self.assertNotIn("teacher", storage.read_json("login_attempts.json"))
-        self.assertEqual(self.request("/login", form={"username": "teacher", "password": "student-pass"})[0], 303)
-        for _ in range(3):
-            self.assertEqual(self.request("/login", form={"username": "s1", "password": "wrong"})[0], 401)
-        self.assertEqual(self.request("/login", form={"username": "s1", "password": "student-pass"})[0], 429)
 
     def test_admin_reset_password_rejects_invalid_input_and_student_access(self):
         original = storage.read_json("students.json")
@@ -405,7 +238,7 @@ class LearningTests(unittest.TestCase):
             stop.set();thread.join(timeout=2)
         self.assertEqual(self.upload(task)[0],409)
 
-    def test_assessment_types_and_one_midterm_and_final_across_file_and_code(self):
+    def test_assessment_types_and_one_final_across_file_and_code(self):
         course = self.course()
         endpoint = "/api/admin/exam-configurations/save"
         def save(category, kind="file", **extra):
@@ -413,7 +246,7 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(save("test")[0], 200)
         self.assertEqual(save("test")[0], 200)
         self.assertEqual(save("midterm")[0], 200)
-        self.assertEqual(save("midterm", "programming")[0], 409)
+        self.assertEqual(save("midterm", "programming")[0], 200)
         code, final = save("final")
         self.assertEqual(code, 200, final)
         self.assertEqual(save("final", "programming")[0], 409)
@@ -922,7 +755,7 @@ class LearningTests(unittest.TestCase):
         repeated=self.request("/api/learning/check-in", "s1", {"session_id": aid, "code": admin["code"]})
         self.assertEqual(repeated[0],200)
         self.assertTrue(repeated[1]["already_checked_in"])
-        self.assertEqual(self.request("/api/learning/attendance-record", form={"session_id": aid, "student_id": "s1", "status": "late", "reason": "reason"})[0], 200)
+        self.assertEqual(self.request("/api/learning/attendance-record", form={"session_id": aid, "student_id": "s1", "status": "late", "reason": "reason"})[0], 409)
 
     def test_qr_checkin_reports_session_and_preserves_teacher_override(self):
         c=self.course()

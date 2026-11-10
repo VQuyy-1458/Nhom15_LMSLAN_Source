@@ -45,9 +45,8 @@ def validate_assessment(assessment_type, course_id, exam_id, rows):
         raise learning.LearningError(400, "Chọn loại kỳ thi: Test, Giữa kỳ hoặc Cuối kỳ.")
     if assessment_type != "test" and not course_id:
         raise learning.LearningError(400, "Kỳ thi tính điểm phải thuộc một khóa học.")
-    if assessment_type in {"midterm", "final"} and any(r["id"] != exam_id and r.get("course_id") == course_id and r.get("assessment_type") == assessment_type for r in rows):
-        label = "giữa kỳ" if assessment_type == "midterm" else "cuối kỳ"
-        raise learning.LearningError(409, f"Mỗi khóa học chỉ có một kỳ thi {label}, kể cả thi nộp file và thi lập trình.")
+    if assessment_type == "final" and any(r["id"] != exam_id and r.get("course_id") == course_id and r.get("assessment_type") == "final" for r in rows):
+        raise learning.LearningError(409, "Mỗi khóa học chỉ có một kỳ thi cuối kỳ, kể cả thi nộp file và thi lập trình.")
 
 
 def integer(value, label, low, high):
@@ -143,22 +142,10 @@ def save(session, form, ip):
             languages = list(dict.fromkeys(form.get("languages", "").split(",")))
             if not languages or any(x not in {"c", "cpp", "java", "python"} for x in languages):
                 raise learning.LearningError(400, "Chọn ít nhất một ngôn ngữ lập trình hợp lệ.")
-            paper_id = form.get("paper_id", "")
-            paper = None
-            if paper_id:
-                from . import question_bank
-                paper = next((p for p in question_bank.papers() if p["id"] == paper_id), None)
-                if not paper or paper["course_id"] != course_id or paper["kind"] != "code":
-                    raise learning.LearningError(400, "Đề thi không thuộc khóa học hoặc không phải đề code.")
-                bank = {q["id"]: q for q in question_bank.questions()}
-                if any(qid not in bank or bank[qid]["course_id"] != course_id or bank[qid]["kind"] != "code" or bank[qid]["category"] != "exam" for qid in paper["question_ids"]):
-                    raise learning.LearningError(409, "Đề thi có câu hỏi không còn hợp lệ.")
-                problems = [{**copy.deepcopy(bank[qid]["problem"]), "question_id": qid} for qid in paper["question_ids"]]
-            else:
-                try:
-                    problems = json.loads(form.get("problems", "[]"))
-                except (TypeError, ValueError):
-                    raise learning.LearningError(400, "Danh sách bài toán không hợp lệ.")
+            try:
+                problems = json.loads(form.get("problems", "[]"))
+            except (TypeError, ValueError):
+                raise learning.LearningError(400, "Danh sách bài toán không hợp lệ.")
             if not isinstance(problems, list) or len(problems) > 30:
                 raise learning.LearningError(400, "Mỗi kỳ thi có tối đa 30 bài toán.")
             cleaned = []
@@ -171,20 +158,15 @@ def save(session, form, ip):
                 if not isinstance(tests, list) or len(tests) > 100:
                     raise learning.LearningError(400, "Mỗi bài toán có tối đa 100 test case.")
                 cases = []
-                mode = problem.get("execution_mode", "stdin")
-                if mode not in {"stdin", "harness"}:
-                    raise learning.LearningError(400, "Kiểu chạy bài toán không hợp lệ.")
                 for test in tests:
-                    if not isinstance(test, dict) or not isinstance(test.get("input", ""), str) or not isinstance(test.get("output", ""), str) or not isinstance(test.get("test_code", ""), str) or len(test.get("input", "")) > 100000 or len(test.get("output", "")) > 100000 or len(test.get("test_code", "")) > 20000:
+                    if not isinstance(test, dict) or not isinstance(test.get("input", ""), str) or not isinstance(test.get("output", ""), str) or len(test.get("input", "")) > 100000 or len(test.get("output", "")) > 100000:
                         raise learning.LearningError(400, "Dữ liệu test case không hợp lệ hoặc quá lớn.")
-                    if mode == "harness" and not test.get("test_code", "").strip():
-                        raise learning.LearningError(400, "Test class/method cần mã kiểm thử.")
-                    cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "test_code": test.get("test_code", "") if mode == "harness" else "", "sample": test.get("sample") is True})
+                    cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "sample": test.get("sample") is True})
                 checker = problem.get("checker", "tokens")
                 if checker not in {"exact", "tokens"}:
                     raise learning.LearningError(400, "Cách so khớp kết quả không hợp lệ.")
-                cleaned.append({"title": learning.text(problem, "title"), "statement": learning.text(problem, "statement", required=False, limit=20000), "points": integer(problem.get("points", 100), "Điểm bài toán", 1, 1000), "time_limit_ms": integer(problem.get("time_limit_ms", 1000), "Giới hạn thời gian (ms)", 100, 30000), "memory_limit_mb": integer(problem.get("memory_limit_mb", 256), "Bộ nhớ (MB)", 16, 2048), "checker": checker, "execution_mode": mode, "tests": cases, **({"question_id": problem["question_id"]} if paper and "question_id" in problem else {})})
-            row["programming"] = {"languages": languages, "problems": cleaned, "question_count": paper["question_count"] if paper else len(cleaned), "paper_id": paper_id or None}
+                cleaned.append({"title": learning.text(problem, "title"), "statement": learning.text(problem, "statement", required=False, limit=20000), "points": integer(problem.get("points", 100), "Điểm bài toán", 1, 1000), "time_limit_ms": integer(problem.get("time_limit_ms", 1000), "Giới hạn thời gian (ms)", 100, 30000), "memory_limit_mb": integer(problem.get("memory_limit_mb", 256), "Bộ nhớ (MB)", 16, 2048), "checker": checker, "tests": cases})
+            row["programming"] = {"languages": languages, "problems": cleaned}
             if any(not code_runner.budget_valid(problem) for problem in cleaned):
                 raise learning.LearningError(400, "Số test và thời gian mỗi test vượt ngân sách chấm. Hãy giảm số test hoặc giới hạn thời gian.")
             if "participant_ids" in form:
@@ -200,14 +182,6 @@ def save(session, form, ip):
             if not extensions or any(not re.fullmatch(r"\.[a-z0-9]{1,9}", x) for x in extensions):
                 raise learning.LearningError(400, "Định dạng file không hợp lệ. Ví dụ: .zip .pdf")
             row["file_settings"] = {"exam_duration_minutes": row["duration_minutes"], "submission_policy": policy, "max_submissions": integer(form.get("max_submissions", "1"), "Số lần nộp", 1, 20), "overwrite_previous": form.get("overwrite_previous") == "true", "accepted_submission_extensions": extensions}
-        if kind == "file":
-            paper_id = form.get("paper_id", old.get("paper_id", "") if old else "")
-            if paper_id:
-                from . import question_bank
-                paper = next((p for p in question_bank.papers() if p["id"] == paper_id), None)
-                if not paper or paper["course_id"] != course_id or paper["kind"] != "file" or not paper.get("generated_files"):
-                    raise learning.LearningError(400, "Đề thi nộp file không thuộc khóa học hoặc chưa tạo được file đề.")
-            row["paper_id"] = paper_id or None
         if old and old["active"]:
             settings = read_json("settings.json")
             settings.update(row["file_settings"])

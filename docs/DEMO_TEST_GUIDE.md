@@ -41,12 +41,13 @@ Các tên và kết quả trong bộ này là dữ liệu giả lập phục v�
    DEMO001 chưa nộp bài này nên bạn có thể thử nộp lần đầu và nộp lại.
 4. Quay lại admin → Bài nộp → Lập trình mạng → Bài tập 03. Mở Chấm bài, lưu điểm
    và nhận xét. Sinh viên tải lại để xem lịch sử và kết quả mới.
-5. Admin mở một buổi học trên lịch và bật điểm danh. Tài khoản sinh viên đang
-   đăng nhập được ghi nhận; để thử lần đăng nhập mới, mở cửa sổ khác và đăng
-   nhập DEMO001 trong thời gian phiên còn mở. Nếu phiên mẫu đã hết hạn, chọn
-   một buổi học khác trên lịch và mở điểm danh từ đó. Bảng giảng viên tự nhận
-   kết quả, có thể chỉnh thủ công cả sau khi đóng phiên. Sinh viên xem lịch sử
-   trên sidebar; bộ lọc khóa và trạng thái cập nhật ngay khi chọn.
+5. Admin mở Điểm danh của khóa và mở/tạo phiên còn hiệu lực để hiện QR.
+   Sinh viên DEMO001 mở Điểm danh ở sidebar → Mở máy ảnh quét QR. Đọc được QR
+   sẽ tự nhận đúng buổi và ghi có mặt, không chọn phiên/nhập mã/xác nhận lần nữa.
+   Nếu phiên mẫu 24 giờ đã hết hạn, tạo phiên mới. Trên HTTP LAN, điện thoại
+   dùng camera chụp QR rồi hệ thống tự giải mã; HTTPS/localhost quét video trực
+   tiếp. Bảng giảng viên tự nhận kết quả. Lọc lịch sử sinh viên theo khóa/trạng
+   thái sẽ cập nhật ngay, không cần Áp dụng.
 6. Vào Thông báo, thử mở chuông, xem chi tiết, lọc chưa đọc và đánh dấu tất cả.
 7. Thử khóa CSDL bằng DEMO017, xác nhận tài khoản này không được truy cập các
    file và dữ liệu của khóa Lập trình mạng.
@@ -78,11 +79,10 @@ nguyên. Sau khi kết thúc, bạn có thể chọn khóa mẫu và các file `
 
 ## Sao lưu và chạy lại
 
-Trước khi thêm mẫu, dữ liệu gốc được sao lưu vào
+Trước khi thêm mẫu, các file dữ liệu gốc được sao lưu vào
 `backups/before-demo-YYYYMMDD-HHMMSS/data/`. Vị trí chính xác được ghi trong
-`data/demo_seed.json`. Muốn khôi phục, dừng server trước rồi dùng chức năng
-sao lưu/phục hồi để khôi phục SQLite, dữ liệu tài khoản và các payload tương ứng;
-lưu riêng mọi bài nộp mới cần giữ.
+`data/demo_seed.json`. Muốn khôi phục, dừng server trước rồi khôi phục các file
+JSON từ bản sao lưu; lưu riêng mọi bài nộp mới cần giữ.
 
 Script chạy lại sẽ báo `already-seeded`, không nhân bản khóa, đổi mật khẩu mẫu
 đã sửa hoặc ghi đè bài bạn vừa thử nộp. Hết hạn điểm danh thì admin tạo phiên mới.

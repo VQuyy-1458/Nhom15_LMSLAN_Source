@@ -1,6 +1,5 @@
 """Compile and run only inside disposable, restricted Linux containers."""
 import os
-import re
 import logging
 import shutil
 import subprocess
@@ -71,19 +70,7 @@ def image_identity():
 
 
 def budget_valid(problem):
-    harness = problem.get("execution_mode") == "harness"
-    compile_budget = 20 if harness else 0
-    return (not harness or len(problem["tests"]) <= 10) and len(problem["tests"]) * (problem["time_limit_ms"]/1000 + 1 + compile_budget) <= MAX_JOB_SECONDS-30
-
-
-def _harness_source(language, test_code):
-    """Wrap a teacher test inside the same restricted container as student code."""
-    if language == "python":
-        return "import runpy\nscope = runpy.run_path('main.py', run_name='student_solution')\nexec(compile(open('judge_test.txt', encoding='utf-8').read(), 'judge_test.txt', 'exec'), scope)\n"
-    if language == "java":
-        return "public class JudgeHarness { public static void main(String[] args) throws Exception {\n" + test_code + "\n} }\n"
-    prefix = '#include <stdio.h>\n' if language == "c" else '#include <bits/stdc++.h>\nusing namespace std;\n'
-    return prefix + '#include "' + LANGUAGES[language] + '"\nint main() {\n' + test_code + '\nreturn 0;\n}\n'
+    return len(problem["tests"]) * (problem["time_limit_ms"]/1000 + 1) <= MAX_JOB_SECONDS-30
 
 
 def _remove_container(name):
@@ -165,45 +152,25 @@ def judge(source, language, problem, progress=None, image=None):
         folder = Path(directory)
         folder.chmod(0o777)
         filename = LANGUAGES[language]
-        if problem.get("execution_mode") == "harness" and language == "java":
-            declaration = re.search(rb"\bpublic\s+(?:final\s+)?class\s+([A-Za-z_$][\w$]*)", source)
-            if declaration:
-                filename = declaration.group(1).decode("ascii") + ".java"
         (folder / filename).write_bytes(source.removeprefix(b"\xef\xbb\xbf"))
-        harness = problem.get("execution_mode") == "harness"
         compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", "Main.java"]}.get(language)
-        if compile_command and not harness:
+        if compile_command:
             if progress: progress("compiling", 0, len(problem["tests"]))
             compiled = _container(folder, compile_command, memory=768, timeout=20, readonly=False, image=image)
             if compiled["system_error"]: raise RuntimeError("Môi trường biên dịch không sẵn sàng.")
             if compiled["exit"] or compiled["overflow"]:
                 return {"verdict": "CE", "score": 0, "passed": 0, "total": len(problem["tests"]), "compile_log": (compiled["stderr"] or compiled["stdout"])[:16000], "tests": []}
         memory = problem["memory_limit_mb"]
-        run_command = {"c": ["./program"], "cpp": ["./program"], "java": ["java", f"-Xmx{max(8, memory-64)}m", "-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:ReservedCodeCacheSize=16m", "JudgeHarness" if harness else "Main"], "python": ["python3", "-I", "-B", "judge_harness.py" if harness else "main.py"]}[language]
+        run_command = {"c": ["./program"], "cpp": ["./program"], "java": ["java", f"-Xmx{max(8, memory-64)}m", "-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:ReservedCodeCacheSize=16m", "Main"], "python": ["python3", "-I", "-B", "main.py"]}[language]
         results = []
         if progress: progress("judging", 0, len(problem["tests"]))
         deadline = time.monotonic() + MAX_JOB_SECONDS
         for index, test in enumerate(problem["tests"]):
             if time.monotonic() > deadline: raise RuntimeError("Lượt chấm vượt thời gian xử lý tổng, hãy giảm số test hoặc thời lượng mỗi test.")
-            if harness:
-                teacher_code = test.get("test_code", "")
-                if not teacher_code:
-                    raise ValueError("Test dạng class/method cần mã kiểm thử.")
-                if language == "python":
-                    (folder / "judge_test.txt").write_text(teacher_code, encoding="utf-8")
-                    (folder / "judge_harness.py").write_text(_harness_source(language, teacher_code), encoding="utf-8")
-                else:
-                    harness_file = "JudgeHarness.java" if language == "java" else "judge_harness." + ("c" if language == "c" else "cpp")
-                    (folder / harness_file).write_text(_harness_source(language, teacher_code), encoding="utf-8")
-                    harness_compile = {"java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", filename, harness_file], "c": ["gcc", "-std=c17", "-O2", harness_file, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", harness_file, "-o", "program"]}[language]
-                    compiled = _container(folder, harness_compile, memory=768, timeout=20, readonly=False, image=image)
-                    if compiled["system_error"]: raise RuntimeError("Môi trường biên dịch không sẵn sàng.")
-                    if compiled["exit"] or compiled["overflow"]:
-                        return {"verdict": "CE", "score": 0, "passed": 0, "total": len(problem["tests"]), "compile_log": (compiled["stderr"] or compiled["stdout"])[:16000], "tests": results}
             run = _container(folder, run_command, memory=memory, timeout=problem["time_limit_ms"] / 1000, input_data=test["input"].encode("utf-8"), image=image)
             if run["system_error"]: raise RuntimeError("Không thể khởi chạy môi trường chấm.")
             verdict = "OLE" if run["overflow"] else "MLE" if run["oom"] else "TLE" if run.get("timed_out", False) else "RE" if run["exit"] else "AC" if matches(run["stdout"], test["output"], problem["checker"]) else "WA"
-            results.append({"index": index+1, "sample": test["sample"], "verdict": verdict, "time_ms": run["time_ms"], "input": test["input"], "test_code": test.get("test_code", "") if harness else "", "expected": test["output"], "actual": run["stdout"][:16000], "stderr": run["stderr"][:4000]})
+            results.append({"index": index+1, "sample": test["sample"], "verdict": verdict, "time_ms": run["time_ms"], "input": test["input"], "expected": test["output"], "actual": run["stdout"][:16000], "stderr": run["stderr"][:4000]})
             if progress: progress("judging", index+1, len(problem["tests"]))
         passed = sum(t["verdict"] == "AC" for t in results)
         return {"verdict": "AC" if passed == len(results) else next(t["verdict"] for t in results if t["verdict"] != "AC"), "score": round(problem["points"] * passed / len(results), 2), "passed": passed, "total": len(results), "tests": results, "compile_log": ""}

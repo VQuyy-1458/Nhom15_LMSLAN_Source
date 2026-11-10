@@ -1,3 +1,0 @@
-test_code,output,sample
-"print(Solution().add(2, 3))",5,true
-"print(Solution().add(-1, 4))",3,false

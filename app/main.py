@@ -39,7 +39,7 @@ from .exams import list_exam_files, add_exam_file, distribute_exams, start_exam,
 from .submissions import accept_submission
 from . import learning
 from . import notifications as student_notifications
-from . import admin_workspace, exam_catalog, programming, submission_rate, code_runner, question_bank
+from . import admin_workspace, exam_catalog, programming, submission_rate, code_runner
 from . import course_packages
 from . import submission_archive, deadlines, exam_preflight, exam_timing
 from .security import login_state
@@ -337,9 +337,6 @@ class Handler(BaseHTTPRequestHandler):
                 result.update({"student":{"student_id":sid,"full_name":student.get("full_name",sid),"must_change_password":student.get("must_change_password",False)},"exam":student_exam_snapshot(sid),"exam_submissions":read_json("submissions.json").get(sid,[]),"notifications":[n for n in read_json("notifications.json",[]) if n.get("student_id") in (None,sid)],"server_time":utc_now()})
                 result["notification_feed"]=student_notifications.feed(sid,result)
                 result["programming"] = programming.snapshot(sid)
-                result["code_assignments"] = programming.assignment_submissions(sid)
-                result["practice_submissions"] = programming.practice_submissions(sid)
-                result["practice_questions"] = question_bank.public_practice({course["id"] for course in result["courses"]})
                 result["exam"]["assessment_type"] = read_json("settings.json").get("exam_assessment_type", "test")
                 settings=read_json("settings.json")
                 common_end=deadlines.exam_end(settings.get("exam_started_at"),settings.get("exam_duration_minutes"),settings.get("exam_ends_at")) if settings.get("exam_state") in {"started","ended"} else None
@@ -526,16 +523,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not username or len(username) > 80 or len(password) > 200:
                     raise ClientError(400, "Tên đăng nhập tối đa 80 ký tự và mật khẩu tối đa 200 ký tự.")
                 check_login_source(ip)
+                allowed,seconds=login_allowed(key)
+                if not allowed:
+                    audit("auth.login_locked",username,ip,{"retry_after_seconds":seconds}); return self._html(self._render("login.html",next=attendance_return(f.get("next")),error=f"Tài khoản tạm khóa. Vui lòng thử lại sau {max(1,seconds//60+1)} phút."),429)
                 admins,students=read_json("admins.json"),read_json("students.json")
                 role="admin" if username in admins else "student" if username in students else None
-                if role != "admin":
-                    allowed,seconds=login_allowed(key)
-                    if not allowed:
-                        audit("auth.login_locked",username,ip,{"retry_after_seconds":seconds}); return self._html(self._render("login.html",next=attendance_return(f.get("next")),error=f"Tài khoản tạm khóa. Vui lòng thử lại sau {max(1,seconds//60+1)} phút."),429)
                 record=admins.get(username) if role=="admin" else students.get(username) if role=="student" else None
                 if not record or not record.get("active",True) or not verify_password(password,record.get("password_hash")):
-                    seconds=0 if role=="admin" else record_login_failure(key)
-                    audit("auth.login_failed",username,ip,{"lockout_seconds":seconds}); msg="Thông tin đăng nhập không đúng."
+                    seconds=record_login_failure(key); audit("auth.login_failed",username,ip,{"lockout_seconds":seconds}); msg="Thông tin đăng nhập không đúng."
                     if seconds: msg += " Đã khóa tạm trong 15 phút sau 3 lần sai."
                     return self._html(self._render("login.html",next=attendance_return(f.get("next")),error=msg),401)
                 verified_hash = record.get("password_hash")
@@ -549,7 +544,6 @@ class Handler(BaseHTTPRequestHandler):
                         revoked=revoke_student_sessions(username)
                         if revoked: audit("auth.previous_session_revoked",username,ip,{"revoked_sessions":revoked})
                     token=new_session(username,role,ip,self.headers.get("user-agent",""))
-                    if role=="student": learning.mark_login_attendance(username,ip)
                     if role=="student":
                         current["last_ip"]=ip; current["last_seen"]=utc_now(); write_json("students.json",accounts)
                     audit("auth.login_success",username,ip,{"role":role})
@@ -628,12 +622,6 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/admin/exam-configurations/save":
                 sess=self._auth(req,"admin")
                 return self._json(exam_catalog.save(sess,f,client_ip(req)))
-            if path=="/api/admin/questions/save":
-                sess=self._auth(req,"admin")
-                return self._json(question_bank.save_question(sess,f,client_ip(req)))
-            if path=="/api/admin/papers/save":
-                sess=self._auth(req,"admin")
-                return self._json(question_bank.save_paper(sess,f,client_ip(req)))
             if path=="/api/admin/exam-preflight/open":
                 sess=self._auth(req,"admin")
                 return self._json(exam_preflight.open_checked(sess,f,client_ip(req),getattr(req,"preflight_runner",None)))
@@ -661,12 +649,6 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/student/programming/submit":
                 sess=self._auth(req,"student")
                 return self._json(programming.submit(sess,f,req.files.get("file"),client_ip(req)))
-            if path=="/api/student/assignments/code":
-                sess=self._auth(req,"student")
-                return self._json(programming.submit_assignment(sess,f,req.files.get("file"),client_ip(req)))
-            if path=="/api/student/practice/code":
-                sess=self._auth(req,"student")
-                return self._json(programming.submit_practice(sess,f,client_ip(req)))
             if path.startswith("/api/admin/accounts/") and path.endswith("/reset-password"):
                 sess=self._auth(req,"admin"); sid=urllib.parse.unquote(path[len("/api/admin/accounts/"):-len("/reset-password")].strip("/")); password=f.get("new_password","")
                 if not password.strip() or len(password)<8 or len(password)>200: raise ClientError(400,"Mật khẩu mới phải dài từ 8 đến 200 ký tự.")
@@ -886,7 +868,7 @@ def _serve():
     if bool(cert)!=bool(key):
         raise RuntimeError("Cần cấu hình đủ CSS_TLS_CERT và CSS_TLS_KEY để bật HTTPS.")
     scheme="https" if cert and key else "http"
-    print("="*66); print("LAN-LMS (Python standard-library HTTP server)"); print("="*66)
+    print("="*66); print("CLASSROOM SUBMISSION SERVER (Python standard-library HTTP server)"); print("="*66)
     print(f"Local URL : {scheme}://127.0.0.1:{PORT}")
     for ip in sorted(Handler._lan_addresses()): print(f"LAN URL   : {scheme}://{ip}:{PORT}")
     if not (cert and key): print("WARNING   : HTTP mode; LAN traffic is not encrypted. Use trusted TLS certs for HTTPS.")

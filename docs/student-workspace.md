@@ -14,7 +14,7 @@ tham khảo từ mã nguồn LAN-LMS trong `D:\Projects\LAN-LMS`, đặc biệt:
   coding_exams; tài liệu `PRACTICAL_WORKFLOWS.md`, `LIFECYCLE_AND_DATA.md`.
 
 Giao diện sử dụng sidebar tối, màu xanh, typography, nút, thẻ và bảng của
-LAN-LMS. Không chuyển framework Next.js/FastAPI hoặc dữ liệu
+Classroom Submission Server. Không chuyển framework Next.js/FastAPI hoặc dữ liệu
 tài khoản/khóa học của LAN-LMS vào project hiện tại.
 
 ## Các màn sử dụng
@@ -23,9 +23,9 @@ tài khoản/khóa học của LAN-LMS vào project hiện tại.
 | --- | --- | --- |
 | Tổng quan | `/student/dashboard` hoặc `/` | Lời chào, thống kê thật, việc cần làm, lịch tháng, hoạt động sắp tới, khóa học |
 | Khóa học | `/student/courses` | Tìm theo tên/mã/học kỳ, lọc đang học/đã tổng kết, mở từng khóa |
-| Chi tiết khóa | `/student/courses?course=ID` | Chọn tuần để xem buổi học và nội dung; các tab Tài liệu, Bài tập, Luyện tập, Lịch học, Kỳ thi, Kết quả; không có Tổng quan/Điểm danh trong khóa |
+| Chi tiết khóa | `/student/courses?course=ID` | Header khóa và các tab Tài liệu (mặc định), Bài tập, Lịch học, Kỳ thi, Kết quả; không có Tổng quan/Điểm danh trong khóa |
 | Lịch | `/student/calendar` | Lịch tháng tương tác, buổi học/thông báo/lịch thi và hạn bài tập |
-| Điểm danh | `/student/attendance` | Tự ghi nhận khi tài khoản đăng nhập trong phiên LAN; lịch sử dạng hàng lọc theo khóa, kết quả, trạng thái phiên |
+| Điểm danh | `/student/attendance` | Mở camera/quét ảnh và tự xác nhận đúng buổi từ QR, không chọn phiên/nhập mã; lịch sử dạng hàng lọc theo khóa, kết quả, trạng thái phiên |
 | Bài tập | `/student/assignments` | Lọc theo khóa/trạng thái, yêu cầu, hạn nộp, nộp/nộp lại, lịch sử, điểm và phản hồi |
 | Kỳ thi | `/student/exams` | Danh sách gọn; chọn kỳ thi mở chi tiết nộp file hoặc lập trình, làm bài và nhận kết quả thật |
 | Lịch sử | `/student/history` | Bài tập/bài thi đã nộp, thời gian, tải lại file còn lưu |
@@ -36,7 +36,7 @@ tài khoản/khóa học của LAN-LMS vào project hiện tại.
 Các danh sách chính của sinh viên được phân trang 10 mục. Lịch tháng và bộ chọn
 khóa không cắt bớt dữ liệu điều hướng. Dashboard hiển thị một số hoạt động gần
 nhất và liên kết đến màn đầy đủ. Dữ liệu được kiểm tra lại mỗi 10 giây; thông báo
-cập nhật tự áp dụng cho danh sách khi không nhập/chọn file;
+cập nhật tự áp dụng cho danh sách khi không nhập/chọn file hoặc đang quét QR;
 khi đang thao tác, giữ form và báo có cập nhật để người dùng chủ động tải.
 
 Các bộ lọc sinh viên áp dụng ngay khi chọn; tìm kiếm cập nhật sau khoảng
@@ -46,18 +46,24 @@ thái; nhấn vào để mở hộp chi tiết với yêu cầu, nộp bài và 
 lịch sử điểm danh cũng mở hộp chi tiết khi nhấn tên. Màu, sidebar và header/tab
 khóa học dùng cùng cấu trúc với phía giảng viên, chỉ giữ chức năng của sinh viên.
 
-Điểm danh nằm riêng ở sidebar. Giảng viên mở phiên từ buổi học trên lịch;
-những sinh viên đang đăng nhập trong LAN được ghi nhận có mặt và lần đăng nhập
-trong thời gian phiên mở cũng được ghi nhận. Sinh viên không cần chọn phiên hoặc
-quét mã. Giảng viên có thể sửa kết quả kể cả sau khi đóng phiên.
+Điểm danh nằm riêng ở sidebar. Camera trực tiếp dùng getUserMedia + ZXing;
+Permissions-Policy cho camera cùng origin. HTTPS/localhost cho phép quét video,
+HTTP LAN trên điện thoại chuyển nút mở camera sang camera chụp QR, ảnh được
+giải mã và gửi check-in tự động. Có chọn ảnh để dùng khi không có camera.
+QR chỉ cung cấp ID phiên và mã; không điều hướng/gửi yêu cầu tới host trong QR,
+nên cùng server qua localhost, IP LAN và HTTPS vẫn nhận được phiên. Backend
+kiểm tra quyền khóa, mã, thời hạn/đóng phiên. Quét lại không tạo bản ghi trùng;
+không tự thay quyết định Vắng của giảng viên. Link QR qua đăng nhập giữ phiên
+để đăng nhập xong tự điểm danh, đồng thời chặn next URL bên ngoài.
 
 HTTP LAN dùng Referrer-Policy strict-origin-when-cross-origin để trình duyệt
 giữ đúng Origin khi gửi form đăng nhập. Không dùng no-referrer tại trang login:
 chính sách đó có thể biến Origin thành null trên IP LAN và bị CSRF từ chối.
 Kiểm tra bằng `node tests/browser_login_qa.cjs`: Chrome giả lập điện thoại với
-HTTP hostname không phải localhost, đăng nhập sinh viên/admin và mở lịch sử điểm danh.
+HTTP hostname không phải localhost, đăng nhập sinh viên/admin và tiếp tục QR.
 
-Lịch sử có bộ lọc khóa học, kết quả và trạng thái phiên. Bảng gồm ngày/buổi/khóa/kết quả/trạng thái phiên, một hàng
+Sau khi quét, lịch sử tự chọn khóa của phiên vừa điểm danh, bỏ bộ lọc trạng
+thái để hiện kết quả. Bảng gồm ngày/buổi/khóa/kết quả/trạng thái phiên, một hàng
 mỗi buổi. Admin đang mở chi tiết điểm danh nhận thay đổi trong khoảng 2,5 giây,
 không làm mất dữ liệu ở form điều chỉnh. Không thay bố cục giảng viên.
 
@@ -80,7 +86,7 @@ Mục Khóa học nằm trong sidebar quản trị gốc, cùng Dashboard, Giám
 Cấu hình kỳ thi, Tài khoản sinh viên, Bài nộp, Địa chỉ LAN và Tài khoản Admin.
 Không có menu quản lý học tập riêng. Trang danh sách tìm theo tên/mã, lọc học kỳ
 và trạng thái; mở một khóa hiển thị ngữ cảnh lớp và các tab Tổng quan, Sinh viên,
-Tài liệu, Bài tập, Câu hỏi & đề, Lịch & điểm danh, Kỳ thi, Bảng điểm. Chuyển tab
+Tài liệu, Lịch & Thông báo, Bài tập & Chấm điểm, Điểm danh, Bảng điểm. Chuyển tab
 giữ khóa đang chọn, đường dẫn lưu khóa/tab để tải lại và dùng nút Back/Forward.
 Đường dẫn `/admin/learning` cũ chuyển tiếp sang Khóa học và giữ khóa/tab.
 
@@ -103,17 +109,20 @@ giữ khóa đang chọn, đường dẫn lưu khóa/tab để tải lại và d
 - Trang Bài nộp có danh sách bài tập theo khóa, số đã nộp/chưa nộp/chờ chấm/đã
   chấm. Chi tiết lấy lần nộp mới nhất cho mỗi sinh viên, giữ toàn bộ lịch sử và
   cho chấm điểm trong hộp thoại. Bảng bài thi nộp file cũ vẫn có ở trang tổng.
-- Thi lập trình dùng bộ chấm Docker, hỗ trợ stdin/stdout và mã kiểm thử
-  class/method; ngân hàng câu hỏi và đề thi dùng lại giữa các kỳ thi.
+- Chưa thay cơ chế một lượt thi nộp file hoạt động tại một thời điểm và chưa
+  tích hợp judge cho thi lập trình. Không tạo danh sách đề/code hoặc số liệu giả
+  để khớp ảnh giao diện.
 
 1. Tạo khóa học với tên, mã, học kỳ và danh sách MSSV đã có. Để trống danh sách
    trong giao diện mới nghĩa là chưa ghi danh sinh viên; thêm sau ở tab Sinh viên.
 2. Chọn khóa rồi đăng tài liệu, buổi học/thông báo, bài tập có hạn nộp/số lần nộp,
    hoặc mở điểm danh có thời hạn. Thời gian trên form là giờ Việt Nam.
-3. Mở điểm danh từ một buổi học trên lịch. Sinh viên đang đăng nhập hoặc đăng
-   nhập mới trong thời gian phiên mở được tự ghi nhận có mặt.
-4. Xem bài nộp và lưu điểm/nhận xét. Có thể điều chỉnh điểm danh thủ công cả
-   sau khi phiên đã đóng hoặc hết hạn.
+3. Cung cấp mã/QR điểm danh. QR được tạo và đọc bằng thư viện ZXing đặt sẵn ở
+   `static/vendor/zxing`, không gọi CDN hoặc dịch vụ bên ngoài. Khi dùng điện
+   thoại, đăng nhập sinh viên ở địa chỉ LAN của server rồi mở Điểm danh để quét;
+   hệ thống tự nhận buổi học và ghi có mặt ngay sau khi đọc mã.
+4. Xem bài nộp và lưu điểm/nhận xét. Có thể điều chỉnh điểm danh có lý do trong
+   phiên đang mở. Phiên đã đóng/hết hạn không sửa được.
 5. Chọn Bảng điểm để đặt trọng số (tổng 100%) và nhập điểm giữa kỳ/cuối kỳ hoặc
    điều chỉnh điểm thành phần. Để trống điểm điều chỉnh để lấy lại kết quả tự tính.
 6. Tổng kết khóa học sau khi đủ điểm của các thành phần có trọng số dương. Sau
@@ -128,15 +137,16 @@ Kỳ thi của lớp vẫn dùng **Cấu hình kỳ thi** hiện có. Không có
   đến muộn đều tính tham gia; phiên còn mở chưa trừ điểm.
 - Bài tập: trung bình điểm lần nộp gần nhất của các bài đã chấm/đã hết hạn;
   chưa nộp sau hạn tính 0, bài chờ chấm khiến điểm trung bình chưa đủ dữ liệu.
-- Giữa kỳ/cuối kỳ: điểm thi được chuẩn hóa về thang 10; mỗi khóa có tối đa một
-  kỳ giữa kỳ và một kỳ cuối kỳ. Kỳ test không tính điểm.
+- Giữa kỳ/cuối kỳ: giảng viên nhập điểm thang 10.
 - Điểm nhập thủ công thành phần được ưu tiên hơn điểm suy ra từ hoạt động.
 - Tổng kết chỉ hiển thị khi các thành phần có trọng số dương đủ điểm.
 
 ## Lưu trữ và kiểm soát truy cập
 
-- Dữ liệu nghiệp vụ lưu trong `data/lms.sqlite3`; payload file lưu riêng.
-- Tài khoản và phiên đăng nhập lưu trong JSON; mật khẩu vẫn băm scrypt.
+- Dữ liệu mới: `data/learning.json`; file riêng: `learning-files/`.
+- JSON ghi thay thế nguyên tử, khóa ghi trong tiến trình cho các thao tác học tập.
+  Tiếp tục chạy một tiến trình server như kiến trúc gốc.
+- Tài khoản và kỳ thi cũ giữ ở các file hiện có. Mật khẩu vẫn băm scrypt.
 - Server kiểm tra quyền thành viên khóa, chủ bài nộp, trạng thái khóa, hạn nộp,
   số lần nộp, loại file và dung lượng (bài tập/học liệu 20 MiB).
 - Bài tập có khóa yêu cầu để gửi lại request lỗi mạng không tăng số lần nộp.
@@ -147,8 +157,9 @@ Kỳ thi của lớp vẫn dùng **Cấu hình kỳ thi** hiện có. Không có
 
 ## Khác biệt với LAN-LMS
 
-Thi nộp file giữ quy trình LAN-LMS; thi lập trình có Docker judge cho
-C/C++/Java/Python, bộ test và lịch sử chấm. Đồng bộ dùng polling thay vì WebSocket. Điểm chấm code hiển thị trong
+Thi nộp file giữ quy trình Classroom; thi lập trình có Docker judge cho
+C/C++/Java/Python, bộ test và lịch sử chấm. Video camera/ảnh QR đều gửi check-in
+tự động. Đồng bộ dùng polling thay vì WebSocket. Điểm chấm code hiển thị trong
 kỳ thi/lịch sử, chưa tự ghi đè điểm thành phần mà giảng viên đã nhập. Chưa
 chuyển nhập CSV điểm, xóa mềm hoặc nhiều file đính kèm đề bài.
 
@@ -166,17 +177,16 @@ callback chỉ hiển thị thông báo thành công của bản xem trước.
   chiều rộng, logo, avatar, khoảng cách menu, trạng thái chọn và ghi chú cuối.
 - Danh sách khóa có thống kê thật, tìm kiếm, lọc trạng thái, thẻ khóa và thao
   tác tạo/nhập. Tiến độ tính theo số buổi đã đến lịch, không giả lập tuần học.
-- Trong khóa dùng các tab Tổng quan, Sinh viên, Tài liệu, Bài tập, Câu hỏi & đề,
-  Lịch & điểm danh, Kỳ thi và Bảng điểm. Các đường dẫn cũ vẫn
+- Trong khóa dùng sáu tab: Tổng quan, Sinh viên, Học tập, Lịch & điểm danh,
+  Kỳ thi, Bảng điểm. Các đường dẫn material/assignment/event/attendance cũ vẫn
   mở được và được đánh dấu dưới tab cha tương ứng.
 - Điểm danh hiển thị danh sách buổi gọn. Nhấn một buổi trong danh sách hoặc
-  Lịch & điểm danh để mở chi tiết duy nhất của buổi đó: thống kê, trạng thái
-  phiên, danh sách sinh viên có tìm kiếm/phân trang, điều chỉnh thủ công và kết
+  Lịch & điểm danh để mở chi tiết duy nhất của buổi đó: thống kê, QR/mã nếu còn
+  mở, danh sách sinh viên có tìm kiếm/phân trang, điều chỉnh có lý do và kết
   thúc phiên. URL giữ `session=ID` để tải lại vẫn đúng buổi. Tạo phiên mới mở
   ngay chi tiết của phiên vừa tạo; nút quay lại trả về danh sách.
-- Tài liệu/bài tập có thể gắn vào buổi học; trang Tổng quan cho chọn tuần rồi
-  mới hiện các buổi và nội dung liên quan. Nội dung cũ chưa gắn buổi nằm trong
-  lựa chọn riêng. Lịch có chuyển tuần và bổ sung cuối tuần khi
+- Học tập nhóm tài liệu/bài tập theo trường chủ đề. Nội dung cũ chưa có chủ đề
+  được nhóm vào Nội dung học tập. Lịch có chuyển tuần và bổ sung cuối tuần khi
   có hoạt động để không bỏ sót hạn nộp.
 - Các thao tác tạo/sửa khóa, thêm/nhập thành viên, điều chỉnh điểm và xuất CSV
   dùng dữ liệu thật. Bỏ sinh viên khỏi lớp không xóa tài khoản hoặc bài nộp.
@@ -191,20 +201,18 @@ callback chỉ hiển thị thông báo thành công của bản xem trước.
   Thi lập trình. Nhấn Cấu hình để mở trang chi tiết `exam=ID`.
 - Thi nộp file giữ các chức năng chi tiết cũ: danh sách dự thi, thời gian,
   số lần nộp, định dạng, mật khẩu, quy tắc phát đề và bắt đầu/kết thúc lượt.
-  Có thể lưu nhiều bản cấu hình trong `data/lms.sqlite3`; chỉ một kỳ
+  Có thể lưu nhiều bản cấu hình trong `data/exam_catalog.json`; chỉ một kỳ
   thi nộp file được chọn để vận hành trên server. “Lưu và mở cấu hình phát đề”
   chọn bản nháp; thao tác này bị chặn nếu một lượt khác đã phát đề/đang thi.
   Các thiết lập và trạng thái của kỳ thi trước được giữ trong danh sách.
 - Thi lập trình hỗ trợ lưu ngôn ngữ C/C++/Java/Python, bài toán, thang điểm,
   giới hạn thời gian/bộ nhớ, cách so khớp và test case mẫu/ẩn. “Lưu và mở kỳ
   thi” đưa đề vào mục Kỳ thi của sinh viên trong danh sách, khóa cấu hình.
-  Sinh viên bấm bắt đầu để vào làm; giờ đóng chung tính từ khi giảng viên mở
-  kỳ thi. Sinh viên nộp file nguồn theo bài toán, nhận kết
+  Sinh viên bấm bắt đầu để tính giờ, nộp file nguồn theo bài toán, nhận kết
   quả chấm tự động qua Docker. Cả test mẫu và ẩn đều tính điểm. Admin xem
   input/output mong đợi/output thực tế và có thể chấm lại bài đã lưu.
   Chi tiết vận hành và giới hạn tại [programming-judge.md](programming-judge.md).
-- Lịch thi dự kiến hiển thị theo giờ Việt Nam; kỳ thi đủ cấu hình có thể tự mở
-  theo lịch.
+- Lịch thi dự kiến hiển thị theo giờ Việt Nam; chưa tự động phát đề/mở thi.
   Cấu hình và test case chỉ được trả về qua API quản trị.
 - Mục Bài nộp là kho chung cho bài tập nộp file, kỳ thi nộp file và code.
   Mỗi lần nộp là một bản gốc riêng; có lọc khóa học, sinh viên, hoạt động,
@@ -245,7 +253,7 @@ node tests/test_exam_csv.cjs
 
 Bộ kiểm thử HTTP dùng thư mục tạm. Bộ trình duyệt chạy Chrome headless qua CDP
 và một server riêng với dữ liệu tạm; không dùng cookie hoặc dữ liệu của server
-lớp thật. Nó kiểm tra các màn, form nộp/chấm bài, điểm danh LAN, điểm trọng số, màn
+lớp thật. Nó kiểm tra các màn, form nộp/chấm bài, QR offline, điểm trọng số, màn
 trống, mobile, đổi mật khẩu và lỗi JavaScript/CSP. Ảnh QA nằm ở
 `previews/student-qa/`.
 

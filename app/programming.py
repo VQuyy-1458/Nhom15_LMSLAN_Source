@@ -2,7 +2,6 @@
 import copy
 import json
 import logging
-import random
 import threading
 import uuid
 import hashlib
@@ -25,15 +24,6 @@ def rows():
     return read_json("programming_submissions.json", [])
 
 
-def assignment_submissions(sid=None, course_ids=None):
-    selected = [r for r in rows() if r.get("assignment_id") and (sid is None or r["student_id"] == sid) and (course_ids is None or r["course_id"] in course_ids)]
-    return [public_submission(row, admin=sid is None) for row in selected]
-
-
-def practice_submissions(sid):
-    return [public_submission(row) for row in rows() if row.get("practice_question_id") and row["student_id"] == sid]
-
-
 def exam(exam_id):
     row = next((r for r in exam_catalog.listing() if r["id"] == exam_id and r["type"] == "programming"), None)
     if not row: raise learning.LearningError(404, "Không tìm thấy kỳ thi lập trình.")
@@ -46,12 +36,6 @@ def eligible(row, sid):
     return sid in row["participants"] and (not row["course_id"] or c and (c.get("student_ids") is None or sid in c["student_ids"]))
 
 
-def assigned_indices(row, attempt=None):
-    pool = row["programming"]["problems"]
-    indices = attempt.get("problem_indices") if attempt else None
-    return indices if isinstance(indices, list) else list(range(len(pool)))
-
-
 def public_submission(row, admin=False):
     result = copy.deepcopy(row)
     grades = [h.get("result") for h in result.get("grading_history", [])] + [result.get("result")]
@@ -61,7 +45,7 @@ def public_submission(row, admin=False):
             if not grade: continue
             for test in grade["tests"]:
                 if not test["sample"]:
-                    for key in ("input", "test_code", "expected", "actual", "stderr"): test.pop(key, None)
+                    for key in ("input", "expected", "actual", "stderr"): test.pop(key, None)
     return result
 
 
@@ -83,7 +67,7 @@ def snapshot(sid):
             item["started_at"] = row.get("started_at") or row.get("scheduled_at")
         item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
         if attempt:
-            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "execution_mode": p.get("execution_mode", "stdin"), "samples": [t for t in p["tests"] if t["sample"]]} for i, real_index in enumerate(assigned_indices(row, attempt)) for p in [row["programming"]["problems"][real_index]]]
+            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"])]
         result.append(item)
     return {"exams": result, "submissions": [public_submission(r) for r in rows() if r["student_id"] == sid]}
 
@@ -131,8 +115,8 @@ def control(session, form, ip, runner_ready=None, now=None):
 def student_submissions(sid, exam_id, problem_index):
     row = exam(exam_id)
     if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
+    index = exam_catalog.integer(problem_index, "Chỉ số bài toán", 0, len(row["programming"]["problems"])-1)
     attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
-    index = exam_catalog.integer(problem_index, "Chỉ số bài toán", 0, len(assigned_indices(row, attempt))-1)
     from .deadlines import exam_end
     end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
     now = datetime.now(timezone.utc)
@@ -155,10 +139,7 @@ def start(session, form, ip):
         key = row["id"] + ":" + sid
         if key not in attempts:
             now = datetime.now(timezone.utc)
-            pool = row["programming"]["problems"]
-            count = row["programming"].get("question_count", len(pool))
-            selected = random.SystemRandom().sample(range(len(pool)), count) if count < len(pool) else list(range(len(pool)))
-            attempts[key] = {"started_at": now.isoformat(), "ends_at": (common_end or now + timedelta(minutes=row["duration_minutes"])).isoformat(), "problem_indices": selected}
+            attempts[key] = {"started_at": now.isoformat(), "ends_at": (common_end or now + timedelta(minutes=row["duration_minutes"])).isoformat()}
             write_json("programming_attempts.json", attempts)
             audit("programming.student_started", sid, ip, {"exam_id": row["id"]})
         return {"ok": True}
@@ -203,8 +184,7 @@ def submit(session, form, file, ip):
     with learning.LOCK, atomic_transaction(), ExitStack() as guards:
         row = exam(form.get("exam_id"))
         if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
-        attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
-        index = exam_catalog.integer(form.get("problem_index"), "Chỉ số bài toán", 0, len(assigned_indices(row, attempt))-1)
+        index = exam_catalog.integer(form.get("problem_index"), "Chỉ số bài toán", 0, len(row["programming"]["problems"])-1)
         records = rows()
         if request_id:
             previous = next((r for r in records if r["student_id"] == sid and r.get("request_id") == request_id), None)
@@ -212,6 +192,7 @@ def submit(session, form, file, ip):
                 if previous["exam_id"] != row["id"] or previous["problem_index"] != index or previous["language"] != language or previous["sha256"] != hashlib.sha256(content).hexdigest():
                     raise learning.LearningError(409, "Yêu cầu gửi lại có nội dung khác. Hãy tạo lần nộp mới.")
                 return {"ok":True, "submission":public_submission(previous)}
+        attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
         if row["state"] != "started" or row.get("waiting") or not attempt or attempt.get("status") == "submitted" or learning.date_value(attempt["ends_at"]) <= datetime.now(timezone.utc): raise learning.LearningError(409, "Chưa bắt đầu, đã nộp bài hoặc đã hết thời gian nộp bài.")
         from .deadlines import exam_end
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
@@ -221,7 +202,7 @@ def submit(session, form, file, ip):
         if Path(file["filename"]).suffix.lower() != Path(code_runner.LANGUAGES[language]).suffix: raise learning.LearningError(400, "Phần mở rộng file không khớp ngôn ngữ đã chọn.")
         pending = [r for r in records if r["state"] in {"queued", "running"}]
         if len(pending) >= 50 or sum(r["student_id"] == sid for r in pending) >= 2: raise learning.LearningError(429, "Bạn còn bài đang chấm hoặc hàng đợi đang đầy. Chờ kết quả trước khi nộp tiếp.")
-        problem = row["programming"]["problems"][assigned_indices(row, attempt)[index]]
+        problem = row["programming"]["problems"][index]
         guards.enter_context(submission_rate.guard(sid))
         record = {"id": uuid.uuid4().hex, "exam_id": row["id"], "exam_title": row["title"], "course_id": row["course_id"], "student_id": sid, "problem_index": index, "problem_title": problem["title"], "max_score": problem["points"], "language": language, "original_filename": Path(file["filename"]).name[:150], "submitted_at": utc_now(), "state": "queued", "result": None, "size_bytes": len(content), "sha256": hashlib.sha256(content).hexdigest(), "ip": ip, "grading_history": []}
         record["full_name"] = read_json("students.json").get(sid,{}).get("full_name",sid)
@@ -235,99 +216,6 @@ def submit(session, form, file, ip):
         records.append(record); write_json("programming_submissions.json", records)
         audit("programming.submitted", sid, ip, {"submission_id": record["id"], "exam_id": row["id"]})
         after_commit(lambda: schedule(record["id"]))
-    return {"ok": True, "submission": public_submission(record)}
-
-
-def submit_assignment(session, form, file, ip):
-    """Queue a course code exercise through the same isolated judge as exams."""
-    language = form.get("language", "")
-    if language not in code_runner.LANGUAGES:
-        raise learning.LearningError(400, "Ngôn ngữ lập trình không hợp lệ.")
-    source = (file or {}).get("data") if file and file.get("filename") else form.get("source", "").encode("utf-8")
-    if not source or len(source) > 100000:
-        raise learning.LearningError(400, "Mã nguồn phải từ 1 đến 100.000 byte.")
-    try:
-        source.decode("utf-8-sig", "strict")
-    except UnicodeDecodeError:
-        raise learning.LearningError(400, "Mã nguồn phải dùng UTF-8.")
-    if file and file.get("filename") and Path(file["filename"]).suffix.lower() != Path(code_runner.LANGUAGES[language]).suffix:
-        raise learning.LearningError(400, "Phần mở rộng file không khớp ngôn ngữ đã chọn.")
-    sid = session["user_id"]
-    request_id = form.get("request_id", "").strip()
-    if len(request_id) > 80 or any(not (x.isascii() and (x.isalnum() or x in "._:-")) for x in request_id):
-        raise learning.LearningError(400, "Mã yêu cầu nộp bài không hợp lệ.")
-    with learning.LOCK, atomic_transaction():
-        data = learning.load()
-        assignment = learning.find(data, "assignments", learning.text(form, "assignment_id", 80))
-        learning.course_access(data, assignment["course_id"], session, write=True)
-        if assignment.get("kind") != "code":
-            raise learning.LearningError(400, "Bài này không nhận mã nguồn.")
-        if assignment.get("closed_at") or learning.date_value(assignment["due_at"]) <= datetime.now(timezone.utc):
-            raise learning.LearningError(409, "Đã hết hạn nộp bài.")
-        records = rows()
-        prior = [row for row in records if row.get("assignment_id") == assignment["id"] and row["student_id"] == sid]
-        digest = hashlib.sha256(source).hexdigest()
-        duplicate = next((row for row in prior if request_id and row.get("request_id") == request_id), None)
-        if duplicate:
-            if duplicate["sha256"] != digest or duplicate["language"] != language:
-                raise learning.LearningError(409, "Yêu cầu gửi lại có nội dung khác.")
-            return {"ok": True, "submission": public_submission(duplicate)}
-        if len(prior) >= assignment["max_attempts"]:
-            raise learning.LearningError(409, "Bạn đã dùng hết số lần nộp bài.")
-        if not code_runner.ready():
-            raise learning.LearningError(503, "Bộ chấm chưa sẵn sàng, vui lòng thử lại.")
-        pending = [row for row in records if row["state"] in {"queued", "running"}]
-        if len(pending) >= 50 or sum(row["student_id"] == sid for row in pending) >= 2:
-            raise learning.LearningError(429, "Bạn còn bài đang chấm hoặc hàng đợi đang đầy.")
-        with submission_rate.guard(sid):
-            problem = assignment["problem"]
-            record = {"id": uuid.uuid4().hex, "exam_id": "assignment:" + assignment["id"], "assignment_id": assignment["id"], "assignment_title": assignment["title"], "course_id": assignment["course_id"], "student_id": sid, "problem_index": 0, "problem_title": problem["title"], "max_score": problem["points"], "language": language, "original_filename": Path((file or {}).get("filename") or code_runner.LANGUAGES[language]).name[:150], "submitted_at": utc_now(), "state": "queued", "result": None, "size_bytes": len(source), "sha256": digest, "ip": ip, "grading_history": [], "request_id": request_id or None, "attempt": len(prior) + 1, "full_name": read_json("students.json").get(sid, {}).get("full_name", sid), "judge_image": code_runner.image_identity()}
-            folder = FILES / record["id"]
-            folder.mkdir(parents=True)
-            on_rollback(lambda: folder.rmdir())
-            save_payload(folder / "source", source)
-            save_payload(folder / "problem.json", json.dumps(problem, ensure_ascii=False).encode("utf-8"))
-            records.append(record)
-            write_json("programming_submissions.json", records)
-            audit("programming.assignment_submitted", sid, ip, {"submission_id": record["id"], "assignment_id": assignment["id"]})
-            after_commit(lambda: schedule(record["id"]))
-    return {"ok": True, "submission": public_submission(record)}
-
-
-def submit_practice(session, form, ip):
-    """Open-ended practice; never contributes to the course gradebook."""
-    from . import question_bank
-    sid, language = session["user_id"], form.get("language", "")
-    if language not in code_runner.LANGUAGES:
-        raise learning.LearningError(400, "Ngôn ngữ lập trình không hợp lệ.")
-    source = form.get("source", "").encode("utf-8")
-    if not source or len(source) > 100000:
-        raise learning.LearningError(400, "Mã nguồn phải từ 1 đến 100.000 byte.")
-    with learning.LOCK, atomic_transaction():
-        question = next((q for q in question_bank.questions() if q["id"] == form.get("question_id")), None)
-        if not question or question["kind"] != "code" or question["category"] != "practice" or not question["published"]:
-            raise learning.LearningError(404, "Không tìm thấy câu luyện tập đã công khai.")
-        learning.course_access(learning.load(), question["course_id"], session)
-        if not question["problem"].get("tests"):
-            raise learning.LearningError(409, "Câu luyện tập chưa có test case.")
-        if not code_runner.ready():
-            raise learning.LearningError(503, "Bộ chấm chưa sẵn sàng, vui lòng thử lại.")
-        records = rows()
-        pending = [row for row in records if row["state"] in {"queued", "running"}]
-        if len(pending) >= 50 or sum(row["student_id"] == sid for row in pending) >= 2:
-            raise learning.LearningError(429, "Bạn còn bài đang chấm hoặc hàng đợi đang đầy.")
-        with submission_rate.guard(sid):
-            problem = question["problem"]
-            record = {"id": uuid.uuid4().hex, "exam_id": "practice:" + question["id"], "practice_question_id": question["id"], "course_id": question["course_id"], "student_id": sid, "problem_index": 0, "problem_title": problem["title"], "max_score": problem["points"], "language": language, "original_filename": code_runner.LANGUAGES[language], "submitted_at": utc_now(), "state": "queued", "result": None, "size_bytes": len(source), "sha256": hashlib.sha256(source).hexdigest(), "ip": ip, "grading_history": [], "full_name": read_json("students.json").get(sid, {}).get("full_name", sid), "judge_image": code_runner.image_identity()}
-            folder = FILES / record["id"]
-            folder.mkdir(parents=True)
-            on_rollback(lambda: folder.rmdir())
-            save_payload(folder / "source", source)
-            save_payload(folder / "problem.json", json.dumps(problem, ensure_ascii=False).encode("utf-8"))
-            records.append(record)
-            write_json("programming_submissions.json", records)
-            audit("programming.practice_submitted", sid, ip, {"submission_id": record["id"], "question_id": question["id"]})
-            after_commit(lambda: schedule(record["id"]))
     return {"ok": True, "submission": public_submission(record)}
 
 
