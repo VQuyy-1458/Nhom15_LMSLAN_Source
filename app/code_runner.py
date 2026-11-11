@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -140,6 +141,40 @@ def _container(folder, command, *, memory, timeout, input_data=b"", readonly=Tru
 
 
 def judge(source, language, problem, progress=None, image=None):
+    from .code_templates import build, validate
+    validate(problem)
+    if problem.get('answer_kind', 'program') == 'program' and not problem.get('template'):
+        return _judge_program(source, language, problem, progress, image)
+    results = []
+    started = time.monotonic()
+    total = len(problem['tests'])
+    if not total or total > 100 or not budget_valid(problem):
+        raise ValueError('Cấu hình test không hợp lệ.')
+    for index, test in enumerate(problem['tests']):
+        if time.monotonic() - started > MAX_JOB_SECONDS:
+            raise RuntimeError('Lượt chấm vượt thời gian xử lý tổng.')
+        try:
+            generated, extras = build(source, language, problem, test)
+        except (ValueError, UnicodeError) as exc:
+            return {'verdict':'CE','score':0,'passed':0,'total':total,'compile_log':str(exc),'tests':[]}
+        if progress: progress('judging', index, total)
+        one = dict(problem, tests=[test])
+        result = _judge_program(generated, language, one, image=image, extra_sources=extras)
+        if result['verdict'] == 'CE':
+            # Compiler diagnostics can contain private test code from the wrapper.
+            result['private_compile_log'] = result['compile_log']
+            result['compile_log'] = 'Không biên dịch được bài làm với mã kiểm thử. Kiểm tra tên lớp, constructor và chữ ký phương thức.'
+            result['total'] = total
+            return result
+        row = result['tests'][0]
+        row.update(index=index+1, test_code=test.get('test_code',''))
+        results.append(row)
+    passed = sum(t['verdict']=='AC' for t in results)
+    if progress: progress('judging', total, total)
+    return {'verdict':'AC' if passed==total else next(t['verdict'] for t in results if t['verdict']!='AC'), 'score':round(problem['points']*passed/total,2),'passed':passed,'total':total,'compile_log':'','tests':results}
+
+
+def _judge_program(source, language, problem, progress=None, image=None, extra_sources=None):
     if language not in LANGUAGES:
         raise ValueError("Ngôn ngữ không hợp lệ.")
     if not ready():
@@ -151,9 +186,19 @@ def judge(source, language, problem, progress=None, image=None):
     with tempfile.TemporaryDirectory(prefix="job-", dir=WORK) as directory:
         folder = Path(directory)
         folder.chmod(0o777)
-        filename = LANGUAGES[language]
+        java_entry = 'Main'
+        if language == 'java':
+            # A complete Java program may use any public entry class, e.g. J05005.
+            match = re.search(rb'(?m)^\s*public\s+(?:final\s+)?class\s+([A-Za-z_$][\w$]*)\b', source)
+            if match:
+                java_entry = match.group(1).decode('ascii')
+        filename = java_entry + '.java' if language == 'java' else LANGUAGES[language]
         (folder / filename).write_bytes(source.removeprefix(b"\xef\xbb\xbf"))
-        compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", "Main.java"]}.get(language)
+        for name, content in (extra_sources or {}).items():
+            (folder / name).write_bytes(content.removeprefix(b'\xef\xbb\xbf'))
+        compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", filename]}.get(language)
+        if language == 'java' and extra_sources:
+            compile_command.extend(sorted(extra_sources))
         if compile_command:
             if progress: progress("compiling", 0, len(problem["tests"]))
             compiled = _container(folder, compile_command, memory=768, timeout=20, readonly=False, image=image)
@@ -161,7 +206,7 @@ def judge(source, language, problem, progress=None, image=None):
             if compiled["exit"] or compiled["overflow"]:
                 return {"verdict": "CE", "score": 0, "passed": 0, "total": len(problem["tests"]), "compile_log": (compiled["stderr"] or compiled["stdout"])[:16000], "tests": []}
         memory = problem["memory_limit_mb"]
-        run_command = {"c": ["./program"], "cpp": ["./program"], "java": ["java", f"-Xmx{max(8, memory-64)}m", "-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:ReservedCodeCacheSize=16m", "Main"], "python": ["python3", "-I", "-B", "main.py"]}[language]
+        run_command = {"c": ["./program"], "cpp": ["./program"], "java": ["java", f"-Xmx{max(8, memory-64)}m", "-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:ReservedCodeCacheSize=16m", java_entry], "python": ["python3", "-I", "-B", "main.py"]}[language]
         results = []
         if progress: progress("judging", 0, len(problem["tests"]))
         deadline = time.monotonic() + MAX_JOB_SECONDS
@@ -172,5 +217,6 @@ def judge(source, language, problem, progress=None, image=None):
             verdict = "OLE" if run["overflow"] else "MLE" if run["oom"] else "TLE" if run.get("timed_out", False) else "RE" if run["exit"] else "AC" if matches(run["stdout"], test["output"], problem["checker"]) else "WA"
             results.append({"index": index+1, "sample": test["sample"], "verdict": verdict, "time_ms": run["time_ms"], "input": test["input"], "expected": test["output"], "actual": run["stdout"][:16000], "stderr": run["stderr"][:4000]})
             if progress: progress("judging", index+1, len(problem["tests"]))
+            results[-1]['feedback_visibility'] = test.get('feedback_visibility', 'sample')
         passed = sum(t["verdict"] == "AC" for t in results)
         return {"verdict": "AC" if passed == len(results) else next(t["verdict"] for t in results if t["verdict"] != "AC"), "score": round(problem["points"] * passed / len(results), 2), "passed": passed, "total": len(results), "tests": results, "compile_log": ""}

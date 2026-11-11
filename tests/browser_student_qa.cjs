@@ -453,6 +453,29 @@ async function codeRoster(base,fixture){
   assert.deepEqual(errors,[],'Roster UI JavaScript/CSP errors');
   console.log('PASS: code exam roster search/select/paste/deduplication, real account login, independent save and combined exam save, membership checks, mobile layout and opening with the selected roster');
 }
+async function codeCustomise(base,fixture){
+  const template="{{ STUDENT_ANSWER | replace({'public class ': 'class '}) }}\npublic class __tester__ { public static void main(String[] args) { {{ TEST.testcode }} } }";
+  const problem={title:'Product class',answer_kind:'class',language:'java',template,points:10,tests:[{input:'',output:'7',test_code:'System.out.println(new Product().price());',sample:true,feedback_visibility:'sample'}]};
+  const response=await fetch(base+'/api/admin/exam-configurations/save',{method:'POST',headers:{Cookie:'css_session='+fixture.admin,Origin:base,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({type:'programming',course_id:fixture.course,title:'Customise QA',languages:'java',problems:JSON.stringify([problem])})});
+  const saved=await response.json();assert.equal(response.status,200,JSON.stringify(saved));
+  await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+'/admin?section=exam&exam='+saved.id);
+  await evaluate("document.querySelector('[data-problem-select]').click()");
+  assert.equal(await evaluate("document.querySelector('[data-customise]').checked"),true);
+  assert.equal(await evaluate("document.querySelector('[data-problem-template]').value"),template);
+  await evaluate("document.querySelector('[data-problem-preview]').click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-trial-form]')"));
+  assert.equal(await evaluate("document.querySelector('dialog table th').textContent"),'Test');
+  await evaluate("document.querySelector('[data-trial-form] textarea').value='public class Product { public int price(){return 7;} }';document.querySelector('[data-trial-form]').requestSubmit()");
+  await waitFor(()=>evaluate("document.querySelector('[data-trial-status]').textContent.includes('AC')"),45000);
+  assert.equal(await evaluate("(()=>{const d=document.querySelector('dialog'),r=d.getBoundingClientRect(),last=d.querySelector('table th:last-child').getBoundingClientRect();return last.right<=r.right&&last.left>=r.left;})()"),true,'Both preview columns visible');
+  await panelScreenshot('dialog','customise-preview-ac.png');
+  await evaluate("document.querySelector('[data-trial-form] textarea').value='public class Product { public int price(){return 0;} }';document.querySelector('[data-trial-form]').requestSubmit()");
+  await waitFor(()=>evaluate("document.querySelector('[data-trial-status]').textContent.includes('WA')"),45000);
+  assert.deepEqual(errors,[],'Browser errors');
+  console.log('PASS Customise template, Test/Result preview, real Docker AC and WA');
+}
+
 (async()=>{
   fs.mkdirSync(out,{recursive:true});
   app=spawn(python,['-u',path.join(__dirname,'serve_student_qa.py')],{cwd:root,windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CSS_ROSTER_QA:['--code-roster','--code-entry','--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':'',CSS_ENROLLMENT_QA:process.argv.includes('--enrollment')?'1':'',CSS_TIMING_QA:['--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':''}});
@@ -467,6 +490,7 @@ async function codeRoster(base,fixture){
   await send('Page.enable');await send('Runtime.enable');await send('Log.enable');await send('Network.enable');
   await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
+  if(process.argv.includes('--code-customise')){await codeCustomise(base,fixture);return;}
   if(process.argv.includes('--sidebar')){await sidebarFit(base,fixture);assert.deepEqual(errors,[],'Sidebar browser JavaScript errors');return;}
   if(process.argv.includes('--code-roster')){await codeRoster(base,fixture);return;}
   if(process.argv.includes('--code-entry')){await codeEntry(base,fixture);return;}
@@ -511,26 +535,21 @@ async function codeRoster(base,fixture){
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
   console.log('PASS: course filters across student pages, keyboard selection, Escape, popup bounds and HiDPI/mobile');
   await navigate(base+`/student/courses?course=${fixture.course}&tab=materials`);
-  await waitFor(()=>evaluate("document.querySelectorAll('.list-order input[type=radio]').length===2 && !!document.querySelector('[data-list-status].course-select-source')"));
-  assert.equal(await evaluate("document.querySelector('[data-list-clear]').disabled"),true);
-  const fileType=await evaluate("document.querySelector('[data-list-status]').options[1].value");
-  await chooseCourse('[data-list-status]',fileType);
-  await waitFor(()=>evaluate("document.querySelector('[data-list-clear]').disabled===false"));
-  await evaluate("document.querySelector('[data-list-clear]').click()");
-  await waitFor(()=>evaluate("document.querySelector('[data-list-status]').value==='' && document.querySelector('[data-list-clear]').disabled"));
-  await evaluate("document.querySelector('[data-list-direction][value=asc]').focus()");
-  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight'});
-  await waitFor(()=>evaluate("document.querySelector('[data-list-direction]:checked')?.value==='desc' && document.activeElement?.matches('[data-list-direction][value=desc]')"));
-  await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight'});
-  await send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowLeft',code:'ArrowLeft'});
-  await waitFor(()=>evaluate("document.querySelector('[data-list-direction]:checked')?.value==='asc'"));
-  await send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowLeft',code:'ArrowLeft'});
+  const materialType='#filter-form select[name="status"]';
+  await waitFor(()=>evaluate("!!document.querySelector('#filter-form select[name=status].course-select-source')"));
+  assert.equal(await evaluate("document.querySelector('[data-student-filter-reset]').disabled"),true);
+  assert.equal(await evaluate("document.querySelectorAll('[data-list-direction]').length"),0);
+  const fileType=await evaluate("document.querySelector('#filter-form select[name=status]').options[1].value");
+  await chooseCourse(materialType,fileType);
+  await waitFor(()=>evaluate("document.querySelector('[data-student-filter-reset]').disabled===false"));
+  await evaluate("document.querySelector('[data-student-filter-reset]').click()");
+  await waitFor(()=>evaluate("document.querySelector('#filter-form select[name=status]').value==='' && document.querySelector('[data-student-filter-reset]').disabled"));
   await noOverflow();await screenshot('filters-student-materials-desktop.png');
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2,mobile:true});
-  await noOverflow();await courseMenu('[data-list-status]');await screenshot('filters-mobile.png');
+  await noOverflow();await courseMenu(materialType);await screenshot('filters-mobile.png');
   await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
-  console.log('PASS: matching filter popups, clear state, accessible direction radios, keyboard focus after rendering and mobile toolbar');
+  console.log('PASS: material type filters, live reset state, compact controls and mobile toolbar');
   console.log('PASS: all student screens render without page errors');
   await navigate(base+'/student/notifications');
   assert.equal(await evaluate("document.querySelectorAll('.notifications-table tbody tr').length"),10);
@@ -613,10 +632,10 @@ async function codeRoster(base,fixture){
   await navigate(base+'/student/attendance');
   await noOverflow();await screenshot('student-attendance-history-mobile.png');
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
-  await navigate(base+'/student/assignments');
+  await navigate(base+`/student/assignments?course=${fixture.course}`);
   assert.equal(await evaluate("document.querySelector('[data-action=assignment-upload]')===null"),true);
   await evaluate("document.querySelector('[data-learning-detail=assignment]').click()");
-  await evaluate(`(()=>{const input=document.querySelector('input[type=file]');const dt=new DataTransfer();dt.items.add(new File(['print(42)'],'main.py',{type:'text/plain'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-action="assignment-upload"]').requestSubmit();})()`);
+  await evaluate(`(()=>{const input=document.querySelector('input[type=file]');const dt=new DataTransfer();dt.items.add(new File(['print(42)'],'report.txt',{type:'text/plain'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-action="assignment-upload"]').requestSubmit();})()`);
   await waitFor(()=>evaluate("document.querySelector('.student-detail-dialog').textContent.includes('Đã nộp 1/3')"));
   await screenshot('assignments-desktop.png');
   await evaluate("document.querySelector('[data-close-student-detail]').click()");

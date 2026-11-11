@@ -493,7 +493,7 @@ class LearningTests(unittest.TestCase):
             response=conn.getresponse(); response.read(); conn.close()
             assignment=self.create("assignment",course_id=course,title="Rate header",due_at=self.future,max_attempts="20")
             boundary='rate-header-test'
-            payload=(f'--{boundary}\r\nContent-Disposition: form-data; name="assignment_id"\r\n\r\n{assignment}\r\n--{boundary}\r\nContent-Disposition: form-data; name="request_id"\r\n\r\nheader\r\n--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.py"\r\nContent-Type: text/plain\r\n\r\nprint(3)\r\n--{boundary}--\r\n').encode()
+            payload=(f'--{boundary}\r\nContent-Disposition: form-data; name="assignment_id"\r\n\r\n{assignment}\r\n--{boundary}\r\nContent-Disposition: form-data; name="request_id"\r\n\r\nheader\r\n--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\nContent-Type: text/plain\r\n\r\nprint(3)\r\n--{boundary}--\r\n').encode()
             conn=http.client.HTTPConnection("127.0.0.1",self.server.server_port,timeout=5)
             conn.request("POST","/api/learning/submit",body=payload,headers={"Cookie":f"css_session={self.tokens['s1']}","Origin":f"http://127.0.0.1:{self.server.server_port}","Content-Type":"multipart/form-data; boundary="+boundary})
             response=conn.getresponse()
@@ -737,7 +737,7 @@ class LearningTests(unittest.TestCase):
                                      ("report.pdf", b"report"))[0], 200)
 
     def upload(self, assignment, role="s1", request_id="r1", payload=b"print(1)"):
-        return self.request("/api/learning/submit", role, {"assignment_id": assignment, "request_id": request_id}, ("main.py", payload))
+        return self.request("/api/learning/submit", role, {"assignment_id": assignment, "request_id": request_id}, ("report.txt", payload))
 
     def test_enrollment_and_private_files_and_scores(self):
         c = self.course()

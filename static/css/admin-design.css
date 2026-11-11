@@ -12,6 +12,13 @@
 @media(max-width:1050px){.ref-week.ref-full-week{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:760px){.ref-week.ref-full-week{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:420px){.ref-week.ref-full-week{grid-template-columns:1fr}}
 .lesson-calendar-button{display:flex;flex-direction:column;gap:6px;width:100%;border:1px solid #d9eee7;text-align:left;font:inherit;cursor:pointer;color:#365e56}
 .lesson-calendar-button:hover{border-color:#5ba58c;background:#e0f3eb}
+.code-preview.ref-modal{max-width:960px}
+.code-preview table{min-width:0!important;width:100%;table-layout:fixed}
+.code-preview th,.code-preview td{width:50%;vertical-align:top;white-space:normal}
+.code-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;font-family:Consolas,monospace;font-size:13px}
+.code-preview textarea{width:100%;box-sizing:border-box;min-height:220px;font-family:Consolas,monospace;font-size:14px}
+.code-preview [data-trial-form]{margin-top:20px}
+.code-preview button{min-height:44px}
 .lesson-calendar-button small{font-size:10px;font-weight:650;color:#27866e}
 .editable-gradebook input{width:76px;min-width:64px;border:1px solid #dce5f1;border-radius:7px;padding:8px;font:inherit;color:#253b57;background:#fff}
 .editable-gradebook input:focus{outline:2px solid #6291ef;outline-offset:1px}

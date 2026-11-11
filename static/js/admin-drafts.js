@@ -9,7 +9,7 @@
   function capture(form){
     const fields=[...form.elements].filter(fieldAllowed).filter(n=>n.type!=='file').map(n=>({name:n.name,type:n.type,value:n.value,checked:['checkbox','radio'].includes(n.type)?n.checked:undefined}));
     const files=[...form.querySelectorAll('input[type=file]')].flatMap(n=>[...n.files].map(f=>f.name));
-    const extra=form.getAttribute('id')==='exam-config-form'?{problems:[...form.querySelectorAll('[data-program-problem]')].map(p=>({title:p.querySelector('[data-problem-title]').value,statement:p.querySelector('[data-problem-statement]').value,points:p.querySelector('[data-problem-points]').value,time_limit_ms:p.querySelector('[data-problem-time]').value,memory_limit_mb:p.querySelector('[data-problem-memory]').value,checker:p.querySelector('[data-problem-checker]').value,tests:[...p.querySelectorAll('[data-program-test]')].map(t=>({input:t.querySelector('[data-test-input]').value,output:t.querySelector('[data-test-output]').value,sample:t.querySelector('[data-test-sample]').checked}))}))}:form.getAttribute('id')==='code-participants-form'?window.examConfig?.captureParticipants():form.getAttribute('id')==='notification-form'?{recipients:window.notificationDraft?.capture()||[]}:null;
+    const extra=form.getAttribute('id')==='exam-config-form'?{problems:[...form.querySelectorAll('[data-program-problem]')].map(p=>window.examConfig.captureProblem(p))}:form.getAttribute('id')==='code-participants-form'?window.examConfig?.captureParticipants():form.getAttribute('id')==='notification-form'?{recipients:window.notificationDraft?.capture()||[]}:null;
     return {fields,files,extra};
   }
   function apply(form,value){
