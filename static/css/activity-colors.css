@@ -7,6 +7,7 @@ form[data-deadline-closed="true"]{display:none}
 [data-activity="assignment"]{--activity-color:#c28a23;--activity-bg:#fff7e7;--activity-ink:#8c6218;--activity-line:#f1dfb7}
 [data-activity="attendance"]{--activity-color:#368d60;--activity-bg:#edf8ef;--activity-ink:#286d49;--activity-line:#cce6d3}
 [data-activity="test"]{--activity-color:#258caa;--activity-bg:#eaf7fc;--activity-ink:#226f87;--activity-line:#c7e5f0}
+[data-activity="practice"]{--activity-color:#c28a23;--activity-bg:#fff7e7;--activity-ink:#8c6218;--activity-line:#f1dfb7}
 [data-activity="midterm"]{--activity-color:#8658c1;--activity-bg:#f4eefc;--activity-ink:#7043a6;--activity-line:#e1d2f2}
 [data-activity="final"]{--activity-color:#c65c79;--activity-bg:#fff0f4;--activity-ink:#a44260;--activity-line:#f1cfda}
 [data-activity="announcement"]{--activity-color:#6b7c96;--activity-bg:#f0f3f8;--activity-ink:#52627b;--activity-line:#d9e1ed}

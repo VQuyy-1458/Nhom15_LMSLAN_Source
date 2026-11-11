@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import code_runner, config, learning, storage
 from .security import hash_password
-from .seed_demo import NAMES, zipped
+from .seed_demo import ASSIGNMENT_PLANS, NAMES, assignment_metadata, zipped
 
 VERSION = "lan-lms-trial-v2"
 VN = timezone(timedelta(hours=7))
@@ -101,7 +101,7 @@ def prepare(root=None):
             elif i==4 and key=="network":
                 data["attendance"].append({**identity("network-attendance-today"),"course_id":cid,"event_id":lesson["id"],"lesson_at":lesson["starts_at"],"title":lesson["title"],"description":"Phiên QR đang mở để dùng thử. SV001 chưa điểm danh.","expires_at":at(minutes=120),"closed":False,"code":secrets.token_hex(4).upper(),"records":{sid:{"status":"present","checked_in_at":at(),"reason":""} for sid in ids[1:4]}})
         materials = [
-            ("Đề cương và cách đánh giá","de-cuong.txt",f"{title}\n{description}\n\nĐánh giá: chuyên cần 10%, bài tập 20%, giữa kỳ 30%, cuối kỳ 40%.\nGiữa kỳ lấy trung bình các kỳ thi giữa kỳ; Test không tính vào điểm khóa học.\n"),
+            ("Đề cương và cách đánh giá","de-cuong.txt",f"{title}\n{description}\n\nĐánh giá: chuyên cần 10%, bài tập/thực hành 20%, giữa kỳ 30%, cuối kỳ 40%.\nThực hành lấy trung bình; giữa kỳ và cuối kỳ mỗi loại một bài; Test không tính điểm khóa học.\n"),
             ("Hướng dẫn thực hành","huong-dan.txt","Đọc yêu cầu; chạy chương trình với test mẫu; kiểm tra tình huống biên; nộp file và xem biên nhận.\nĐiểm danh: mở mục Điểm danh trên điện thoại, quét QR giảng viên cung cấp.\nKỳ thi dùng đồng hồ chung kể từ lúc giảng viên mở.\n"),
             ("Ví dụ nhập xuất và kiểm thử","sum.cpp",SUM_SOURCES["cpp"]),
         ]
@@ -111,14 +111,15 @@ def prepare(root=None):
         for i,(name,filename,text) in enumerate(materials):
             data["materials"].append({**identity(f"{key}-material-{i+1}",-10+i),"course_id":cid,"title":name,"topic":"Tài liệu học phần","description":"Tài liệu phục vụ thực hành và kiểm thử chức năng xem/tải.",**payload("learning-files",f"{key}-material-{i+1}-"+filename,filename,text)})
         tasks[cid] = []
-        titles = ["Ôn tập kiến thức cơ bản","Xử lý dữ liệu và tình huống biên","Thực hành có đề đính kèm","Bài tập tổng hợp cuối chủ đề"] if not completed else ["Nhập xuất và biến","Mảng, hàm và vòng lặp"]
+        subject = "network" if key == "network" else "database" if key == "database" else "programming"
+        titles = ASSIGNMENT_PLANS[subject]
         for i,name in enumerate(titles):
-            day = -40+i*5 if completed else [-7,-2,3,10][i]
+            day = -50+i*4 if completed else [-7,-2,3,7,12,18,24,31,39,48][i]
             aid = f"trial-v2-{key}-task-{i+1}"
             exercise="Bài 1: Đọc hai số nguyên a, b và in a+b.\nBài 2: Đọc n và n số nguyên; in phần tử lớn nhất.\nKiểm thử số âm, số 0 và dữ liệu lớn."
-            if key=="network":exercise="Bài 1: Viết TCP Echo Server lắng nghe cổng 9000 và trả lại chuỗi nhận từ client.\nBài 2: Viết client gửi UTF-8, nhận phản hồi; xử lý đóng kết nối và thông báo lỗi.\nNộp source, README và ít nhất ba tình huống kiểm thử."
+            if key=="network":exercise="Mô tả thiết kế TCP Echo Client–Server, luồng gửi nhận UTF-8, cách đóng kết nối và xử lý lỗi.\nĐính kèm sơ đồ, ảnh kết quả và ít nhất ba tình huống kiểm thử. Phần chạy code dùng Bộ chấm code online."
             if key=="database":exercise="Bài 1: Thiết kế bảng độc giả, sách và phiếu mượn cho thư viện; khai báo khóa chính, khóa ngoại.\nBài 2: Viết SQL tìm sách đang mượn, số lượt mượn theo độc giả, sách chưa được mượn.\nNộp ZIP gồm schema.sql, queries.sql và dữ liệu kiểm thử."
-            task={**identity(f"{key}-task-{i+1}",-20+i),"course_id":cid,"title":f"Bài tập {i+1:02} · {name}","topic":"Thực hành","description":f"Hoàn thành yêu cầu trong file đề bài của {title}. Nộp mã nguồn hoặc ZIP có README hướng dẫn chạy.\nTiêu chí: đúng chức năng 6 điểm, kiểm thử 2 điểm, trình bày 2 điểm.","due_at":at(day,hour=23),"max_attempts":5,**payload("learning-files",f"{key}-task-{i+1}.txt","de-bai.txt",f"{title} — {name}\n\n{exercise}\n")}
+            task={**identity(f"{key}-task-{i+1}",-20+i),"course_id":cid,"title":f"Bài tập {i+1:02} · {name}","topic":"Thực hành","description":f"Hoàn thành yêu cầu trong file đề bài của {title}. Nộp báo cáo hoặc ZIP tài liệu minh chứng; phần lập trình có test tự động dùng Bộ chấm code online.\nTiêu chí: đúng chức năng 6 điểm, kiểm thử 2 điểm, trình bày 2 điểm.","due_at":at(day,hour=23),"max_attempts":5,**assignment_metadata({"code":code,"name":title},i),**payload("learning-files",f"{key}-task-{i+1}.txt","de-bai.txt",f"{title} — {name}\n\n{exercise}\n")}
             if day<0: task["closed_at"]=task["due_at"]
             data["assignments"].append(task);tasks[cid].append(aid)
             for j,sid in enumerate(members):
@@ -146,7 +147,7 @@ def prepare(root=None):
     catalog=[]
     def exam(key,cid,title,category="test",state="idle",kind="programming",problems=None):
         course=next(c for c in data["courses"] if c["id"]==cid)
-        row={"id":"trial-v2-"+key,"course_id":cid,"title":title,"description":"Bộ dùng thử LAN-LMS. Test dùng để luyện tập; giữa kỳ tính trung bình; mỗi khóa có một kỳ thi cuối kỳ.","type":kind,"assessment_type":category,"state":state,"duration_minutes":120 if state=="started" else 60,"scheduled_at":at(minutes=5) if state=="started" else at(2 if category=="midterm" else 7,hour=9),"participants":course["student_ids"],"created_at":at(-15)}
+        row={"id":"trial-v2-"+key,"course_id":cid,"title":title,"description":"Bộ dùng thử LAN-LMS. Thực hành có thể gồm nhiều bài và lấy trung bình; giữa kỳ, cuối kỳ mỗi loại một bài; Test không tính điểm.","type":kind,"assessment_type":category,"state":state,"duration_minutes":120 if state=="started" else 60,"scheduled_at":at(minutes=5) if state=="started" else at(2 if category=="midterm" else 7,hour=9),"participants":course["student_ids"],"created_at":at(-15)}
         if kind=="programming":row["programming"]={"languages":["c","cpp","java","python"],"problems":copy.deepcopy(problems or [sum_problem,max_problem])}
         else:row["file_settings"]={"exam_duration_minutes":row["duration_minutes"],"submission_policy":"configurable","max_submissions":20,"overwrite_previous":True,"accepted_submission_extensions":[".zip",".txt",".cpp",".c",".java",".py"]}
         if state=="started":row.update({"started_at":at(),"ends_at":at(minutes=120),"scheduled_at":at()})
@@ -157,8 +158,9 @@ def prepare(root=None):
     old_file_exam["release_id"]="trial-v2-history-file-release"
     code_exam=exam("code-test",course_ids["network"],"Test chấm code · Tổng hai số và tìm max",state="started")
     exam("cpp-test",course_ids["cpp"],"Test lập trình C/C++/Java/Python",state="started")
-    historical=exam("network-midterm-1",course_ids["network"],"Giữa kỳ 01 · Nhập xuất và số nguyên","midterm","ended",problems=[sum_problem])
-    exam("network-midterm-2",course_ids["network"],"Giữa kỳ 02 · Mảng và thuật toán","midterm")
+    historical=exam("network-practice-1",course_ids["network"],"Thực hành 01 · Nhập xuất và số nguyên","practice","ended",problems=[sum_problem])
+    exam("network-practice-2",course_ids["network"],"Thực hành 02 · Mảng và thuật toán","practice")
+    exam("network-midterm",course_ids["network"],"Giữa kỳ · Lập trình mạng","midterm")
     exam("network-final",course_ids["network"],"Cuối kỳ · Thực hành lập trình mạng","final")
     exam("cpp-midterm",course_ids["cpp"],"Giữa kỳ · Nhập xuất và mảng","midterm")
     exam("cpp-final",course_ids["cpp"],"Cuối kỳ · Lập trình C++","final")
@@ -231,7 +233,7 @@ SV001 là tài khoản chính; chưa bắt đầu kỳ thi Test và chưa điể
 - Bài tập: chọn Thực hành có đề đính kèm; xem/tải đề, nộp file rồi chấm trong vai trò admin.
 - Điểm danh: admin mở Lập trình mạng → Lịch & điểm danh → buổi hôm nay → xem QR; SV001 quét QR.
 - Giữa kỳ 01 đã có kết quả chấm Docker thật. Giữa kỳ 02 và Cuối kỳ ở trạng thái nháp để mở thử.
-- Test không tính điểm; nhiều giữa kỳ lấy trung bình; mỗi khóa chỉ có một kỳ thi cuối kỳ.
+- Test không tính điểm; thực hành có thể có nhiều bài và lấy trung bình; giữa kỳ và cuối kỳ mỗi loại một bài cho mỗi khóa.
 - Python căn bản là khóa đã hoàn thành, có bảng điểm và lịch sử để xem lại.
 - Khi hết 120 phút, kỳ thi đang mở tự kết thúc. Có thể mở kỳ giữa kỳ/khóa C++ hoặc tạo Test mới trong Cấu hình kỳ thi.
 
@@ -263,6 +265,7 @@ def validate(stage):
     catalog=json.loads((stage/"data"/"exam_catalog.json").read_text(encoding="utf-8"))
     for cid in courses:
         if sum(e["course_id"]==cid and e["assessment_type"]=="final" for e in catalog)!=1:raise RuntimeError("Expected one final per course")
+        if sum(e["course_id"]==cid and e["assessment_type"]=="midterm" for e in catalog)>1:raise RuntimeError("Expected at most one midterm per course")
     for row in json.loads((stage/"data"/"programming_submissions.json").read_text(encoding="utf-8")):
         source=stage/"programming-submissions"/row["id"]/"source"
         if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest()!=row["sha256"]:raise RuntimeError("Missing or inconsistent source")

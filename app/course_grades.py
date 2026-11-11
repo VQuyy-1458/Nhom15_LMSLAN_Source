@@ -1,4 +1,4 @@
-"""Course exam marks on a common ten-point scale; practice tests never contribute."""
+"""Course assessment marks normalized to a common ten-point scale."""
 import math
 
 from .storage import read_json
@@ -10,7 +10,7 @@ def valid_score(value):
 
 def exam_marks(course_id, student_ids):
     from .exam_catalog import listing
-    exams = [e for e in listing() if e.get("course_id") == course_id and e.get("assessment_type") in {"midterm", "final"} and e.get("state") != "idle"]
+    exams = [e for e in listing() if e.get("course_id") == course_id and e.get("assessment_type") in {"practice", "midterm", "final"} and e.get("state") != "idle"]
     files = read_json("submissions.json", {})
     code = read_json("programming_submissions.json", [])
     indexed_code = {}

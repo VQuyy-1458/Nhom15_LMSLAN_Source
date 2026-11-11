@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Khóa học' if section == 'courses' else 'Admin Dashboard' }} · LAN-LMS{% endblock %}
-{% block body %}
+{% block page_styles %}
 {% if section == 'courses' %}<link rel="stylesheet" href="/static/css/student.css"><link rel="stylesheet" href="/static/css/courses-admin.css?v=20261030-8"><link rel="stylesheet" href="/static/css/admin-attendance.css?v=20261031-1">{% endif %}
 {% if section in ['dashboard','monitor','exam','submissions'] %}<link rel="stylesheet" href="/static/css/admin-lms.css">{% endif %}
 {% if section == 'monitor' %}<link rel="stylesheet" href="/static/css/exam-monitor.css?v=20261030-9">{% endif %}
@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="/static/css/activity-colors.css">
 {% if section == 'courses' %}<link rel="stylesheet" href="/static/css/course-schedule.css?v=20261031-2">{% endif %}
 <link rel="stylesheet" href="/static/css/admin-drafts.css?v=20261030-8">
+{% endblock %}
+{% block body %}
 <div class="admin-shell admin-sidebar-unified {{ 'course-admin-shell' if section == 'courses' else '' }} {{ 'admin-redesign' if section not in ['monitor','notifications'] else '' }}" data-admin-section="{{ section|default('dashboard') }}" data-draft-owner="{{ session.user_id }}">
     <aside class="main-sidebar" aria-label="Điều hướng quản trị">
         <a class="sidebar-brand" href="/admin?section=dashboard"><span class="brand-mark"><i
@@ -58,7 +60,7 @@
             </div>
         </header>
         <main class="page-wrap mx-auto max-w-7xl px-6 py-8">
-            <section class="page-title">
+            <section class="page-title page-intro-card">
                 <div><p class="eyebrow">{{ 'KHÓA HỌC & LỚP HỌC' if section == 'courses' else 'QUẢN TRỊ KỲ THI LAN' }}</p>
                     <h1>{% if section == 'courses' %}Khóa học{% elif section == 'dashboard' %}Dashboard{% elif section == 'monitor' %}Giám sát sinh viên{% elif
                         section == 'notifications' %}Trung tâm thông báo{% elif section == 'exam' %}Cấu hình kỳ thi{%
@@ -453,14 +455,14 @@
 {% if section in ['exam','courses'] %}<script defer src="/static/js/admin-exams.js?v=20261031-4"></script>{% endif %}
 {% if section == 'submissions' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261030-8"><link rel="stylesheet" href="/static/css/submission-archive.css"><script defer src="/static/js/programming.js?v=20261030-10"></script><script defer src="/static/js/submission-archive.js?v=20261031-1"></script>{% endif %}
 {% if section == 'dashboard' %}<script defer src="/static/js/admin-teacher-calendar.js"></script>{% endif %}
-{% if section in ['dashboard','monitor','exam','submissions'] %}<script defer src="/static/js/admin-lms.js?v=20261030-10"></script>{% endif %}
+{% if section in ['dashboard','monitor','exam','submissions'] %}<script defer src="/static/js/admin-lms.js?v=20261111-2"></script>{% endif %}
 {% if section == 'courses' %}
 <script defer src="/static/vendor/zxing/zxing-browser.min.js"></script>
 <script defer src="/static/js/attendance-qr.js"></script>
 <script defer src="/static/js/file-preview.js"></script>
 <script defer src="/static/js/admin-courses-design.js?v=20261031-2"></script>
 <script defer src="/static/js/admin-attendance.js?v=20261031-2"></script>
-<script defer src="/static/js/learning-admin.js?v=20261031-1"></script>
+<script defer src="/static/js/learning-admin.js?v=20261111-3"></script>
 {% endif %}
 <script defer src="/static/js/admin-drafts.js?v=20261030-8"></script>
 {% endblock %}

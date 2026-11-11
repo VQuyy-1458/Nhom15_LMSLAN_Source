@@ -9,8 +9,9 @@
   const empty=message=>`<div class="student-empty"><i class="fa fa-folder-open-o"></i><p>${esc(message)}</p></div>`;
   const titleField='<label>Tiêu đề<input name="title" required maxlength="200"></label>';
   const description='<label>Mô tả / Yêu cầu<textarea name="description" rows="4" maxlength="10000"></textarea></label>';
+  const assignmentMeta='<div class="assignment-config-grid"><label>Nhóm bài tập<select name="category"><option value="GENERAL">Chung</option><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="RMI">RMI</option><option value="WS">WebSocket</option><option value="DATABASE">Database</option><option value="WEB">Web</option><option value="MIXED">Mixed</option></select></label><label>Mã ngắn<input name="short_code" maxlength="40" placeholder="Ví dụ: TCP_CHARACTER"></label></div><p class="muted">Khu vực này chỉ dành cho bài nộp file. Bài lập trình có chấm test tự động được tạo trong Bộ chấm code online.</p>';
   const enrollmentPolicy='<label>Tính điểm cho sinh viên mới<select name="include_previous"><option value="false">Từ lúc tham gia (khuyến nghị)</option><option value="true">Tính cả nội dung trước khi tham gia</option></select></label><p class="muted">Mặc định không tính bài tập đã hết hạn và buổi học trước lúc tham gia. Bài tập còn hạn vẫn cần làm. Lựa chọn chỉ áp dụng cho người mới; thêm lại người từng ở lớp giữ quy tắc cũ.</p>';
-  const form=(action,title,fields)=>`<section class="panel"><h2>${title}</h2><form class="stack-form" data-action="${action}"><input type="hidden" name="course_id" value="${esc(selected)}">${['material','assignment'].includes(action)?'<label>Chủ đề<input name="topic" maxlength="200" placeholder="Ví dụ: Chủ đề 02 · Thực hành"></label>':''}${fields}<div><button class="btn btn-primary">Lưu ${title.toLowerCase()}</button></div></form></section>`;
+  const form=(action,title,fields)=>`<section class="panel"><h2>${title}</h2><form class="stack-form" data-action="${action}"><input type="hidden" name="course_id" value="${esc(selected)}">${['material','assignment'].includes(action)?'<label>Chủ đề<input name="topic" maxlength="200" placeholder="Ví dụ: Chủ đề 02 · Thực hành"></label>':''}${action==='assignment'?assignmentMeta:''}${fields}<div><button class="btn btn-primary">Lưu ${title.toLowerCase()}</button></div></form></section>`;
   const scoped=key=>data[key].filter(r=>r.course_id===selected);
   const course=()=>data.courses.find(c=>c.id===selected);
   const members=c=>data.students.filter(s=>c.student_ids===null||c.student_ids.includes(s.student_id));
@@ -71,6 +72,18 @@
     content.innerHTML=top+`<nav class="ref-tabs" aria-label="Chức năng khóa học">${tabs.map(([v,t,icon])=>`<button type="button" class="ref-tab ${parentTab===v?'active':''}" data-tab="${v}" ${parentTab===v?'aria-current="page"':''}><i class="fa fa-${icon}"></i>${t}</button>`).join('')}</nav>${readonly?'<div class="alert alert-info">Khóa học đã tổng kết. Nội dung chỉ được xem.</div>':''}<div class="student-stack">${body}</div></div>`;
   }
   function drawAttendanceQr(){
+    content.querySelectorAll('[data-activity="assignment"] .ref-resource-text').forEach(item=>{
+      if(item.querySelector('.assignment-badge-line'))return;
+      const title=item.querySelector('strong')?.textContent;
+      const assignment=scoped('assignments').find(row=>row.title===title);
+      if(!assignment)return;
+      const category=assignment.category||'GENERAL';
+      const labels=document.createElement('span');labels.className='assignment-badge-line';
+      for(const [className,text] of [['assignment-code',assignment.short_code||category+'_TASK'],['assignment-category',category]]){
+        const badge=document.createElement('b');badge.className=className;badge.textContent=text;labels.append(badge);
+      }
+      item.prepend(labels);
+    });
     window.listUi.preserveTable('course:gradebook:'+selected,content.querySelector('.editable-gradebook'));
     window.classroomPreview.decorate(content);
     if(tab==='attendance'&&attendanceId)window.classroomAttendance.decorate(content,data,course(),attendanceId);

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from app import learning, main, storage, submissions, exams, programming, code_runner, submission_rate, submission_archive, deadlines, exam_preflight, exam_timing
+from app import learning, main, storage, submissions, exams, programming, code_runner, submission_rate, submission_archive, deadlines, exam_preflight, exam_timing, exam_catalog
 from app.security import hash_password, new_session, verify_password
 
 
@@ -238,15 +238,19 @@ class LearningTests(unittest.TestCase):
             stop.set();thread.join(timeout=2)
         self.assertEqual(self.upload(task)[0],409)
 
-    def test_assessment_types_and_one_final_across_file_and_code(self):
+    def test_assessment_types_and_single_midterm_final_across_file_and_code(self):
         course = self.course()
         endpoint = "/api/admin/exam-configurations/save"
         def save(category, kind="file", **extra):
             return self.request(endpoint, form={"type": kind, "assessment_type": category, "course_id": course, "title": category, "duration_minutes": "60", "languages": "python", **extra})
         self.assertEqual(save("test")[0], 200)
         self.assertEqual(save("test")[0], 200)
-        self.assertEqual(save("midterm")[0], 200)
-        self.assertEqual(save("midterm", "programming")[0], 200)
+        self.assertEqual(save("practice")[0], 200)
+        self.assertEqual(save("practice", "programming")[0], 200)
+        code, midterm = save("midterm")
+        self.assertEqual(code, 200, midterm)
+        self.assertEqual(save("midterm", "programming")[0], 409)
+        self.assertEqual(save("midterm", id=midterm["id"])[0], 200)
         code, final = save("final")
         self.assertEqual(code, 200, final)
         self.assertEqual(save("final", "programming")[0], 409)
@@ -257,33 +261,54 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(save("final", "programming", course_id=other)[0], 200)
         self.assertEqual(self.request(endpoint, "s1", {"type":"file", "title":"No"})[0], 403)
 
-    def test_exam_marks_normalization_average_practice_exclusion_and_pending(self):
+    def test_legacy_extra_midterms_migrate_to_practice_and_keep_active_exam(self):
+        course = self.course()
+        rows = [
+            {"id":"old-midterm", "course_id":course, "type":"programming", "assessment_type":"midterm", "state":"ended"},
+            {"id":"active-midterm", "course_id":course, "type":"file", "assessment_type":"midterm", "state":"idle"},
+        ]
+        storage.write_json("exam_catalog.json", rows)
+        settings = storage.read_json("settings.json")
+        settings["exam_catalog_id"] = "active-midterm"
+        storage.write_json("settings.json", settings)
+
+        self.assertEqual(exam_catalog.migrate_assessment_policy(), ["old-midterm"])
+        migrated = {row["id"]: row for row in storage.read_json("exam_catalog.json")}
+        self.assertEqual(migrated["old-midterm"]["assessment_type"], "practice")
+        self.assertEqual(migrated["old-midterm"]["assessment_policy_migrated_from"], "midterm")
+        self.assertEqual(migrated["active-midterm"]["assessment_type"], "midterm")
+        self.assertEqual(exam_catalog.migrate_assessment_policy(), [])
+
+    def test_exam_marks_practice_average_single_exams_test_exclusion_and_pending(self):
         course = self.course("s1,s2")
         catalog = [
-            {"id":"mid-file", "course_id":course, "title":"Mid file", "type":"file", "assessment_type":"midterm", "state":"ended", "participants":["s1","s2"]},
-            {"id":"mid-code", "course_id":course, "title":"Mid code", "type":"programming", "assessment_type":"midterm", "state":"ended", "participants":["s1","s2"], "programming":{"problems":[{"points":100},{"points":300}]}},
+            {"id":"practice-file", "course_id":course, "title":"Practice file", "type":"file", "assessment_type":"practice", "state":"ended", "participants":["s1","s2"]},
+            {"id":"practice-code", "course_id":course, "title":"Practice code", "type":"programming", "assessment_type":"practice", "state":"ended", "participants":["s1","s2"], "programming":{"problems":[{"points":100},{"points":300}]}},
+            {"id":"mid-file", "course_id":course, "title":"Midterm", "type":"file", "assessment_type":"midterm", "state":"ended", "participants":["s1","s2"]},
             {"id":"final-file", "course_id":course, "title":"Final", "type":"file", "assessment_type":"final", "state":"ended", "participants":["s1","s2"]},
             {"id":"practice", "course_id":course, "title":"Practice", "type":"file", "assessment_type":"test", "state":"ended", "participants":["s1","s2"]},
             {"id":"draft", "course_id":course, "title":"Draft", "type":"file", "assessment_type":"midterm", "state":"idle", "participants":["s1","s2"]},
         ]
         storage.write_json("exam_catalog.json", catalog)
-        storage.write_json("submissions.json", {"s1":[{"exam_id":"mid-file","score":10,"submitted_at":"2026-01-01"},{"exam_id":"mid-file","score":6,"submitted_at":"2026-01-02"},{"exam_id":"final-file","score":9,"submitted_at":"2026-01-02"},{"exam_id":"practice","score":0,"submitted_at":"2026-01-02"}]})
+        storage.write_json("submissions.json", {"s1":[{"exam_id":"practice-file","score":10,"submitted_at":"2026-01-01"},{"exam_id":"practice-file","score":6,"submitted_at":"2026-01-02"},{"exam_id":"mid-file","score":7,"submitted_at":"2026-01-02"},{"exam_id":"final-file","score":9,"submitted_at":"2026-01-02"},{"exam_id":"practice","score":0,"submitted_at":"2026-01-02"}]})
         storage.write_json("programming_submissions.json", [
-            {"exam_id":"mid-code","student_id":"s1","problem_index":0,"result":{"score":25}},
-            {"exam_id":"mid-code","student_id":"s1","problem_index":0,"result":{"score":50}},
-            {"exam_id":"mid-code","student_id":"s1","problem_index":1,"result":None,"grading_history":[{"result":{"score":300}}]},
+            {"exam_id":"practice-code","student_id":"s1","problem_index":0,"result":{"score":25}},
+            {"exam_id":"practice-code","student_id":"s1","problem_index":0,"result":{"score":50}},
+            {"exam_id":"practice-code","student_id":"s1","problem_index":1,"result":None,"grading_history":[{"result":{"score":300}}]},
         ])
         data = learning.load()
         book = learning.gradebook(data, data["courses"][0], ["s1","s2"])
-        self.assertEqual(book["items"][0]["midterm"], 7.38)
+        self.assertEqual(book["items"][0]["homework"], 7.38)
+        self.assertEqual(book["items"][0]["midterm"], 7)
         self.assertEqual(book["items"][0]["final"], 9)
+        self.assertEqual(book["items"][1]["homework"], 0)
         self.assertEqual(book["items"][1]["midterm"], 0)
         self.assertEqual(book["items"][1]["final"], 0)
-        self.assertEqual(len(book["items"][0]["exam_results"]), 3)
+        self.assertEqual(len(book["items"][0]["exam_results"]), 4)
         pending = storage.read_json("submissions.json")
-        pending["s1"].append({"exam_id":"mid-file","score":None,"submitted_at":"2026-01-03"})
+        pending["s1"].append({"exam_id":"practice-file","score":None,"submitted_at":"2026-01-03"})
         storage.write_json("submissions.json", pending)
-        self.assertIsNone(learning.gradebook(data,data["courses"][0],["s1"])["items"][0]["midterm"])
+        self.assertIsNone(learning.gradebook(data,data["courses"][0],["s1"])["items"][0]["homework"])
 
     def test_attendance_requires_scheduled_lesson_and_is_idempotent(self):
         course = self.course()
@@ -695,6 +720,22 @@ class LearningTests(unittest.TestCase):
     def assignment(self, course):
         return self.create("assignment", course_id=course, title="Task", due_at=self.future, max_attempts="2")
 
+    def test_assignment_classification_uses_file_submission_only(self):
+        course = self.course()
+        assignment = self.create("assignment", course_id=course, title="TCP Echo", due_at=self.future,
+                                 max_attempts="2", submission_type="code", category="TCP",
+                                 short_code="TCP_ECHO")
+        snapshot = self.request("/api/student/workspace", "s1")[1]
+        row = next(item for item in snapshot["assignments"] if item["id"] == assignment)
+        self.assertEqual((row["submission_type"], row["category"], row["short_code"]),
+                         ("file", "TCP", "TCP_ECHO"))
+        self.assertEqual(self.request("/api/learning/submit", "s1",
+                                     {"assignment_id": assignment, "request_id": "bad-code"},
+                                     ("main.js", b"console.log(1)"))[0], 400)
+        self.assertEqual(self.request("/api/learning/submit", "s1",
+                                     {"assignment_id": assignment, "request_id": "good-file"},
+                                     ("report.pdf", b"report"))[0], 200)
+
     def upload(self, assignment, role="s1", request_id="r1", payload=b"print(1)"):
         return self.request("/api/learning/submit", role, {"assignment_id": assignment, "request_id": request_id}, ("main.py", payload))
 
@@ -1091,7 +1132,7 @@ class LearningTests(unittest.TestCase):
             self.assertTrue(verify_password("111111", storage.read_json("students.json")["DEMO001"]["password_hash"]))
             data = learning.load()
             self.assertEqual(len(data["courses"]), 3)
-            self.assertEqual(len(data["assignments"]), 13)
+            self.assertEqual(len(data["assignments"]), 30)
             self.assertTrue(all((learning.FILES / r["stored_name"]).is_file() for r in data["materials"] + data["submissions"]))
             closed = next(c for c in data["courses"] if c["status"] == "completed")
             self.assertTrue(all(r["total"] is not None for r in learning.gradebook(data, closed, closed["student_ids"])["items"]))

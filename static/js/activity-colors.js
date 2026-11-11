@@ -1,7 +1,7 @@
 /* Shared activity names and markup for teacher and student views. */
 (() => {
   'use strict';
-  const names={lesson:'Buổi học',material:'Tài liệu',assignment:'Bài tập',attendance:'Điểm danh',test:'Test',midterm:'Giữa kỳ',final:'Cuối kỳ',exam:'Kỳ thi',announcement:'Thông báo'};
+  const names={lesson:'Buổi học',material:'Tài liệu',assignment:'Bài tập',attendance:'Điểm danh',test:'Test',practice:'Thực hành',midterm:'Giữa kỳ',final:'Cuối kỳ',exam:'Kỳ thi',announcement:'Thông báo'};
   const kind=value=>Object.hasOwn(names,value)?value:'exam';
   const esc=value=>window.cssEscape(value);
   const badge=(value,label)=>`<span class="activity-badge" data-activity="${kind(value)}">${esc(label||names[kind(value)])}</span>`;

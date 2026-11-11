@@ -45,15 +45,15 @@ class BackendHardeningTests(unittest.TestCase):
     def test_transaction_rolls_back_all_documents_and_audit_after_write_error(self):
         before = {name:storage.read_json(name) for name in ("students.json","settings.json")}
         audit_before = (storage.LOG_DIR / "audit.jsonl").read_bytes()
-        original = storage.atomic_write
+        original = storage._upsert_document
         failed = False
-        def fail_once(path,value):
+        def fail_once(connection,name,value):
             nonlocal failed
-            if path.name == "settings.json" and not failed:
+            if name == "settings.json" and not failed:
                 failed=True
                 raise OSError("simulated disk error")
-            return original(path,value)
-        with patch.object(storage,"atomic_write",side_effect=fail_once):
+            return original(connection,name,value)
+        with patch.object(storage,"_upsert_document",side_effect=fail_once):
             with self.assertRaises(OSError), storage.atomic_transaction():
                 storage.write_json("students.json",{})
                 storage.write_json("settings.json",{"partial":True})
@@ -62,17 +62,9 @@ class BackendHardeningTests(unittest.TestCase):
         self.assertEqual((storage.LOG_DIR / "audit.jsonl").read_bytes(),audit_before)
         self.assertFalse((storage.DATA_DIR / ".transaction.json").exists())
 
-    def test_startup_recovers_prepared_transaction_but_keeps_committed_one(self):
-        previous = storage.read_json("students.json")
-        path = storage.DATA_DIR / ".transaction.json"
-        journal={"state":"prepared","before":{"students.json":{"exists":True,"value":previous}},"audit_offset":(storage.LOG_DIR/"audit.jsonl").stat().st_size}
-        storage.atomic_write(path,journal)
-        storage.atomic_write(storage.DATA_DIR/"students.json",{})
-        storage.initialize()
-        self.assertEqual(storage.read_json("students.json"),previous)
-        journal["state"]="committed"
-        storage.atomic_write(path,journal)
-        storage.atomic_write(storage.DATA_DIR/"students.json",{})
+    def test_startup_keeps_sqlite_canonical_over_stale_legacy_json(self):
+        storage.write_json("students.json", {})
+        storage.atomic_write(storage.DATA_DIR/"students.json", {"stale": True})
         storage.initialize()
         self.assertEqual(storage.read_json("students.json"),{})
 
@@ -87,14 +79,14 @@ class BackendHardeningTests(unittest.TestCase):
                 pass
         self.assertEqual(storage.read_json("settings.json"),before)
 
-    def test_cached_documents_are_isolated_and_external_changes_detected(self):
+    def test_cached_documents_are_isolated_and_write_api_refreshes_cache(self):
         value=storage.read_json("students.json");value.clear()
         self.assertTrue(storage.read_json("students.json"))
-        storage.atomic_write(storage.DATA_DIR/"students.json",{})
+        storage.write_json("students.json",{})
         self.assertEqual(storage.read_json("students.json"),{})
 
     def test_missing_document_does_not_mutate_default_state(self):
-        (storage.DATA_DIR/"sessions.json").unlink()
+        storage.delete_document("sessions.json")
         document=storage.read_json("sessions.json");document["unexpected"]={}
         self.assertEqual(storage.read_json("sessions.json"),{})
 
@@ -166,15 +158,15 @@ class BackendHardeningTests(unittest.TestCase):
     def test_file_submission_failure_leaves_no_receipt_payload_or_quota(self):
         self.file_exam()
         before=storage.read_json("assignments.json")
-        original=storage.atomic_write
+        original=storage._upsert_document
         failed=False
-        def fail_once(path,value):
+        def fail_once(connection,name,value):
             nonlocal failed
-            if path.name=="assignments.json" and not failed:
+            if name=="assignments.json" and not failed:
                 failed=True
                 raise OSError("simulated failed assignment commit")
-            return original(path,value)
-        with patch.object(storage,"atomic_write",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
+            return original(connection,name,value)
+        with patch.object(storage,"_upsert_document",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
             code,result=self.request("/api/student/submit","s1",{"request_id":"failed-submit"},file=("answer.txt",b"answer"))
         self.assertEqual(code,500,result)
         self.assertEqual(storage.read_json("submissions.json"),{})
@@ -235,15 +227,15 @@ class BackendHardeningTests(unittest.TestCase):
     def test_code_commit_failure_cleans_source_and_does_not_schedule(self):
         with patch.object(code_runner,"ready",return_value=True),patch.object(programming,"schedule") as schedule:
             exam_id=self.programming_exam()
-            original=storage.atomic_write
+            original=storage._upsert_document
             failed=False
-            def fail_once(path,value):
+            def fail_once(connection,name,value):
                 nonlocal failed
-                if path.name=="programming_submissions.json" and not failed:
+                if name=="programming_submissions.json" and not failed:
                     failed=True
                     raise OSError("simulated code commit failure")
-                return original(path,value)
-            with patch.object(storage,"atomic_write",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
+                return original(connection,name,value)
+            with patch.object(storage,"_upsert_document",side_effect=fail_once),patch.object(main.traceback,"print_exc"):
                 code,result=self.request("/api/student/programming/submit","s1",{"exam_id":exam_id,"language":"python","problem_index":"0","request_id":"failed-code"},file=("answer.py",b"print(3)"))
             self.assertEqual(code,500,result)
             self.assertEqual(programming.rows(),[])

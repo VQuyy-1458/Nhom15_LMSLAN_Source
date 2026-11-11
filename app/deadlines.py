@@ -16,14 +16,7 @@ def maybe_refresh():
     global _last_refresh
     names = ("learning.json", "settings.json", "assignments.json", "exam_catalog.json", "programming_attempts.json")
     def signature():
-        result = []
-        for name in names:
-            try:
-                stat = (storage.DATA_DIR / name).stat()
-                result.append((stat.st_mtime_ns, stat.st_size, stat.st_ino))
-            except FileNotFoundError:
-                result.append(None)
-        return (str(storage.DATA_DIR.resolve()), tuple(result))
+        return storage.document_signature(names)
     stamp = signature()
     last = _last_refresh
     if last and last[0] == stamp and time.monotonic()-last[1] < .5:
