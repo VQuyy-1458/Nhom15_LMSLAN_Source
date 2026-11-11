@@ -2,6 +2,10 @@
    Keeps the established blue/slate palette while making surfaces, forms and
    data-heavy screens feel like one product. Loaded after every page stylesheet. */
 :root{
+  --ui-space-section:24px;
+  --ui-space-card:16px;
+  --ui-space-control:10px;
+  --ui-control-height:40px;
   --ui-blue:#245edb;
   --ui-blue-dark:#194bb9;
   --ui-blue-soft:#edf4ff;
@@ -58,7 +62,7 @@ body.app-body{
   background:radial-gradient(circle,rgba(36,94,219,.13),rgba(36,94,219,0) 70%);
 }
 .app-body .page-intro-card h1{color:var(--ui-ink)}
-.app-body .page-intro-card .muted{max-width:760px;margin-bottom:0}
+.app-body .page-intro-card .muted{max-width:767px;margin-bottom:0}
 .app-body .page-intro-card .server-chip{
   background:rgba(248,255,250,.9);
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.75);
@@ -528,7 +532,7 @@ body.app-body{
 @media(max-width:1100px){
   .app-body .smart-filter-grid{grid-template-columns:minmax(240px,2fr) repeat(2,minmax(160px,1fr))}
 }
-@media(max-width:760px){
+@media(max-width:767px){
   .app-body .student-shell .smart-list-panel{padding:18px}
   .app-body .smart-filter-grid{grid-template-columns:1fr 1fr}
   .app-body .smart-filter-grid>.student-search{grid-column:1/-1}
@@ -575,5 +579,110 @@ body.app-body{
 .app-body .assignment-course-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px;border:1px solid #dfe7f2;border-radius:16px;background:#fff;box-shadow:var(--ui-shadow-sm)}
 .app-body .assignment-course-summary>div{display:flex;align-items:center;gap:11px;padding:7px 10px;min-width:0}.app-body .assignment-course-summary>div>span:last-child{display:grid;gap:3px;color:#8290a4;font-size:10px}.app-body .assignment-course-summary strong{color:#263b5b;font-size:18px}.app-body .summary-icon{display:grid!important;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:11px;font-size:16px}.app-body .summary-icon.done{background:#e8f8f0;color:#278562}.app-body .summary-icon.progress{background:#eaf2ff;color:#3269d2}.app-body .summary-icon.pending{background:#fff5df;color:#ad781f}.app-body .summary-icon.overdue{background:#fff0ec;color:#c15a43}.app-body .assignment-course-summary>progress{grid-column:1/-1;width:100%;height:8px;accent-color:#3473ea}
 @media(max-width:1100px){.app-body .assignment-course-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:760px){.app-body .assignment-picker-intro{padding:22px}.app-body .assignment-picker-icon{display:none}.app-body .assignment-course-grid{grid-template-columns:1fr}.app-body .assignment-course-hero{align-items:stretch;flex-direction:column}.app-body .assignment-course-hero label{min-width:0;width:100%}.app-body .assignment-course-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:767px){.app-body .assignment-picker-intro{padding:22px}.app-body .assignment-picker-icon{display:none}.app-body .assignment-course-grid{grid-template-columns:1fr}.app-body .assignment-course-hero{align-items:stretch;flex-direction:column}.app-body .assignment-course-hero label{min-width:0;width:100%}.app-body .assignment-course-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:430px){.app-body .assignment-course-summary{grid-template-columns:1fr 1fr;padding:12px}.app-body .assignment-course-summary>div{padding:5px}.app-body .summary-icon{display:none!important}}
+
+/* LAN_LMS_UI_DESIGN_RULER.md — shared component contract.
+   Keep feature/status colors and editor internals in their feature stylesheets. */
+.app-body .admin-sidebar-unified .admin-content{min-width:0}
+.app-body .admin-sidebar-unified .page-wrap{width:100%;min-width:0;padding:var(--ui-space-section);padding-bottom:48px}
+.app-body :is(#learning-content,#workspace-content,.student-stack,.schedule-day-strip){min-width:0;max-width:100%}
+.app-body :is(.student-stack,.schedule-page){grid-template-columns:minmax(0,1fr)}
+.app-body :is(.student-stack,.schedule-page)>*{min-width:0}
+.app-body :is(.student-stack,.course-admin-shell .student-stack){gap:var(--ui-space-section)}
+.app-body :is(.panel,.student-course-showcase,.dashboard-action-dock){border-radius:var(--ui-radius);padding:var(--ui-space-section)}
+.app-body .panel{margin-bottom:var(--ui-space-section)}
+.app-body .student-shell .panel{margin-bottom:0}
+.app-body .student-shell .panel.student-course{padding:0}
+.app-body :is(.page-title,.ref-page-head,.ref-course-header,.student-course-heading){
+  display:flex;align-items:center;justify-content:space-between;gap:var(--ui-space-section);
+  padding:var(--ui-space-section);margin:0 0 var(--ui-space-section);
+  border:1px solid var(--ui-line);border-radius:var(--ui-radius-lg);
+  background:var(--ui-surface);box-shadow:var(--ui-shadow-sm);min-width:0;
+}
+.app-body :is(.ref-course-header.course-context,.student-course-heading){background:var(--ui-surface);border:1px solid var(--ui-line);padding:var(--ui-space-section);border-radius:var(--ui-radius-lg)}
+.app-body .student-stack>:is(.student-course-heading,.page-title){margin-bottom:0}
+.app-body :is(.page-title,.ref-page-head,.ref-course-title,.student-course-title) h1{font-size:28px;line-height:1.3;letter-spacing:-.035em;margin:0 0 8px;color:var(--ui-ink);overflow-wrap:anywhere}
+.app-body :is(.page-title,.ref-page-head) .eyebrow{margin:0 0 10px}
+.app-body :is(.page-title,.ref-page-head) .muted{margin:0;line-height:1.6}
+.app-body :is(.panel-heading,.student-section-head,.ref-heading-row){gap:var(--ui-space-card);margin-bottom:var(--ui-space-card)}
+.app-body :is(.panel-heading,.student-section-head,.ref-heading-row) h2{font-size:18px;line-height:1.4;color:var(--ui-ink)}
+.app-body :is(.table-toolbar,.ref-toolbar,.student-toolbar,.bridge-section-toolbar,.admin-course-context){
+  display:flex;flex-wrap:wrap;align-items:center;gap:var(--ui-space-control);
+  margin-bottom:var(--ui-space-section);min-width:0;
+}
+.app-body :is(.ref-toolbar,.student-toolbar,.list-controls){border:1px solid var(--ui-line);border-radius:var(--ui-radius-sm);background:var(--ui-surface-soft);padding:var(--ui-space-card)}
+.app-body :is(.ref-search,.student-search){min-width:0;flex:1 1 240px;max-width:480px}
+.app-body :is(.ref-toolbar,.student-toolbar,.list-controls,.table-toolbar,.admin-course-context) :is(input:not([type=checkbox]):not([type=radio]),select){min-height:var(--ui-control-height);max-width:100%;font-size:13px}
+.app-body :is(.ref-actions,.student-actions,.actions-inline,.form-actions){display:flex;align-items:center;flex-wrap:wrap;gap:var(--ui-space-control)}
+.app-body :is(.stack-form>.form-actions,.ref-modal .ref-actions,.student-dialog .student-actions){justify-content:flex-end;margin-top:var(--ui-space-card)}
+.app-body :is(.btn,.admin-redesign .btn,.admin-redesign .ref-soft){min-height:var(--ui-control-height);border-radius:var(--ui-radius-sm);font-size:13px;line-height:1.4;padding:9px 14px;gap:8px}
+.app-body :is(.btn-primary,.admin-redesign .btn-primary){color:var(--ui-surface)}
+.app-body :is(.btn-secondary,.admin-redesign .btn-secondary){color:var(--ui-text);border-color:var(--ui-line-strong)}
+.app-body :is(.smart-open-button,.sidebar-toggle,.notification-bell){min-width:var(--ui-control-height);min-height:var(--ui-control-height)}
+.app-body :is(button:disabled,.btn[aria-disabled=true]){opacity:.45;cursor:not-allowed;transform:none}
+.app-body :is(input,select,textarea)[aria-invalid=true]{border-color:currentColor}
+.app-body :is(.stack-form,.notification-form) :is(input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select){min-height:var(--ui-control-height)}
+.app-body :is(input,select,textarea)[readonly]{background:var(--ui-surface-soft)}
+.app-body input[type=file]{max-width:100%;font-size:13px}
+.app-body input[type=file]::file-selector-button{min-height:var(--ui-control-height);margin-right:12px;padding:8px 12px;border:1px solid var(--ui-line-strong);border-radius:var(--ui-radius-sm);background:var(--ui-surface-soft);color:var(--ui-text);font:inherit;cursor:pointer}
+.app-body :is(.tabs,.student-tabs,.ref-tabs){display:flex;gap:8px;overflow-x:auto;max-width:100%;padding:5px;margin-bottom:var(--ui-space-section);border:1px solid var(--ui-line);border-radius:var(--ui-radius-sm);background:var(--ui-surface-soft)}
+.app-body :is(.tabs a,.student-tabs a,.ref-tab,.admin-redesign .ref-tab){flex-shrink:0;min-height:var(--ui-control-height);padding:10px 12px;font-size:13px;line-height:1.4;border-radius:var(--ui-radius-sm);white-space:nowrap}
+.app-body :is(.tabs a.active,.student-tabs a.active,.ref-tab.active){background:var(--ui-blue-soft);color:var(--ui-blue);font-weight:700;border-bottom-color:var(--ui-blue)}
+.app-body :is(.table-wrap,.table-scroll,.smart-records){overflow-x:auto;max-width:100%;overscroll-behavior-inline:contain;border-radius:var(--ui-radius-sm)}
+.app-body :is(.table-wrap,.table-scroll,.smart-records) th{padding:12px 16px;font-size:11px;line-height:1.5}
+.app-body :is(.table-wrap,.table-scroll,.smart-records) td{padding:14px 16px;font-size:13px;line-height:1.5}
+.app-body :is(.student-list-footer,.attendance-pagination,.list-pagination){display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:var(--ui-space-control);font-size:12px}
+.app-body :is(.empty-state,.student-empty,.ref-empty,.bridge-empty){padding:32px 20px;border:1px dashed var(--ui-line-strong);border-radius:var(--ui-radius);background:var(--ui-surface-soft);color:var(--ui-muted);text-align:center;line-height:1.6}
+.app-body :is(.student-loading,[aria-busy=true]){cursor:progress}
+.app-body :is(.student-dialog,.ref-modal,.bridge-grade-dialog){max-width:min(620px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;border-color:var(--ui-line);border-radius:var(--ui-radius-lg);padding:var(--ui-space-section)}
+.app-body :is(.code-preview.ref-modal){max-width:min(960px,calc(100vw - 32px))}
+.app-body :is(.ref-course-grid,.bridge-course-grid,.student-course-grid,.assignment-course-grid){gap:var(--ui-space-card)}
+.app-body :is(.ref-course-body,.bridge-course-body,.student-course-body){padding:var(--ui-space-section)}
+.app-body :is(.ref-course-card,.bridge-course-card,.student-course){border-radius:var(--ui-radius);border-color:var(--ui-line)}
+.app-body :is(.ref-course-card,.bridge-course-card,.student-course) h3{font-size:18px;line-height:1.4;overflow-wrap:anywhere}
+.app-body .login-card{max-width:450px;border-radius:var(--ui-radius-lg)}
+.app-body .admin-sidebar-unified .topbar{height:68px;min-height:68px;padding:0 24px;gap:12px}
+.app-body .admin-sidebar-unified .topbar-actions{margin-left:auto;gap:12px}
+.app-body .admin-sidebar-unified .sidebar-user>div{min-width:0}
+.app-body .admin-sidebar-unified .sidebar-user strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-body :is(.student-course-breadcrumb,.assignment-course-breadcrumb,.ref-breadcrumb){flex-wrap:wrap;line-height:1.5;overflow-wrap:anywhere}
+@media(min-width:768px){
+  .app-body .student-shell .main-sidebar{display:flex;transform:none;width:244px;inset:0 auto 0 0}
+  .app-body .student-shell .admin-content{margin-left:244px;width:auto}
+  .app-body .student-shell .student-menu-toggle{display:none}
+}
+@media(max-width:1199px){
+  .app-body :is(.ref-course-grid,.bridge-course-grid,.student-course-grid,.assignment-course-grid){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .app-body .smart-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .app-body .notification-layout{grid-template-columns:1fr}
+  .app-body .admin-course-context select{min-width:0}
+}
+@media(max-width:767px){
+  .app-body .admin-sidebar-unified .admin-content{margin-left:0;width:100%}
+  .app-body .admin-sidebar-unified .main-sidebar{width:244px;max-width:calc(100vw - 40px);transform:translateX(-100%)}
+  .app-body .student-shell .main-sidebar{display:none}
+  .app-body .student-shell.menu-open .main-sidebar{display:flex;inset:68px auto 0 0;width:244px;transform:none}
+  .app-body .admin-shell.sidebar-open .main-sidebar{transform:none}
+  .app-body .admin-sidebar-unified .sidebar-toggle,.app-body .student-shell .student-menu-toggle{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .app-body .admin-sidebar-unified .topbar{padding:0 14px;flex-wrap:nowrap;height:68px}
+  .app-body .admin-sidebar-unified .topbar .brand{min-width:0;white-space:normal;font-size:12px;flex:1}
+  .app-body .admin-sidebar-unified .topbar-actions{gap:4px;flex-shrink:0}
+  .app-body .admin-sidebar-unified .topbar-actions>.muted{display:none}
+  .app-body .admin-sidebar-unified .page-wrap{padding:16px 14px 32px}
+  .app-body :is(.panel,.student-course-showcase,.dashboard-action-dock){padding:16px}
+  .app-body :is(.page-title,.ref-page-head,.ref-course-header,.ref-course-header.course-context,.student-course-heading){align-items:flex-start;flex-direction:column;padding:20px;gap:16px}
+  .app-body :is(.page-title,.ref-page-head,.ref-course-title,.student-course-title) h1{font-size:24px}
+  .app-body :is(.ref-toolbar,.student-toolbar,.table-toolbar,.admin-course-context){align-items:stretch;flex-direction:column}
+  .app-body :is(.ref-search,.student-search){max-width:none;width:100%;flex:auto}
+  .app-body :is(.ref-toolbar,.student-toolbar,.table-toolbar,.admin-course-context) :is(input,select){width:100%;min-width:0;max-width:100%}
+  .app-body .admin-course-context form{flex-wrap:wrap;min-width:0}
+  .app-body :is(.ref-course-grid,.bridge-course-grid,.student-course-grid,.assignment-course-grid){grid-template-columns:minmax(0,1fr)}
+  .app-body .notification-layout{padding:16px;gap:16px;min-width:0}
+  .app-body :is(.panel-heading,.student-section-head){flex-wrap:wrap}
+  .app-body .smart-filter-grid{grid-template-columns:minmax(0,1fr)}
+  .app-body .smart-filter-grid>.student-search{grid-column:auto}
+  .app-body .student-course-title{min-width:0}
+  .app-body .student-course-switch{max-width:100%;width:100%}
+  .app-body .toast{right:14px;bottom:14px;max-width:calc(100vw - 28px)}
+}

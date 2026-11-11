@@ -1,0 +1,4 @@
+input,output,sample
+"2 3",5,true
+"-2 7",5,false
+"0 0",0,false

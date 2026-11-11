@@ -26,7 +26,8 @@
     window.submissionDeadlines.sync(data.occurred_at);
     if($('monitor-exam-context')){
       const e=monitorExam;
-      $('monitor-exam-context').innerHTML=e?`<h2>${escape(e.title)}</h2><p class="muted">${e.type==='programming'?'Thi lập trình':'Thi nộp file'} · ${e.waiting?'Chờ đến giờ bắt đầu':e.live?'Đang diễn ra':'Chưa mở hoặc đã kết thúc'}${e.started_at?' · Bắt đầu '+escape(new Date(e.started_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})):''}${e.ends_at?' · Kết thúc '+escape(new Date(e.ends_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})):''}</p>${e.waiting?window.submissionDeadlines.waiting(e.started_at):''}<a class="btn btn-secondary" href="/admin?section=exam&exam=${encodeURIComponent(e.id)}${e.course_id?'&course='+encodeURIComponent(e.course_id):''}">Cấu hình / Điều chỉnh thời gian thi</a>`:'<p class="muted">Tổng quan sinh viên. Chọn kỳ thi phía trên để giám sát riêng danh sách dự thi và bài nộp của kỳ thi đó.</p>';
+      $('monitor-exam-context').innerHTML=e?`<h2>${escape(e.title)}</h2><p class="muted">${e.type==='programming'?'Thi lập trình':'Thi nộp file'} · ${e.waiting?'Chờ đến giờ bắt đầu':e.live?'Đang diễn ra':'Chưa mở hoặc đã kết thúc'}${e.started_at?' · Bắt đầu '+escape(new Date(e.started_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})):''}${e.ends_at?' · Kết thúc '+escape(new Date(e.ends_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})):''}</p>${e.waiting?window.submissionDeadlines.waiting(e.started_at):''}<a class="btn btn-secondary" href="/admin?section=exam&exam=${encodeURIComponent(e.id)}${e.course_id?'&course='+encodeURIComponent(e.course_id):''}">Cấu hình / Điều chỉnh thời gian thi</a>`:'';
+      $('monitor-exam-context').hidden=!e;
     }
     monitorRows = (data.students || []).filter(row=>!monitorExam||row.monitoring_active);
     monitorServerAt = Date.parse(data.occurred_at) || Date.now();
@@ -148,7 +149,7 @@
     try { data = await window.cssRequest("/api/admin/server-info", { cache: "no-store" }); }
     catch (error) { box.textContent = "Không cập nhật được địa chỉ LAN. Hãy kiểm tra kết nối mạng."; throw error; }
     const addresses = (data.addresses || []).slice(0, 1).map((ip) => `${data.scheme}://${ip}:${data.port}`);
-    box.innerHTML = addresses.map((address) => `<div class="address-item"><strong>${escape(address)}</strong><button class="btn btn-secondary" data-copy="${escape(address)}">Copy</button></div>`).join("") || '<span class="muted">Không xác định được địa chỉ LAN.</span>';
+    box.innerHTML = addresses.map((address) => `<div class="address-item"><strong>${escape(address)}</strong><button class="btn btn-secondary" data-copy="${escape(address)}">Sao chép</button></div>`).join("") || '<span class="muted">Không xác định được địa chỉ LAN.</span>';
   }
 
   $("refresh-monitor")?.addEventListener("click", () => loadMonitor().catch(toastError));
@@ -289,6 +290,7 @@
     node.dataset.sending = "true"; button.disabled = true;
     try {
       const result = await window.cssRequest("/api/admin/notifications", { method: "POST", body: form });
+      document.dispatchEvent(new CustomEvent('ui-notification-sent',{detail:{message:form.get('message'),recipientCount:result.recipient_count}}));
       node.reset(); notificationRecipients.clear(); renderNotificationStudents(); $("notification-picker").classList.add("hidden");window.adminDrafts?.saved(node);
       show("notification-result", `Đã gửi thông báo thành công tới ${result.recipient_count} sinh viên.`);
     } catch (error) { show("notification-result", error.message, true); toastError(error); }

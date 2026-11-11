@@ -1,0 +1,6 @@
+Cơ sở dữ liệu
+
+Mục tiêu: Thiết kế dữ liệu, truy vấn SQL và quản lý giao dịch.
+
+Đánh giá: chuyên cần 10%, bài tập 20%, giữa kỳ 30%, cuối kỳ 40%.
+Nộp bài theo hạn quy định và giữ lại biên nhận.

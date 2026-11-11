@@ -1,0 +1,15 @@
+{
+  "courses": 12,
+  "students": 51,
+  "assignments": 47,
+  "materials": 14,
+  "attendance": 15,
+  "submissions": 144,
+  "questions": 20,
+  "archive": {
+    "total": 167,
+    "students": 20,
+    "pending": 48,
+    "missing": 0
+  }
+}

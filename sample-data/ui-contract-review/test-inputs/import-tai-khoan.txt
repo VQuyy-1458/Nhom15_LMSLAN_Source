@@ -1,0 +1,3 @@
+# MSSV|Ngày sinh|Họ tên
+IMPORT001|01012005|Nguyễn Văn Nhập Mẫu
+IMPORT002|02022005|Trần Thị Dữ Liệu

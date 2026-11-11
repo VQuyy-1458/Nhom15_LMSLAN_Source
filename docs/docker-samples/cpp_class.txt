@@ -1,0 +1,7 @@
+class Counter {
+    long long value = 0;
+public:
+    Counter() = default;
+    void add(long long amount) { value += amount; }
+    long long get() const { return value; }
+};

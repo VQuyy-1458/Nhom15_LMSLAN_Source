@@ -1,0 +1,276 @@
+{
+  "format": "classroom-course-v1",
+  "course": {
+    "name": "Cơ sở dữ liệu",
+    "code": "CSDL-DEMO-02",
+    "group": "",
+    "semester": "Học kỳ 1 · 2026–2027",
+    "description": "Thiết kế dữ liệu, truy vấn SQL và quản lý giao dịch.",
+    "weights": {
+      "attendance": 10,
+      "homework": 20,
+      "midterm": 30,
+      "final": 40
+    }
+  },
+  "materials": [
+    {
+      "title": "Đề cương học phần",
+      "topic": "",
+      "description": "Học liệu dùng cho bộ dữ liệu kiểm thử của lớp.",
+      "filename": "de-cuong.txt",
+      "data_base64": "Q8ahIHPhu58gZOG7ryBsaeG7h3UKCk3hu6VjIHRpw6p1OiBUaGnhur90IGvhur8gZOG7ryBsaeG7h3UsIHRydXkgduG6pW4gU1FMIHbDoCBxdeG6o24gbMO9IGdpYW8gZOG7i2NoLgoKxJDDoW5oIGdpw6E6IGNodXnDqm4gY+G6p24gMTAlLCBiw6BpIHThuq1wIDIwJSwgZ2nhu69hIGvhu7MgMzAlLCBjdeG7kWkga+G7syA0MCUuCk7hu5lwIGLDoGkgdGhlbyBo4bqhbiBxdXkgxJHhu4tuaCB2w6AgZ2nhu68gbOG6oWkgYmnDqm4gbmjhuq1uLgo="
+    },
+    {
+      "title": "Hướng dẫn thực hành",
+      "topic": "",
+      "description": "Học liệu dùng cho bộ dữ liệu kiểm thử của lớp.",
+      "filename": "huong-dan.txt",
+      "data_base64": "MS4gxJDhu41jIHnDqnUgY+G6p3UgYsOgaSB04bqtcC4KMi4gSG/DoG4gdGjDoG5oIGLDoW8gY8OhbyBob+G6t2MgdMOgaSBsaeG7h3UgbWluaCBjaOG7qW5nLgozLiBCw6BpIGzhuq1wIHRyw6xuaCBjw7MgdGVzdCB04buxIMSR4buZbmcgxJHGsOG7o2MgbMOgbSB0cm9uZyBC4buZIGNo4bqlbSBjb2RlIG9ubGluZS4KNC4gTuG7mXAgZmlsZSB2w6Aga2nhu4NtIHRyYSBs4bqhaSBs4buLY2ggc+G7rS4K"
+    },
+    {
+      "title": "Mã nguồn tham khảo",
+      "topic": "",
+      "description": "Học liệu dùng cho bộ dữ liệu kiểm thử của lớp.",
+      "filename": "vi-du.cpp",
+      "data_base64": "I2luY2x1ZGUgPGlvc3RyZWFtPgppbnQgbWFpbigpIHsgaW50IG47IHN0ZDo6Y2luID4+IG47IHN0ZDo6Y291dCA8PCBuICogKG4gKyAxKSAvIDI7IH0K"
+    }
+  ],
+  "assignments": [
+    {
+      "title": "Bài tập 01 – Phân tích yêu cầu và mô hình ERD",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-11-01T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "ERD"
+    },
+    {
+      "title": "Bài tập 02 – Chuẩn hóa dữ liệu đến dạng 3NF",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-11-08T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "NORMAL_3NF"
+    },
+    {
+      "title": "Bài tập 03 – Thiết kế lược đồ và ràng buộc toàn vẹn",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-11-14T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "SCHEMA"
+    },
+    {
+      "title": "Bài tập 04 – Truy vấn JOIN trên nhiều bảng",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-11-18T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "SQL_JOIN"
+    },
+    {
+      "title": "Bài tập 05 – GROUP BY, HAVING và truy vấn thống kê",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-11-23T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "SQL_GROUP"
+    },
+    {
+      "title": "Bài tập 06 – Subquery, CTE và truy vấn nâng cao",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-11-29T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "SQL_CTE"
+    },
+    {
+      "title": "Bài tập 07 – View, trigger và stored procedure",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-12-05T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "DB_OBJECTS"
+    },
+    {
+      "title": "Bài tập 08 – Giao dịch và xử lý tranh chấp dữ liệu",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-12-12T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "TRANSACTION"
+    },
+    {
+      "title": "Bài tập 09 – Tối ưu truy vấn bằng chỉ mục",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-12-20T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "SQL_INDEX"
+    },
+    {
+      "title": "Bài tập 10 – Đồ án cơ sở dữ liệu ứng dụng",
+      "description": "Hoàn thành nội dung thực hành của Cơ sở dữ liệu.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).",
+      "topic": "",
+      "due_at": "2026-12-29T16:59:00+00:00",
+      "max_attempts": 3,
+      "submission_type": "file",
+      "category": "DATABASE",
+      "short_code": "DB_PROJECT"
+    }
+  ],
+  "events": [
+    {
+      "title": "Buổi 01: Giới thiệu và thiết lập môi trường",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-10-18T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 02: Cấu trúc chương trình",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-10-21T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 03: Bài tập thực hành",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-10-24T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 04: Xử lý lỗi",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-10-27T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 05: Ôn tập giữa kỳ",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-10-30T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 06: Thực hành tổng hợp",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-11-02T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 07: Giới thiệu và thiết lập môi trường",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-11-05T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 08: Cấu trúc chương trình",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-11-08T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 09: Bài tập thực hành",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-11-12T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 10: Xử lý lỗi",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-11-15T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 11: Ôn tập giữa kỳ",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-11-18T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Buổi 12: Thực hành tổng hợp",
+      "description": "Chuẩn bị tài liệu và hoàn thành phần thực hành trước buổi học.",
+      "kind": "lesson",
+      "starts_at": "2026-11-21T06:30:00+00:00",
+      "location": "Phòng thực hành B105"
+    },
+    {
+      "title": "Chào mừng đến với khóa học",
+      "description": "Theo dõi lịch học, tài liệu và các hoạt động trong không gian khóa học.",
+      "kind": "announcement",
+      "starts_at": "2026-11-08T13:23:37+00:00",
+      "location": ""
+    },
+    {
+      "title": "Tài liệu và bài tập đã được cập nhật",
+      "description": "Xem mục Tài liệu và Bài tập để chuẩn bị cho buổi thực hành tiếp theo.",
+      "kind": "announcement",
+      "starts_at": "2026-11-09T13:23:37+00:00",
+      "location": ""
+    },
+    {
+      "title": "Lưu ý quy định nộp bài",
+      "description": "Kiểm tra tên file, nội dung và biên nhận sau khi nộp. Liên hệ giảng viên nếu cần hỗ trợ.",
+      "kind": "announcement",
+      "starts_at": "2026-11-10T13:23:37+00:00",
+      "location": ""
+    },
+    {
+      "title": "Điểm danh buổi 01",
+      "description": "Buổi học gắn phiên điểm danh mẫu.",
+      "kind": "lesson",
+      "starts_at": "2026-10-31T13:23:37+00:00",
+      "location": "Phòng máy QA"
+    },
+    {
+      "title": "Điểm danh buổi 02",
+      "description": "Buổi học gắn phiên điểm danh mẫu.",
+      "kind": "lesson",
+      "starts_at": "2026-11-01T13:23:37+00:00",
+      "location": "Phòng máy QA"
+    },
+    {
+      "title": "Điểm danh buổi 03",
+      "description": "Buổi học gắn phiên điểm danh mẫu.",
+      "kind": "lesson",
+      "starts_at": "2026-11-02T13:23:37+00:00",
+      "location": "Phòng máy QA"
+    },
+    {
+      "title": "Điểm danh buổi 04 – Đang mở",
+      "description": "Buổi học gắn phiên điểm danh mẫu.",
+      "kind": "lesson",
+      "starts_at": "2026-11-11T13:18:37+00:00",
+      "location": "Phòng máy QA"
+    }
+  ]
+}

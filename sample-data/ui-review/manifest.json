@@ -1,0 +1,59 @@
+{
+  "version": "system-test-v1",
+  "created_at": "2026-11-11T16:13:31+00:00",
+  "root": "D:\\Term7\\Network Programming\\Nhom15_LMSLAN_Source-main\\sample-data\\ui-review",
+  "password": "111111",
+  "admin": "testadmin",
+  "student": "DEMO001",
+  "empty_student": "TESTEMPTY",
+  "network_course": "demo-v1-network",
+  "database_course": "demo-v1-database",
+  "completed_course": "demo-v1-completed",
+  "empty_course": "5af14561791dd122c31a",
+  "limit_assignment": "demo-v1-network-task-4",
+  "exam_ids": [
+    "9cc6528a5e3d496ebf2edc23f68fb5c4",
+    "b7baa6d3d1c14527b336c53316a59a60",
+    "e0e6442f0208464ab95f83e707f222d2",
+    "da54dee832544699bfea40473b17267f",
+    "e36f2b5733b64060a1e44d1c78836de2",
+    "8d29747e53b3470785c1f858d9d29c4b",
+    "26f43caecd6d4510a6802b6f47dbad29",
+    "14e34179b49644a9b4ad1042beb95465"
+  ],
+  "question_ids": [
+    "q_c32fa5d190d70f7b0bac",
+    "q_3bc08e5ceba90bf88a8c",
+    "q_2a7fa756afbb669f8c3a",
+    "q_7fab39b73b4e171655ed",
+    "q_4afe36e2261ad0173908",
+    "q_4aef3c9c1fe2eac28dce",
+    "q_68cc0e8502a6cbf356fa",
+    "q_0a68d221dd9fb5540c02",
+    "q_fbdbb45f78bb5f12ad27",
+    "q_247da0fb8c4afbe486e2",
+    "q_5531253c2dbcfca21a21",
+    "q_0bdc3c7a352cd57733ae",
+    "q_764324fcb0e3e32fdf9d",
+    "q_87e5701f43d27ac5290f",
+    "q_e5a8bd28bd8e1c8160a9",
+    "q_c3548f1d651f979fabb9",
+    "q_aed8cf91e3cb5ce7503a",
+    "q_573ab6c21a7e54518174",
+    "q_e7db74428c5facde5d36",
+    "q_acf61b64af2a7ec400a9"
+  ],
+  "paper_ids": [
+    "paper_f4d2b9c1ba12750fbb1f",
+    "paper_f277516438429fa48558",
+    "paper_2b804b838117769816e3"
+  ],
+  "practical_ids": [
+    "practical_2aa26645bea7251d5115",
+    "practical_c7b92cb7a45e930019a8",
+    "practical_6253de7e50db9525daf6"
+  ],
+  "student_count": 51,
+  "course_count": 12,
+  "simulated_results": true
+}

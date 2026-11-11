@@ -15,6 +15,7 @@
     document.querySelectorAll('[data-deadline-countdown]').forEach(node=>{
       const end=Date.parse(node.dataset.expiresAt);if(!Number.isFinite(end))return;
       const seconds=Math.max(0,Math.ceil((end-current)/1000));
+      const clockLabel=node.closest('.code-deadline')?.querySelector('[data-code-clock-label]');if(clockLabel)clockLabel.hidden=seconds===0;
       const text=seconds?(node.dataset.countdownFormat==='clock'?`${pad(Math.floor(seconds/3600))}:${pad(Math.floor(seconds/60)%60)}:${pad(seconds%60)}`:`${pad(Math.floor(seconds/60))}:${pad(seconds%60)}`):(node.dataset.zeroLabel||'Hết giờ');
       if(node.textContent!==text)node.textContent=text;
       node.classList.toggle('urgent',seconds<=300);

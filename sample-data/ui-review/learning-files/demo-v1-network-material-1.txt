@@ -1,0 +1,4 @@
+1. Đọc yêu cầu bài tập.
+2. Hoàn thành báo cáo hoặc tài liệu minh chứng.
+3. Bài lập trình có test tự động được làm trong Bộ chấm code online.
+4. Nộp file và kiểm tra lại lịch sử.

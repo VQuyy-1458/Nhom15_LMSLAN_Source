@@ -4,18 +4,20 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}LAN-LMS{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/tailwind.css">
-  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/app.css?v=20261111-ruler-1">
   <link rel="stylesheet" href="/static/css/exam-clock.css?v=20261030-9">
   <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
-  <script defer src="/static/js/app.js"></script>
+  <script defer src="/static/js/app.js?v=20261112-ui-1"></script>
   <link rel="stylesheet" href="/static/css/list-controls.css?v=20261030-2">
-  <script defer src="/static/js/list-controls.js?v=20261030-9"></script>
+  <script defer src="/static/js/list-controls.js?v=20261112-ui-1"></script>
   <link rel="stylesheet" href="/static/css/course-select.css?v=20261030-2">
+  <script defer src="/static/js/ui-forms.js?v=20261112-ui-1"></script>
+  <script defer src="/static/js/ui-behavior.js?v=20261112-ui-1"></script>
   {% block page_styles %}{% endblock %}
-  <link rel="stylesheet" href="/static/css/ui-polish.css?v=20261111-9">
-  <script defer src="/static/js/course-select.js?v=20261111-four-1"></script>
+  <link rel="stylesheet" href="/static/css/design-system.css?v=20261112-ui-1">
+  <script defer src="/static/js/course-select.js?v=20261112-ui-1"></script>
 </head>
-<body class="app-body">
+<body class="app-body ui-standard">
 {% block body %}{% endblock %}
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 </body></html>

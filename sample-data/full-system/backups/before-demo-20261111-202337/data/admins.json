@@ -1,0 +1,16 @@
+{
+  "testadmin": {
+    "full_name": "Quản trị kiểm thử",
+    "password_hash": "scrypt$864e7a6e8b362f1aa9cf7fb68dcbd198$fb1b282c8cf49070b922158a9fa63954be93212f01646e4fdabac3953c6a8545",
+    "active": true,
+    "created_at": "2026-10-12T13:23:37+00:00",
+    "created_by": "system-test-fixture"
+  },
+  "testadmin2": {
+    "full_name": "Giảng viên thử thao tác",
+    "password_hash": "scrypt$785239be428df999714dec5eb73e65fa$11864d92f424556e63d5e0ff2cda14cc5af6912e4135c4b9e39e0850c7f83e17",
+    "active": true,
+    "created_at": "2026-10-12T13:23:37+00:00",
+    "created_by": "system-test-fixture"
+  }
+}

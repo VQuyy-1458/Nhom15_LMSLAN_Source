@@ -395,7 +395,7 @@ class Handler(BaseHTTPRequestHandler):
                 allowed={"bank","dashboard","courses","monitor","notifications","exam","accounts","submissions","server","admins"}
                 if section not in allowed: section="dashboard"
                 selected_exam = next((r for r in exam_catalog.listing() if r["id"] == req.query.get("exam", [""])[0]), None) if section == "exam" else None
-                return self._html(self._render("admin.html",session=sess,section=section,exam_engine_detail=bool(selected_exam and selected_exam["type"] == "file" and selected_exam["active"]),exam_files=list_exam_files(),settings={**read_json("settings.json"), **({"exam_state":"scheduled"} if exam_timing.waiting(read_json("settings.json").get("exam_state"),read_json("settings.json").get("exam_started_at")) else {})},monitoring=monitoring_snapshot(),course_count=len(learning.load()["courses"])))
+                return self._html(self._render("admin.html",session=sess,section=section,exam_engine_detail=bool(selected_exam and selected_exam["type"] == "file" and selected_exam["active"]),exam_files=list_exam_files(),settings={**read_json("settings.json"), **({"exam_state":"scheduled"} if exam_timing.waiting(read_json("settings.json").get("exam_state"),read_json("settings.json").get("exam_started_at")) else {})},monitoring=monitoring_snapshot(),course_count=len(learning.load()["courses"]),sent_notifications=list(reversed(read_json("notifications.json", [])))[0:30] if section=="notifications" else []))
             if path=="/admin/accounts-template.txt":
                 self._auth(req,"admin")
                 content="21010001|01/02/2003|Nguyen Van A\n21010002|15/08/2003|Tran Thi B\n"

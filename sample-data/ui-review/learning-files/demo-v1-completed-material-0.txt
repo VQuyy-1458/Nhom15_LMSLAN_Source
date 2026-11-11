@@ -1,0 +1,6 @@
+Lập trình căn bản
+
+Mục tiêu: Khóa học đã tổng kết để kiểm tra lịch sử, bảng điểm và chế độ chỉ xem.
+
+Đánh giá: chuyên cần 10%, bài tập 20%, giữa kỳ 30%, cuối kỳ 40%.
+Nộp bài theo hạn quy định và giữ lại biên nhận.

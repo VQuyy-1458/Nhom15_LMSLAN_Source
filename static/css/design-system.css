@@ -1,0 +1,290 @@
+/* UI.md: shared tokens/components. Loaded after screen CSS during migration. */
+:root{
+  --ui-navy:#192e50;--ui-primary:#2864e8;--ui-primary-hover:#1e50c8;
+  --ui-canvas:#f4f7fb;--ui-surface:#fff;--ui-surface-soft:#f7f9fc;
+  --ui-border:#dfe7f2;--ui-control-border:#7c8da4;--ui-text:#20324c;--ui-text-muted:#62738d;
+  --ui-success:#21845d;--ui-warning:#a66c0a;--ui-danger:#b33b38;
+  --ui-success-text:#1b7450;--ui-warning-text:#996000;
+  --ui-space-1:4px;--ui-space-2:8px;--ui-space-3:12px;--ui-space-4:16px;
+  --ui-space-6:24px;--ui-space-8:32px;--ui-space-12:48px;
+  --ui-radius-sm:8px;--ui-radius:16px;--ui-radius-lg:20px;
+  --ui-shadow-sm:none;--ui-shadow:0 8px 24px #192e5014;--ui-shadow-hover:none;
+  /* Compatibility aliases let established features share the semantic layer. */
+  --ui-blue:var(--ui-primary);--ui-blue-dark:var(--ui-primary-hover);--ui-blue-soft:#edf3ff;
+  --ui-ink:var(--ui-text);--ui-muted:var(--ui-text-muted);--ui-line:var(--ui-border);
+  --ui-line-strong:var(--ui-control-border);--design-blue:var(--ui-primary);
+  --design-navy:var(--ui-navy);--design-line:var(--ui-border);
+  --ui-button-height:40px;--ui-input-height:40px;--ui-panel-padding:24px;--ui-input-padding-start:12px;
+}
+.ui-standard{font-family:Inter,"Segoe UI",Arial,sans-serif;font-size:14px;line-height:1.55;color:var(--ui-text);background:var(--ui-canvas)}
+/* Back navigation stays at the leading edge even inside a stretched grid. */
+.ui-standard .admin-shell :is(.attendance-back,.bridge-back,.btn:has(> .fa-arrow-left)){justify-self:start;align-self:start;width:fit-content;max-width:100%;margin-inline:0;text-align:left;justify-content:flex-start}
+.ui-standard .admin-shell :is(.code-breadcrumb a,.student-course-breadcrumb a,.ref-breadcrumb a,.bridge-back,a.btn,a:has(> .fa-arrow-left)),
+.ui-standard .admin-shell :is(.code-breadcrumb a,.student-course-breadcrumb a,.ref-breadcrumb a,.bridge-back,a.btn,a:has(> .fa-arrow-left)):is(:hover,:focus,:visited){text-decoration:none}
+/* Shared sorting controls use the same label and surface as adjacent filters. */
+.ui-standard .admin-shell fieldset.list-order{padding:0;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none;min-inline-size:0}
+.ui-standard .admin-shell fieldset.list-order>legend{float:none;width:auto;padding:0;margin:0 0 8px;font:600 12px/1.5 Inter,"Segoe UI",Arial,sans-serif;color:var(--lms-control-muted);letter-spacing:0;text-transform:none}
+.ui-standard .admin-shell :is(.list-controls,.student-toolbar,.ref-toolbar,.notifications-toolbar,.archive-filter)>label,
+.ui-standard .admin-shell fieldset.list-order>legend{font:600 13px/1.5 Inter,"Segoe UI",Arial,sans-serif;color:var(--ui-text);letter-spacing:normal;text-transform:none}
+.ui-standard .admin-shell .list-order-options{min-height:var(--ui-input-height);border:1px solid var(--ui-control-border);border-radius:var(--ui-radius-sm);background:var(--ui-surface);box-shadow:none}
+.ui-standard .admin-shell .exam-programming>.bridge-section-toolbar{margin-block:24px 16px}
+.ui-standard .admin-shell .exam-programming .bridge-section-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.ui-standard .admin-shell .exam-programming .bridge-section-toolbar>h3{margin:0;margin-inline-end:auto}
+.ui-standard .admin-shell .exam-type-options>label{display:flex;flex-direction:row;align-items:center;gap:12px;min-width:0}
+.ui-standard .admin-shell .exam-type-options>label>input[type=radio]{flex:0 0 18px;width:18px;height:18px;margin:0}
+.ui-standard .admin-shell .exam-type-options>label>span{display:grid;gap:4px;min-width:0}
+.ui-standard .admin-shell[data-admin-section="monitor"] .admin-course-context{align-items:end}
+.ui-standard .admin-shell[data-admin-section="monitor"] #admin-scope-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:1 1 100%;width:100%;gap:16px;min-width:0}
+.ui-standard .admin-shell[data-admin-section="monitor"] #admin-scope-form>label{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:0;white-space:normal}
+.ui-standard .admin-shell[data-admin-section="monitor"] #admin-scope-form>label>.fa{display:none}
+.ui-standard .admin-shell[data-admin-section="monitor"] #admin-scope-form :is(select,.course-select){width:100%;min-width:0;max-width:none}
+.ui-standard .admin-shell #monitor :is([data-monitor-archive],[data-force],[data-adjust]){font-family:inherit;font-size:14px;font-weight:600;line-height:1.4}
+.ui-standard .admin-shell #accounts td>.actions-inline{gap:6px;width:clamp(260px,25vw,380px);max-width:100%;align-items:center}
+.ui-standard .admin-shell #accounts td>.actions-inline>.btn{min-height:32px;padding:6px 10px;font-size:12px;font-weight:600;line-height:1.4;white-space:nowrap;flex:0 0 auto}
+.ui-standard .admin-shell #archive-filter{display:grid;grid-template-columns:minmax(160px,2fr) repeat(2,minmax(120px,1fr)) auto;align-items:end;gap:12px}
+.ui-standard .admin-shell #archive-filter>.archive-search{grid-column:auto}
+.ui-standard .admin-shell #archive-filter>.archive-actions{grid-column:auto;display:flex;flex-wrap:nowrap;gap:8px;align-items:center}
+.ui-standard .admin-shell #archive-filter>.archive-actions>.btn{white-space:nowrap}
+.ui-standard .admin-shell #archive-filter>:is(.ui-advanced-filters,p){grid-column:1/-1}
+@media(max-width:767px){.ui-standard .admin-shell #archive-filter{grid-template-columns:minmax(0,1fr)}.ui-standard .admin-shell #archive-filter>.archive-actions{flex-wrap:wrap}}
+.ui-standard .admin-shell{background:var(--ui-canvas);color:var(--ui-text);font-family:inherit}
+.ui-standard :where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{outline:3px solid var(--ui-primary);outline-offset:3px;scroll-margin:24px}
+.ui-standard :is(.admin-shell,.login-shell) :is(.btn,.ref-soft,.exam-soft){min-height:var(--ui-button-height);padding:9px 16px;border-radius:var(--ui-radius-sm);font-size:14px;font-weight:600;line-height:1.4;gap:8px;box-shadow:none;transform:none;white-space:normal}
+.ui-standard :is(.admin-shell,.login-shell) .btn-primary{background:var(--ui-primary);color:var(--ui-surface);border-color:var(--ui-primary)}
+.ui-standard :is(.admin-shell,.login-shell) .btn-primary:hover:not(:disabled){background:var(--ui-primary-hover);border-color:var(--ui-primary-hover);transform:none}
+.ui-standard :is(.admin-shell,.login-shell) .btn-secondary{background:var(--ui-surface);color:var(--ui-text);border-color:var(--ui-control-border)}
+.ui-standard :is(.admin-shell,.login-shell) .btn-ghost{background:transparent;color:var(--ui-text);border-color:transparent}
+.ui-standard :is(.admin-shell,.login-shell) .btn-ghost:hover{background:var(--ui-surface-soft)}
+.ui-standard :is(.admin-shell,.login-shell) :is(button:disabled,.btn[aria-disabled=true]){opacity:.55;cursor:not-allowed;transform:none}
+.ui-standard :is(.admin-shell,.login-shell) :is(.btn-danger,.btn.danger){color:var(--ui-surface);background:var(--ui-danger)}
+.ui-standard :is(.admin-shell,.login-shell) :is(input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea){max-width:100%;min-height:var(--ui-input-height);border:1px solid var(--ui-control-border);border-radius:var(--ui-radius-sm);background:var(--ui-surface);color:var(--ui-text);font:inherit;padding:9px 12px 9px var(--ui-input-padding-start);box-sizing:border-box}
+.ui-standard :is(.admin-shell,.login-shell) textarea{line-height:1.6;resize:vertical}
+.ui-standard :is(.admin-shell,.login-shell) :is(input,select,textarea):focus{border-color:var(--ui-primary);outline:2px solid var(--ui-primary);outline-offset:2px;box-shadow:none}
+.ui-standard :is(.admin-shell,.login-shell) :is(input,select,textarea)[readonly]{background:var(--ui-surface-soft)}
+.ui-standard :is(.admin-shell,.login-shell) :is(input[type=checkbox],input[type=radio]){accent-color:var(--ui-primary);width:18px;height:18px;flex-shrink:0}
+.ui-standard :is(.admin-shell,.login-shell) label{font-size:13px;font-weight:600;line-height:1.5;color:var(--ui-text);letter-spacing:normal;text-transform:none}
+.ui-standard :is(.admin-shell,.login-shell) .stack-form{gap:16px}
+.ui-standard :is(.admin-shell,.login-shell) .stack-form>label{display:grid;gap:8px}
+.ui-standard :is(.admin-shell,.login-shell) .stack-form>label:has(>input[type=checkbox]){display:flex;align-items:center}
+.ui-standard :is(.admin-shell,.login-shell) :is(.two-cols,.grade-weight-grid,.assignment-config-grid){gap:16px}
+.ui-standard :is(.admin-shell,.login-shell) .two-cols>label{display:grid;gap:8px;min-width:0}
+.ui-standard :is(.admin-shell,.login-shell) :is(h1,.page-title h1,.ref-page-head h1,.ref-course-title h1,.student-course-title h1){font-size:30px;line-height:1.3;font-weight:700;letter-spacing:-.025em;color:var(--ui-text);margin:0;overflow-wrap:anywhere}
+.ui-standard :is(.admin-shell,.login-shell) :is(h2,.panel h2,.cl-heading h2){font-size:20px;line-height:1.35;font-weight:700;letter-spacing:normal;color:var(--ui-text)}
+.ui-standard :is(.admin-shell,.login-shell) :is(h3,.panel h3){font-size:16px;line-height:1.4;font-weight:600;color:var(--ui-text);overflow-wrap:anywhere}
+.ui-standard :is(.admin-shell,.login-shell) :is(.muted,.fine-print,small,.cl-row-meta,.cell-sub,.student-summary,.ref-course-description,.ref-course-meta,.ref-course-code,.bridge-course-code,.student-course-code,.ref-course-subtitle,.student-course-subtitle,.smart-course-chip,.smart-date,.smart-deadline small,.smart-status-stack small){font-size:13px;line-height:1.55;color:var(--ui-text-muted);letter-spacing:normal;text-transform:none}
+.ui-standard :is(.admin-shell,.login-shell) .eyebrow{font-size:12px;font-weight:600;color:var(--ui-text-muted);letter-spacing:.04em}
+.ui-standard :is(.admin-shell,.login-shell) :is(.panel,.student-course-showcase,.bridge-course-card,.ref-course-card){border:1px solid var(--ui-border);border-radius:16px;box-shadow:none;background:var(--ui-surface);padding:24px;transform:none}
+.ui-standard :is(.admin-shell,.login-shell) .panel{margin-bottom:24px;min-width:0}
+.ui-standard .student-shell .panel{margin-bottom:0}
+.ui-standard .admin-shell :is(.panel-heading,.cl-heading,.student-section-head,.ref-heading-row){display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.ui-standard .admin-shell :is(.panel-heading,.cl-heading,.student-section-head,.ref-heading-row) h2{margin:0}
+.ui-standard .admin-shell :is(.page-title,.ref-page-head,.ref-course-header,.student-course-heading,.assignment-course-hero){display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0;margin:0 0 24px;border:0;border-radius:0;min-height:0;background:transparent;box-shadow:none;color:var(--ui-text);flex-wrap:wrap}
+.ui-standard .admin-shell :is(.page-title,.ref-page-head,.ref-course-header,.student-course-heading,.assignment-course-hero)::before,
+.ui-standard .admin-shell :is(.page-title,.ref-page-head,.ref-course-header,.student-course-heading,.assignment-course-hero)::after{content:none}
+.ui-standard .admin-shell .ref-course-header.course-context{padding:0;border:0;background:transparent;border-radius:0}
+.ui-standard .admin-shell :is(.student-course-heading,.assignment-course-hero) label{color:var(--ui-text);min-width:200px;max-width:360px}
+.ui-standard .admin-shell :is(.student-stack,.schedule-page){display:grid;grid-template-columns:minmax(0,1fr);gap:24px;min-width:0}
+.ui-standard .admin-shell :is(.student-stack,.schedule-page)>*{min-width:0}
+.ui-standard .course-admin-shell .student-stack:has(> .attendance-back,> .ref-actions > [data-tab="calendar"]){row-gap:8px}
+.ui-standard .course-admin-shell .student-stack>.attendance-back{margin-block:0}
+.ui-standard .course-admin-shell .student-stack>.ref-actions:has(> [data-tab="calendar"]){margin-block:0}
+.ui-standard .course-admin-shell .ref-tabs:has(+ .student-stack > .attendance-back,+ .student-stack > .ref-actions > [data-tab="calendar"]){margin-bottom:8px}
+.ui-standard .admin-shell .student-stack>:is(.student-course-heading,.assignment-course-hero){margin-bottom:0}
+.ui-standard .admin-shell .page-wrap{width:100%;min-width:0;max-width:1540px;padding:32px 32px 48px}
+.ui-standard .admin-shell :is(#learning-content,#workspace-content,.schedule-day-strip){min-width:0;max-width:100%}
+.ui-standard .admin-shell .topbar{height:68px;min-height:68px;padding:0 32px;background:var(--ui-surface);border-bottom:1px solid var(--ui-border);gap:16px;box-shadow:none}
+.ui-standard .admin-shell .topbar-actions{margin-left:auto;gap:12px}
+.ui-standard .admin-sidebar-unified .main-sidebar{width:244px;background:var(--ui-navy);box-shadow:none}
+.ui-standard .admin-sidebar-unified .sidebar-user::after{content:none}
+.ui-standard .admin-sidebar-unified .sidebar-nav a{font-size:14px;min-height:40px;line-height:1.4;gap:8px}
+.ui-standard .admin-sidebar-unified .sidebar-label{font-size:12px;letter-spacing:.04em;color:#a8b9d0}
+.ui-standard .admin-sidebar-unified .sidebar-nav a i{font-size:18px;width:20px}
+.ui-standard .admin-sidebar-unified .sidebar-nav a.active{background:var(--ui-primary);box-shadow:none;color:var(--ui-surface)}
+.ui-standard .admin-sidebar-unified .sidebar-nav a.active i{color:inherit}
+.ui-standard .admin-shell :is(.table-wrap,.table-scroll,.smart-records){max-width:100%;overflow-x:auto;border:1px solid var(--ui-border);border-radius:12px;background:var(--ui-surface);overscroll-behavior-inline:contain}
+.ui-standard .admin-shell table{font-size:14px;font-variant-numeric:tabular-nums}
+.ui-standard .admin-shell :is(table th,.smart-records thead th){font-size:12px;padding:12px 16px;font-weight:600;letter-spacing:normal;text-transform:none;color:var(--ui-text-muted);background:var(--ui-surface-soft);white-space:nowrap}
+.ui-standard .admin-shell :is(table td,.smart-records tbody td){font-size:14px;line-height:1.55;padding:14px 16px;color:var(--ui-text);border-bottom:1px solid var(--ui-border)}
+.ui-standard .admin-shell :is(table td small,table td .cell-sub){display:block;font-size:12px}
+.ui-standard .admin-shell tbody tr:hover{background:var(--ui-surface-soft)}
+.ui-standard .admin-shell :is(.table-toolbar,.ref-toolbar,.student-toolbar,.cl-filters,.list-controls,.admin-course-context){display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:16px;min-width:0}
+.ui-standard .admin-shell :is(.ref-toolbar,.student-toolbar,.list-controls){padding:16px;border:0;border-radius:8px;background:var(--ui-surface-soft);box-shadow:none}
+.ui-standard .admin-shell :is(.cl-filters,.ref-toolbar,.student-toolbar,.list-controls)>label{display:grid;gap:8px;min-width:140px;flex:1;max-width:none}
+.ui-standard .admin-shell :is(.ref-search,.student-search){flex:2 1 240px;min-width:0;max-width:none}
+.ui-standard .admin-shell :is(.student-actions,.ref-actions,.actions-inline,.form-actions,.bridge-inline){display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.ui-standard .admin-shell :is(.stack-form>.form-actions,.ref-modal .ref-actions,.student-dialog .student-actions){justify-content:flex-end;margin-top:16px}
+.ui-standard .admin-shell :is(.tabs,.ref-tabs,.student-tabs,.archive-tabs){display:flex;align-items:center;gap:8px;padding:0 0 8px;margin:0 0 24px;border:0;border-bottom:1px solid var(--ui-border);border-radius:0;background:transparent;overflow-x:auto;max-width:100%}
+.ui-standard .student-shell .student-stack>.student-course-tabs{margin-bottom:0}
+.ui-standard .student-shell .student-exam-list .student-list-title{font:600 14px/1.5 Inter,"Segoe UI",Arial,sans-serif;color:var(--ui-text)}
+.ui-standard .student-shell .student-exam-list .smart-title strong{font:inherit;color:inherit}
+.ui-standard .student-shell .student-exam-list :is(.smart-date,.smart-course-chip){display:inline-flex;align-items:center;gap:6px}
+.ui-standard .student-shell .student-exam-status{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.ui-standard .student-shell .student-exam-status>*{margin:0;max-width:100%}
+.ui-standard .student-shell .student-exam-list .exam-wait-clock-compact{padding:4px 8px;gap:6px;border-radius:6px;min-height:0}
+.ui-standard .student-shell .student-exam-list .exam-wait-clock-compact>span{font:500 12px/1.5 Inter,"Segoe UI",Arial,sans-serif}
+.ui-standard .student-shell .student-exam-list .exam-wait-clock-compact>strong{font:600 13px/1.5 Inter,"Segoe UI",Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:0}
+.ui-standard .admin-shell .cl-resource-list>.cl-filters>.ui-advanced-filters{order:1;flex-basis:100%}
+.ui-standard .admin-shell .cl-resource-list>.cl-filters>[data-cl-clear]{order:0;flex:0 0 auto;align-self:end;white-space:nowrap}
+.ui-standard .student-shell .student-submission-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.ui-standard .student-shell .student-submission-actions>.btn{min-height:32px;padding:6px 10px;font-size:12px;line-height:1.4;white-space:nowrap;text-decoration:none}
+.ui-standard .student-shell #notification-search-form{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:end;justify-content:flex-start;gap:10px;overflow-x:auto}
+.ui-standard .student-shell #notification-search-form>.notification-search{flex:1 0 160px;width:auto;height:40px;order:0}
+.ui-standard .student-shell #notification-search-form>.list-order{order:1;flex-shrink:0}
+.ui-standard .student-shell #notification-search-form>.notification-filters{display:contents}
+.ui-standard .student-shell #notification-search-form .notification-filters>label{order:2;flex:1 0 120px;min-width:120px;max-width:200px}
+.ui-standard .student-shell #notification-search-form [data-notification-action="clear"]{order:3}
+.ui-standard .student-shell #notification-search-form [data-notification-action="refresh"]{order:4}
+.ui-standard .student-shell #notification-search-form>.notification-total{order:5;flex-shrink:0;height:40px;box-sizing:border-box}
+.ui-standard .student-shell #notification-search-form .btn{flex-shrink:0;height:40px;min-height:40px;padding:8px 10px;font-size:12px;white-space:nowrap}
+.ui-standard .student-shell #notification-search-form :is(.notification-search,.list-order-options,.course-select-trigger,.notification-total,.btn){border:1px solid var(--ui-control-border);border-radius:var(--ui-radius-sm);background:var(--ui-surface);color:var(--ui-text);box-sizing:border-box}
+.ui-standard .student-shell #notification-search-form :is(.notification-filters>label,.list-order>legend){font:600 13px/1.5 Inter,"Segoe UI",Arial,sans-serif;color:var(--ui-text);letter-spacing:normal}
+.ui-standard .student-shell #notification-search-form :is(.btn,.course-select-trigger,.list-order-choice,.notification-total){font:500 13px/1.5 Inter,"Segoe UI",Arial,sans-serif;color:var(--ui-text)}
+.ui-standard .student-shell #notification-search-form .notification-total strong{font:600 13px/1.5 Inter,"Segoe UI",Arial,sans-serif;color:var(--ui-text)}
+.ui-standard .student-shell #notification-search-form .notification-search>input{border:0;border-radius:0;background:transparent;min-height:0;height:100%;font:400 13px/1.5 Inter,"Segoe UI",Arial,sans-serif;color:var(--ui-text);box-shadow:none}
+.ui-standard .student-shell #notification-search-form .notification-search>input::placeholder{color:var(--ui-text-muted)}
+.ui-standard .student-shell #notification-search-form .notification-search>button{border-left:1px solid var(--ui-control-border);color:var(--ui-text-muted)}
+.ui-standard .student-shell #notification-search-form .list-order-choice:has(input:checked){color:var(--ui-primary);font-weight:600}
+.ui-standard .admin-shell :is(.tabs a,.ref-tab,.student-tabs a,.archive-tabs button){flex-shrink:0;min-height:40px;padding:10px 12px;border-radius:8px;font:600 14px/1.4 Inter,"Segoe UI",Arial,sans-serif;white-space:nowrap;background:transparent;color:var(--ui-text-muted)}
+.ui-standard .admin-shell :is(.tabs a.active,.ref-tab.active,.student-tabs a.active,.archive-tabs button.active){background:var(--ui-blue-soft);color:var(--ui-primary);border-bottom-color:var(--ui-primary);box-shadow:none}
+.ui-standard .admin-shell :is(.stat-card,.ref-stats .stat-card){padding:16px;border:1px solid var(--ui-border);border-radius:16px;box-shadow:none;background:var(--ui-surface);min-width:0;transform:none}
+.ui-standard .admin-shell .stat-card strong{font-size:28px;line-height:1.3;font-weight:700;color:var(--ui-text)}
+.ui-standard .admin-shell .stat-card p{font-size:13px;color:var(--ui-text-muted);margin:0 0 4px;text-transform:none;letter-spacing:normal}
+.ui-standard .admin-shell :is(.stat-icon,.ref-symbol,.student-course-symbol,.assignment-course-symbol){display:inline-grid;place-items:center;width:40px;height:40px;flex:0 0 40px;border-radius:8px;font-size:22px;box-shadow:none}
+.ui-standard .admin-shell :is(.stat-icon,.ref-symbol,.student-course-symbol) i{font-size:22px}
+.ui-standard .admin-shell :is(.student-status,.bridge-pill,.status-pill,.section-badge,.assignment-badge-line b,.activity-badge){display:inline-flex;align-items:center;gap:4px;min-height:24px;padding:3px 8px;font-size:12px;line-height:1.4;font-weight:600;letter-spacing:normal;border-radius:6px;box-shadow:none}
+.ui-standard .admin-shell :is(.student-status.green,.bridge-pill.green,.status-green){color:var(--ui-success-text);background:#eaf6ef}
+.ui-standard .admin-shell :is(.student-status.amber,.bridge-pill.amber,.status-amber){color:var(--ui-warning-text);background:#fff5df}
+.ui-standard .admin-shell :is(.student-status.red,.status-red){color:var(--ui-danger);background:#ffefed}
+.ui-standard .admin-shell :is(.student-status.blue,.bridge-pill.blue,.status-blue){color:var(--ui-primary-hover);background:var(--ui-blue-soft)}
+.ui-standard .admin-shell :is(.ref-course-grid,.student-course-grid,.bridge-course-grid,.assignment-course-grid){display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:16px}
+.ui-standard .admin-shell :is(.panel.student-course,.ref-course-card,.bridge-course-card){padding:0;overflow:hidden;transform:none}
+.ui-standard .admin-shell :is(.student-course-cover,.ref-cover,.bridge-course-cover){height:auto;min-height:0;padding:16px 24px;background:var(--ui-surface-soft);border-bottom:1px solid var(--ui-border);box-shadow:none}
+.ui-standard .admin-shell :is(.student-course-cover,.ref-cover,.bridge-course-cover)::after{content:none}
+.ui-standard .admin-shell :is(.student-course-cover-icon,.ref-cover .ref-symbol,.bridge-course-cover>span:first-child){width:32px;height:32px;flex-basis:32px;font-size:22px;border:0;background:transparent;color:var(--ui-text-muted);box-shadow:none}
+.ui-standard .admin-shell :is(.student-course-cover-icon i,.ref-cover i,.bridge-course-cover i){font-size:22px}
+.ui-standard .admin-shell :is(.student-course-body,.ref-course-body,.bridge-course-body){padding:20px 24px}
+.ui-standard .admin-shell :is(.ref-course-card,.bridge-course-card,.panel.student-course){display:flex;flex-direction:column}
+.ui-standard .admin-shell :is(.ref-course-body,.bridge-course-body,.student-course-body){display:flex;flex-direction:column;flex:1}
+.ui-standard .admin-shell :is(.ref-course-bottom,.bridge-course-footer,.student-course-meta){margin-top:auto;padding-top:16px}
+.ui-standard .admin-shell :is(.student-course,.ref-course-card,.bridge-course-card) h3{font-size:17px;line-height:1.4;margin:8px 0;font-weight:600}
+.ui-standard .admin-shell :is(.empty-state,.student-empty,.bridge-empty,.ref-empty,.cl-empty){padding:24px 16px;border:0;border-radius:8px;background:var(--ui-surface-soft);color:var(--ui-text-muted);text-align:center;line-height:1.6}
+.ui-standard .admin-shell :is(.empty-state,.student-empty,.bridge-empty)>i{font-size:24px;color:var(--ui-text-muted)}
+.ui-standard .admin-shell :is(.alert,.notice){font-size:14px;line-height:1.55;border-radius:8px;box-shadow:none}
+.ui-standard .admin-shell :is(.student-dialog,.ref-modal,.cl-dialog,.student-detail-dialog,.bridge-grade-dialog){max-width:min(640px,calc(100vw - 48px));max-height:90dvh;border:1px solid var(--ui-border);border-radius:20px;padding:24px;color:var(--ui-text);overflow:auto;box-shadow:var(--ui-shadow)}
+.ui-standard .admin-shell :is(.ref-modal,.cl-dialog,.student-detail-dialog)::backdrop{background:#192e5070}
+.ui-standard .ui-workspace{position:static;inset:auto;display:block;width:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+.ui-standard .admin-shell .ui-workspace{position:static;max-width:none;max-height:none;padding:0;border:0;border-radius:0;box-shadow:none;overflow:visible}
+.ui-standard .ui-workspace>.stack-form{padding:24px;border:1px solid var(--ui-border);border-radius:16px;background:var(--ui-surface)}
+.ui-standard .ui-workspace :is(.ref-dialog-head,.cl-heading,.student-detail-head){margin-bottom:24px}
+.ui-standard .ui-field-error{display:block;margin:6px 0 0;font-size:13px;color:var(--ui-danger)}
+.ui-standard .ui-field-error:empty{display:none}
+.ui-standard :is(.ref-form-error,[role=alert]):empty{display:none}
+.ui-standard .ui-task-list{list-style:none;margin:0;padding:0}
+.ui-standard .ui-task-list>li{display:flex;align-items:center;gap:16px;padding:16px 0;border-bottom:1px solid var(--ui-border)}
+.ui-standard .ui-task-list>li:last-child{border:0}
+.ui-standard .ui-task-list>li>div{flex:1;min-width:0}
+.ui-standard .ui-task-list h3{margin:0 0 4px}
+.ui-standard .ui-task-list p{margin:0}
+.ui-standard .ui-summary-line{display:flex;align-items:center;flex-wrap:wrap;gap:16px;margin:0;color:var(--ui-text-muted);font-size:13px}
+.ui-standard .ui-summary-line progress{width:140px;max-width:100%;height:8px;accent-color:var(--ui-primary)}
+.ui-standard .ui-summary-line strong{color:var(--ui-text)}
+.ui-standard .smart-filter-grid{display:flex;align-items:end;gap:12px;flex:1;flex-wrap:wrap}
+.ui-standard .smart-filter-grid>label{display:grid;gap:8px;flex:1;min-width:140px}
+.ui-standard .smart-filter-grid>.student-search{flex:2 1 240px}
+.ui-standard .ui-course-search{display:grid;gap:8px;max-width:480px;margin-bottom:24px}
+.ui-standard .ui-title-button{padding:0;border:0;background:transparent;color:var(--ui-text);font:600 17px/1.4 Inter,"Segoe UI",Arial,sans-serif;text-align:left;cursor:pointer}
+.ui-standard .ui-title-button:hover{color:var(--ui-primary);text-decoration:underline}
+.ui-standard .ui-task-list p{max-width:80ch;overflow-wrap:anywhere}
+.ui-standard .admin-shell :is(.cl-title,.student-list-title){font-size:16px;line-height:1.5;font-weight:600}
+.ui-standard .admin-shell .cl-row-meta{max-width:360px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.55}
+.ui-standard .admin-shell :is(.ref-breadcrumb,.student-course-breadcrumb,.assignment-course-breadcrumb){font-size:13px;line-height:1.5;flex-wrap:wrap}
+.ui-standard .admin-shell .notifications-pagination nav>button{min-width:32px;min-height:32px}
+.ui-standard dialog:not(.ui-workspace){max-width:min(640px,calc(100vw - 48px));max-height:90dvh;padding:24px;border:1px solid var(--ui-border);border-radius:20px;overflow:auto;color:var(--ui-text);font:14px/1.55 Inter,"Segoe UI",Arial,sans-serif}
+.ui-standard .admin-shell :is(.student-tabs button,.ref-tabs button){min-height:40px;padding:10px 12px;border:0;border-radius:8px;background:transparent;color:var(--ui-text-muted);font:600 14px/1.4 Inter,"Segoe UI",Arial,sans-serif}
+.ui-standard .admin-shell :is(.student-tabs button.active,.ref-tabs button.active){background:var(--ui-blue-soft);color:var(--ui-primary)}
+.ui-standard .admin-shell :is(textarea.code-editor,textarea[data-code-editor],textarea[data-problem-template],textarea[data-test-code],textarea[data-test-input],textarea[data-test-output],textarea[name=source]){font-family:Consolas,"Cascadia Code",monospace;font-size:14px;line-height:1.6;tab-size:4}
+.ui-standard .ui-advanced-filters{flex-basis:100%;grid-column:1/-1}
+.ui-standard .ui-advanced-filters>summary{cursor:pointer;min-height:40px;font-weight:600;padding:8px 0}
+.ui-standard .ui-advanced-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin:12px 0}
+.ui-standard .ui-advanced-grid>label{display:grid;gap:8px;min-width:0}
+.ui-standard :is(.smart-filter-control,.ref-search){--ui-input-padding-start:38px;position:relative;display:block}
+.ui-standard .smart-filter-control>i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ui-text-muted);pointer-events:none}
+.ui-standard .admin-shell .smart-filter-control>input{width:100%;padding-left:36px}
+.ui-standard .smart-filter-reset{align-self:end;min-height:40px}
+.ui-standard .smart-title{display:flex;align-items:center;gap:12px;text-align:left;width:100%;min-width:180px;color:var(--ui-text)}
+.ui-standard .smart-title>span:last-child{display:grid;gap:4px}
+.ui-standard .smart-title strong{font-size:16px;font-weight:600;overflow-wrap:anywhere}
+.ui-standard .smart-row-icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;border-radius:8px;color:var(--ui-text-muted);background:var(--ui-surface-soft)}
+.ui-standard .smart-open-button{display:grid;place-items:center;min-width:40px;min-height:40px;border:1px solid var(--ui-control-border);border-radius:8px;background:var(--ui-surface);color:var(--ui-text)}
+.ui-standard .smart-deadline,.ui-standard .smart-status-stack{display:grid;gap:4px}
+.ui-standard .student-list-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}
+.ui-standard .assignment-badge-line{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.ui-standard .assignment-code{background:var(--ui-surface-soft);color:var(--ui-text-muted)}
+.ui-standard .assignment-category{background:var(--ui-blue-soft);color:var(--ui-primary-hover)}
+.ui-standard .admin-shell .activity-table-row[data-activity]{background:var(--ui-surface);color:var(--ui-text)}
+.ui-standard .admin-shell .activity-table-row[data-activity]:hover{background:var(--ui-surface-soft)}
+.ui-standard .admin-shell .activity-table-row>td{background:transparent}
+.ui-standard .admin-shell .activity-surface{background:var(--ui-surface);box-shadow:none}
+.ui-standard .admin-shell i[data-design-icon]{display:inline-flex;align-items:center;justify-content:center;font-style:normal;line-height:1;width:1em;height:1em;flex-shrink:0}
+.ui-standard .admin-shell i[data-design-icon]::before{content:none}
+.ui-standard .admin-shell i[data-design-icon] svg{display:block;width:100%;height:100%}
+.ui-standard .admin-shell i.fa-arrow-left[data-design-icon] svg{transform:rotate(180deg)}
+.ui-standard .admin-shell .btn>i{font-size:16px}
+.ui-standard .admin-shell :is(.notification-layout,.notification-form){background:transparent;border:0;border-radius:0;padding:0;display:block}
+.ui-standard .admin-shell .notification-form{max-width:800px}
+.ui-standard .admin-shell .notification-form-footer{margin-top:16px}
+.ui-standard .admin-shell .ref-topic-body{padding:16px 0}
+.ui-standard .login-shell .login-card{width:100%;max-width:450px;padding:32px;border:1px solid var(--ui-border);border-radius:16px;box-shadow:none}
+.ui-standard .login-shell{background:var(--ui-canvas)}
+.ui-standard .login-shell .brand-mark{width:40px;height:40px;font-size:22px;margin-bottom:16px;border-radius:8px}
+.ui-standard .login-shell .stack-form{padding:0;border:0;background:transparent}
+.ui-standard .toast{border-radius:8px;font-size:14px;line-height:1.5;background:var(--ui-navy)}
+.ui-standard .toast.success{background:var(--ui-success)}
+.ui-standard .toast.error{background:var(--ui-danger)}
+@media(min-width:1024px){
+  .ui-standard .admin-shell .main-sidebar{display:flex;transform:none;inset:0 auto 0 0;height:100dvh;overflow:hidden}
+  .ui-standard .admin-sidebar-unified .admin-content{margin-left:244px;width:auto;min-width:0}
+  .ui-standard .admin-shell :is(.sidebar-toggle,.student-menu-toggle){display:none}
+  .ui-standard .admin-sidebar-unified .sidebar-nav{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+}
+@media(max-width:1199px){
+  .ui-standard .admin-shell .page-wrap{padding:24px}
+  .ui-standard .admin-shell :is(.student-grid,.ref-split,.notification-layout){grid-template-columns:minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){
+  .ui-standard *,.ui-standard *::before,.ui-standard *::after{animation-duration:.01ms;animation-iteration-count:1;transition-duration:.01ms;scroll-behavior:auto}
+}
+
+/* UI.md component contracts. Feature CSS may keep behavioral hooks, but all
+   opted-in forms share this layout and one action bar. */
+/* State utility: author grid/flex rules must never reveal an explicitly
+   hidden editor, filter result or permission-controlled section. */
+.ui-standard [hidden]{display:none!important}
+.ui-standard .ui-page-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.ui-standard .ui-form-workspace{width:100%;max-width:1120px;min-width:0;margin-inline:auto;box-sizing:border-box}
+.ui-standard .admin-shell dialog.ui-form-workspace{position:static;inset:auto;display:block;max-width:1120px;max-height:none;margin:0 auto;padding:24px;border:1px solid var(--ui-border);border-radius:16px;background:var(--ui-surface);overflow:visible;box-shadow:none}
+.ui-standard .admin-shell .ui-workspace>.stack-form{padding:0;border:0;background:transparent}
+.ui-standard form.ui-form-workspace{display:block;margin:0;box-shadow:none}
+.ui-standard .ui-form-section{display:block;padding:0;margin:0 0 24px;border:0;min-width:0;background:transparent}
+.ui-standard .ui-form-section>h3{margin:0 0 16px;font-size:18px;line-height:1.35;font-weight:600}
+.ui-standard .ui-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;min-width:0;align-items:start}
+.ui-standard .ui-form-grid>label,.ui-standard .ui-form-grid>.ui-field{display:grid;gap:8px;min-width:0;margin:0}
+.ui-standard .ui-form-grid>label:has(>input[type=checkbox]),.ui-standard .ui-form-grid>label:has(>input[type=radio]){display:flex;align-items:center;gap:8px}
+.ui-standard .admin-shell .ui-form-workspace :is(.checkbox-row,.radio-row,.cl-check){display:flex;align-items:center;gap:8px}
+.ui-standard .ui-form-grid :is(input:not([type=checkbox]):not([type=radio]),select,textarea){width:100%}
+.ui-standard .ui-form-grid :is(input[type=checkbox],input[type=radio]){width:18px}
+.ui-standard .ui-span-2,.ui-standard .ui-balanced-span{grid-column:1/-1}
+.ui-standard .ui-rule-details{margin:0;padding:0;border:0;background:transparent;max-width:80ch}
+.ui-standard .ui-rule-details>summary{cursor:pointer;min-height:40px;padding:8px 0;font-size:14px;font-weight:600}
+.ui-standard .ui-rule-details p{margin:8px 0;font-size:13px;line-height:1.6;color:var(--ui-text-muted)}
+.ui-standard .ui-choice-group{min-width:0;max-width:100%;margin:0;padding:16px;border:1px solid var(--ui-border);border-radius:8px;background:var(--ui-surface)}
+.ui-standard .ui-choice-group>legend{padding:0 8px;font-size:14px;line-height:1.5;font-weight:600;color:var(--ui-text)}
+.ui-standard .ui-empty-state{padding:16px;border:0;border-radius:8px;background:var(--ui-surface-soft);color:var(--ui-text-muted);line-height:1.6}
+.ui-standard .ui-empty-state p{margin:0 0 12px}
+.ui-standard .ui-action-bar{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px;margin:24px 0 0;padding:16px 0 0;border-top:1px solid var(--ui-border)}
+.ui-standard .admin-shell .ui-course-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;min-width:0}
+.ui-standard .ui-course-card{display:flex;flex-direction:column;min-width:0;border-radius:16px}
+.ui-standard .ui-course-card>a.btn:last-child{align-self:flex-start;margin-top:auto}
+@media(max-width:1199px){
+  .ui-standard .ui-form-grid{grid-template-columns:minmax(0,1fr)}
+}

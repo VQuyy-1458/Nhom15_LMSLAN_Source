@@ -1,0 +1,13 @@
+public class Product {
+    private final int price;
+    private final int quantity;
+
+    public Product(int price, int quantity) {
+        this.price = price;
+        this.quantity = quantity;
+    }
+
+    public long total() {
+        return (long) price * quantity;
+    }
+}

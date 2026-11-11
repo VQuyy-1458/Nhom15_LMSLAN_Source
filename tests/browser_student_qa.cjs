@@ -48,13 +48,13 @@ async function courseGradesOrder(){
 }
 async function sidebarFit(base,fixture,restoreMetrics={width:1440,height:1100,deviceScaleFactor:1,mobile:false}){
   const sizes=[{width:1536,height:738},{width:1366,height:768},{width:1280,height:650},{width:1024,height:576},{width:1280,height:480},{width:390,height:664},{width:844,height:390},{width:568,height:320}];
-  const pages=[{role:'student',path:'/student/dashboard',count:10},{role:'admin',path:'/admin?section=accounts',count:9},{role:'admin',path:'/admin?section=monitor',count:9},{role:'admin',path:'/admin/courses',count:9}];
+  const pages=[{role:'student',path:'/student/dashboard',count:10},{role:'admin',path:'/admin?section=accounts',count:10},{role:'admin',path:'/admin?section=monitor',count:10},{role:'admin',path:'/admin/courses',count:10}];
   for(const screen of pages){
     await send('Network.setCookie',{name:'css_session',value:fixture[screen.role],url:base,httpOnly:true,sameSite:'Strict'});
     for(const size of sizes){
       await send('Emulation.setDeviceMetricsOverride',{...size,deviceScaleFactor:1,mobile:size.width<=900});
       await navigate(base+screen.path);
-      if(size.width<=(screen.role==='student'?900:760))await evaluate(`document.querySelector('${screen.role==='student'?'#student-menu-toggle':'.sidebar-toggle'}').click()`);
+      if(size.width<768)await evaluate(`document.querySelector('${screen.role==='student'?'#student-menu-toggle':'.sidebar-toggle'}').click()`);
       await waitFor(()=>evaluate("(()=>{const r=document.querySelector('.main-sidebar').getBoundingClientRect();return r.width>0&&r.left>=-0.1;})()"));
       await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       const fit=await evaluate("(()=>{const s=document.querySelector('.main-sidebar'),n=s.querySelector('.sidebar-nav'),r=s.getBoundingClientRect();const links=[...n.querySelectorAll('a')].map(a=>{const b=a.getBoundingClientRect(),hit=document.elementFromPoint(b.left+b.width/2,b.top+b.height/2);return {label:a.textContent.trim(),top:b.top,bottom:b.bottom,width:b.width,visible:getComputedStyle(a).visibility==='visible'&&b.width>0&&b.height>0,hit:hit?.closest('.sidebar-nav a')===a};});return {top:r.top,bottom:r.bottom,height:innerHeight,sideOverflow:s.scrollHeight-s.clientHeight,navOverflow:n.scrollHeight-n.clientHeight,links};})()");

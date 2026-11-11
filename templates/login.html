@@ -4,8 +4,8 @@
 <main class="login-shell ui-page min-h-screen flex items-center justify-center p-6 bg-slate-50">
   <section class="login-card auth-card ui-card w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
     <div class="brand-mark"><i class="fa fa-laptop"></i></div>
-    <p class="eyebrow">HỆ THỐNG HỌC TẬP</p><h1>LAN-LMS</h1>
-    <p class="muted">Đăng nhập bằng MSSV hoặc tài khoản Admin.</p>
+    <h1>LAN-LMS</h1>
+    
     {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
     <form action="/login" method="post" class="stack-form ui-form">
       <input name="next" type="hidden" value="{{ next|default('') }}">
@@ -15,7 +15,7 @@
       <input id="password" type="password" name="password" autocomplete="current-password" required>
       <button class="btn btn-primary btn-wide ui-action" type="submit"><i class="fa fa-sign-in"></i> Đăng nhập</button>
     </form>
-    <p class="fine-print">Hệ thống nội bộ · Không chia sẻ thông tin đăng nhập.</p>
+    
   </section>
 </main>
 {% endblock %}

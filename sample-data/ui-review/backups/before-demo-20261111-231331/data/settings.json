@@ -1,0 +1,20 @@
+{
+  "exam_duration_minutes": 90,
+  "submission_policy": "configurable",
+  "max_submissions": 1,
+  "accepted_submission_extensions": [
+    ".zip"
+  ],
+  "overwrite_previous": true,
+  "exam_password_enabled": false,
+  "exam_password_hash": null,
+  "distribution_mode": "random",
+  "distribution_config": {},
+  "exam_released": false,
+  "exam_state": "idle",
+  "exam_release_id": null,
+  "exam_release_at": null,
+  "exam_participants": [],
+  "max_upload_bytes": 52428800,
+  "allow_late_submission": false
+}

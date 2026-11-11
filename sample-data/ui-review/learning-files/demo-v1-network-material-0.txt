@@ -1,0 +1,6 @@
+Lập trình mạng
+
+Mục tiêu: Thực hành socket, TCP/UDP và ứng dụng Client–Server.
+
+Đánh giá: chuyên cần 10%, bài tập 20%, giữa kỳ 30%, cuối kỳ 40%.
+Nộp bài theo hạn quy định và giữ lại biên nhận.

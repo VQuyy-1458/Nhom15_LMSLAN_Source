@@ -1,0 +1,7 @@
+KIỂM TRA THỰC HÀNH – ĐỀ B
+Thời lượng 60 phút.
+
+Bài 1 (5 điểm): Viết chương trình tính tổng các số lẻ từ 1 đến n.
+Bài 2 (5 điểm): Mô tả cách gửi và nhận file qua TCP.
+
+Nộp file ZIP gồm mã nguồn và README hướng dẫn chạy. Có thể nộp tối đa 3 lần.
