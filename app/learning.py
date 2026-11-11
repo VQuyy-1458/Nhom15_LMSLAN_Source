@@ -17,6 +17,7 @@ from .config import BASE_DIR, RUNTIME_DIR
 from .storage import read_json, write_json, utc_now, audit, atomic_transaction, save_payload
 from .submissions import validate_zip
 from . import submission_rate, enrollments
+from .security import session_is_active
 
 FILES = RUNTIME_DIR / "learning-files"
 LOCK = threading.RLock()
@@ -198,17 +199,13 @@ def record_student_presence(student_id):
             return 0
         now = datetime.now(timezone.utc)
         sessions = read_json("sessions.json")
-        logged_in = False
-        for item in sessions.values():
-            if not isinstance(item, dict) or item.get("role") != "student" or item.get("user_id") != student_id:
-                continue
-            try:
-                expires_at = float(item.get("expires_at", 0))
-            except (TypeError, ValueError):
-                continue
-            if expires_at > now.timestamp():
-                logged_in = True
-                break
+        logged_in = any(
+            isinstance(item, dict)
+            and item.get("role") == "student"
+            and item.get("user_id") == student_id
+            and session_is_active(item, now)
+            for item in sessions.values()
+        )
         if not logged_in:
             return 0
 
@@ -579,11 +576,7 @@ def mutate(session, action, form, files, ip):
                     student = students.get(student_id)
                     if not student or not student.get("active", True):
                         continue
-                    try:
-                        expires_at = float(student_session.get("expires_at", 0))
-                    except (TypeError, ValueError):
-                        continue
-                    if expires_at > opened_at.timestamp():
+                    if session_is_active(student_session, opened_at):
                         online_students.add(student_id)
                 records = {}
                 for student_id in enrollments.member_ids(course, students):

@@ -10,7 +10,7 @@
 {% if section == 'exam' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261111-homework-1">{% endif %}
 <link rel="stylesheet" href="/static/css/activity-colors.css">
 {% if section == 'class-notifications' %}<link rel="stylesheet" href="/static/css/resource-weeks.css">{% endif %}
-{% if section == 'courses' %}<link rel="stylesheet" href="/static/css/course-schedule.css?v=20261110-1">{% endif %}
+{% if section == 'courses' %}<link rel="stylesheet" href="/static/css/course-schedule.css?v=20261111-activities-3">{% endif %}
 <link rel="stylesheet" href="/static/css/admin-drafts.css?v=20261030-8">
 <div class="admin-shell admin-sidebar-unified {{ 'course-admin-shell' if section == 'courses' else '' }} {{ 'admin-redesign' if section not in ['monitor','notifications'] else '' }}" data-user-role="{{ session.role }}" data-admin-section="{{ section|default('dashboard') }}" data-draft-owner="{{ session.user_id }}">
     <aside class="main-sidebar" aria-label="Điều hướng quản trị">
@@ -475,9 +475,9 @@
 <script defer src="/static/js/file-preview.js"></script>
 <link rel="stylesheet" href="/static/css/resource-weeks.css?v=20261111-2">
 <script defer src="/static/js/resource-weeks.js?v=20261111-2"></script>
-<script defer src="/static/js/admin-courses-design.js?v=20261111-merge-1"></script>
+<script defer src="/static/js/admin-courses-design.js?v=20261111-activities-3"></script>
 <script defer src="/static/js/admin-attendance.js?v=20261111-merge-1"></script>
-<script defer src="/static/js/learning-admin.js?v=20261111-homework-1"></script>
+<script defer src="/static/js/learning-admin.js?v=20261111-activities-1"></script>
 {% endif %}
 {% if section == 'classification' %}<script defer src="/static/js/exam-test-csv.js"></script><link rel="stylesheet" href="/static/css/resource-weeks.css">{% endif %}
 <script defer src="/static/js/admin-drafts.js?v=20261030-8"></script>

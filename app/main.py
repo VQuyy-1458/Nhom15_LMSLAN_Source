@@ -34,7 +34,7 @@ from .config import REQUEST_IDLE_TIMEOUT_SECONDS, REQUEST_BODY_TIMEOUT_SECONDS
 from .accounts import parse_accounts
 from .http import inline_filename_header
 from .storage import initialize, read_json, write_json, audit, utc_now, transaction, atomic_transaction
-from .security import hash_password, verify_password, new_session, get_session, require_user, client_ip, login_allowed, record_login_failure, clear_login_failures, logout_session, revoke_student_sessions, check_origin, SecurityError, check_login_source
+from .security import hash_password, verify_password, new_session, get_session, require_user, client_ip, login_allowed, record_login_failure, clear_login_failures, logout_session, revoke_student_sessions, check_origin, SecurityError, check_login_source, session_is_active
 from .exams import list_exam_files, add_exam_file, distribute_exams, start_exam, start_exam_session, remaining_seconds
 from .submissions import accept_submission
 from . import learning
@@ -116,9 +116,8 @@ def monitoring_snapshot(course_id="", exam_id="") -> dict:
     result=[]
     for sid, student in students.items():
         sess=latest.get(sid); assignment=assignments.get(sid, {}); online=False
-        if sess and sess.get("last_seen"):
-            try: online=(now-datetime.fromisoformat(sess["last_seen"])).total_seconds() <= 45
-            except (ValueError, TypeError): pass
+        if sess:
+            online=session_is_active(sess, now)
         records=submissions.get(sid, [])
         telemetry=sess.get("telemetry",{}) if sess else {}
         alerts=[]

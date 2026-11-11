@@ -8,11 +8,24 @@ import secrets
 import time
 import threading
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
-from .config import SESSION_TTL_SECONDS, SESSION_COOKIE, LOCKOUT_SECONDS, MAX_FAILED_LOGINS
+from .config import SESSION_TTL_SECONDS, SESSION_ACTIVE_SECONDS, SESSION_COOKIE, LOCKOUT_SECONDS, MAX_FAILED_LOGINS
 from .storage import read_json, write_json, utc_now, audit, transaction
 _HASH_SLOTS = threading.BoundedSemaphore(4)
+
+def session_is_active(item: dict, now: datetime | None = None) -> bool:
+    """Return whether a session is valid and has sent a request recently."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        expires_at = float(item.get("expires_at", 0))
+        last_seen = datetime.fromisoformat(item.get("last_seen", ""))
+        if last_seen.tzinfo is None:
+            return False
+        age = (now - last_seen).total_seconds()
+    except (TypeError, ValueError):
+        return False
+    return expires_at > now.timestamp() and 0 <= age <= SESSION_ACTIVE_SECONDS
 
 class SecurityError(Exception):
     def __init__(self, status: int, detail: str):

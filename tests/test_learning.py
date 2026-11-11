@@ -798,6 +798,29 @@ class LearningTests(unittest.TestCase):
         self.assertNotIn("s1", record)
         self.assertEqual(record["s2"]["status"], "present")
 
+    def test_attendance_ignores_sessions_that_are_not_recently_active(self):
+        course = self.course("s1,s2")
+        sessions = storage.read_json("sessions.json")
+        stale = (datetime.now(timezone.utc) - timedelta(seconds=46)).isoformat()
+        for item in sessions.values():
+            if item.get("role") == "student":
+                item["last_seen"] = stale
+        storage.write_json("sessions.json", sessions)
+        lesson = self.create("event", course_id=course, title="Scheduled lesson", starts_at=self.future, kind="lesson")
+
+        code, result = self.request("/api/learning/attendance", form={
+            "course_id": course,
+            "event_id": lesson,
+            "duration_minutes": "15",
+        })
+        self.assertEqual(code, 200, result)
+        self.assertEqual(result["auto_present_count"], 0)
+        attendance_id = result["id"]
+        self.assertEqual(learning.find(learning.load(), "attendance", attendance_id)["records"], {})
+        self.assertEqual(learning.record_student_presence("s1"), 0)
+        monitor = {row["student_id"]: row for row in main.monitoring_snapshot()["students"]}
+        self.assertFalse(monitor["s1"]["logged_in"])
+
     def test_student_login_is_recorded_in_an_already_open_attendance_session(self):
         course = self.course("s1,s2")
         sessions = storage.read_json("sessions.json")

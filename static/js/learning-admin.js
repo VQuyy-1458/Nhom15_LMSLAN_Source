@@ -4,6 +4,7 @@
   let data,selected=new URLSearchParams(location.search).get('course')||'',tab=new URLSearchParams(location.search).get('tab')||'overview',busy=false;
   let search='',statusFilter='',semesterFilter='';
   let weekOffset=0;
+  let activitiesPage=1;
   let attendanceId=new URLSearchParams(location.search).get('session')||'',attendancePage=1,attendanceQuery='';
   const date=v=>new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',dateStyle:'short',timeStyle:'short'}).format(new Date(v));
   const empty=message=>`<div class="student-empty"><i class="fa fa-folder-open-o"></i><p>${esc(message)}</p></div>`;
@@ -59,7 +60,7 @@
   }
   window.classificationUI?.onChange(()=>{render();drawAttendanceQr();});
   window.resourceWeeks.onChange(()=>{render();drawAttendanceQr();});
-  window.listUi.on('course',()=>{attendancePage=1;render();drawAttendanceQr();});
+  window.listUi.on('course',()=>{attendancePage=1;activitiesPage=1;render();drawAttendanceQr();});
   function render(){
     window.classificationUI?.setCatalog(data.classification);
     if($('admin-course-count'))$('admin-course-count').textContent=data.courses.length;
@@ -75,7 +76,7 @@
     if(!tabs.some(([key])=>key===parentTab))tab='overview';
     let body='';
     if(tab==='materials'||tab==='assignments')body=window.courseDesign.teaching(data,c,tab)+(tab==='assignments'?window.programmingAssignmentsUI.adminList(data,c):'');
-    if(tab==='calendar')body=window.courseDesign.calendar(data,c,weekOffset);
+    if(tab==='calendar')body=window.courseDesign.calendar(data,c,weekOffset,activitiesPage);
     if(tab==='exams')body=window.courseDesign.examView(data,c);
     if(tab==='students')body=window.courseDesign.students(data,c);
     if(tab==='grades')body=window.courseDesign.grades(data,c);
@@ -100,6 +101,7 @@
     const session=e.target.closest('[data-attendance-open]');if(session){openAttendance(session.dataset.attendanceOpen);return;}
     if(e.target.closest('[data-attendance-back]')){openAttendance('');return;}
     const attendancePager=e.target.closest('[data-attendance-page]');if(attendancePager){attendancePage=Number(attendancePager.dataset.attendancePage);render();drawAttendanceQr();return;}
+    const activitiesPager=e.target.closest('[data-activities-page]');if(activitiesPager){activitiesPage=Number(activitiesPager.dataset.activitiesPage);render();return;}
     const choice=e.target.closest('[data-attendance-choice]');if(choice){
       if(busy)return;
       const sessionId=attendanceId,studentId=choice.dataset.studentId,value=choice.dataset.attendanceChoice;

@@ -47,6 +47,11 @@
 .course-admin-shell .schedule-item-main small{font-size:10px;line-height:1.4;color:#8090a7}
 .course-admin-shell .schedule-history-row>.fa-angle-right{color:#9cacc1}
 .course-admin-shell .schedule-history-list{display:grid;gap:7px}
+.course-admin-shell .schedule-activities-list .resource-line>summary{min-height:40px;padding:8px 14px}
+.course-admin-shell .schedule-activities-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;color:#6e7f96;font-size:13px}
+.course-admin-shell .schedule-activities-pagination>div{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.course-admin-shell .schedule-activities-pagination .schedule-page-number{min-width:40px;padding-inline:10px}
+.course-admin-shell .schedule-activities-pagination .schedule-page-ellipsis{display:grid;min-width:16px;place-items:center}
 .course-admin-shell .schedule-history-row .bridge-pill{margin-left:auto}
 .course-admin-shell .schedule-history-empty{margin:0;padding:12px;color:#8293a9;font-size:12px}
 .course-admin-shell .attendance-session-detail{border:1px solid #e1e8f2;border-radius:14px;box-shadow:0 5px 20px #19315308}
