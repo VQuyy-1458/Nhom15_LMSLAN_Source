@@ -479,6 +479,10 @@ class Handler(BaseHTTPRequestHandler):
             if admin_request:
                 self._auth(req, "admin", touch=False)
             body, req = self._parse_body()
+            if req.path == '/api/admin/programming/preview':
+                self._auth(req, 'admin')
+                from . import code_preview
+                return self._json(code_preview.run(req.form))
             if req.path == "/api/admin/exam-preflight/verify":
                 sess = self._auth(req, "admin")
                 return self._json(exam_preflight.verify_reference(sess, req.form, client_ip(req)))

@@ -4,6 +4,40 @@ from app import code_templates as templates, code_runner
 
 
 class TemplateTests(unittest.TestCase):
+    def test_teacher_replace_filter_and_wrapper(self):
+        template="{{ STUDENT_ANSWER | replace({'public class ': 'class '}) }}\npublic class __tester__ { {{ TEST.testcode }} }"
+        problem={'answer_kind':'class','template':template,'tests':[{'test_code':'void test(){}'}]}
+        templates.validate(problem)
+        output,_=templates.build(b'public class Product {}','java',problem,problem['tests'][0])
+        self.assertIn(b'class Product {}',output)
+        self.assertNotIn(b'public class Product',output)
+        self.assertIn(b'public class __tester__',output)
+        with self.assertRaises(ValueError):
+            templates.render('{{ arbitrary_function() }}','','')
+
+    def test_preview_http_is_admin_only_and_does_not_save(self):
+        import json
+        from unittest.mock import patch
+        from tests.test_learning import LearningTests
+        from app import code_runner
+        from app.storage import read_json
+        fixture=LearningTests()
+        try:
+            fixture.setUp()
+            before=read_json('exam_catalog.json',[])
+            problem={'answer_kind':'method','language':'java','tests':[{'test_code':'System.out.println(add(1,2));','output':'3'}]}
+            fields={'problem':json.dumps(problem),'language':'java','source':'int add(int a,int b){return a+b;}'}
+            with patch.object(code_runner,'judge',return_value={'verdict':'AC','tests':[]}) as judge:
+                self.assertEqual(fixture.request('/api/admin/programming/preview',role='s1',form=fields)[0],403)
+                judge.assert_not_called()
+                status,result=fixture.request('/api/admin/programming/preview',form=fields)
+                self.assertEqual(status,200,result)
+                self.assertEqual(result['verdict'],'AC')
+            self.assertEqual(before,read_json('exam_catalog.json',[]))
+            fields['problem']=json.dumps({'tests':[]})
+            self.assertEqual(fixture.request('/api/admin/programming/preview',form=fields)[0],400)
+        finally:
+            fixture.doCleanups()
     def test_hidden_test_code_and_private_diagnostics_never_reach_student(self):
         from app.programming import public_submission
         grade={'score':0,'private_compile_log':'secret wrapper','tests':[{'sample':False,'test_code':'secret test','input':'secret','expected':'secret','actual':'secret','stderr':'secret','feedback_visibility':'hide'}]}
@@ -56,6 +90,13 @@ class TemplateTests(unittest.TestCase):
 
 @unittest.skipUnless(os.getenv('CSS_JUDGE_TESTS')=='1','Requires Docker')
 class TemplateDockerTests(unittest.TestCase):
+    def test_teacher_customised_product(self):
+        from app import code_preview
+        import json
+        template="{{ STUDENT_ANSWER | replace({'public class ': 'class '}) }}\npublic class __tester__ { public static void main(String[] args){ {{ TEST.testcode }} } }"
+        problem={'answer_kind':'class','template':template,'language':'java','tests':[{'input':'','output':'7','test_code':'System.out.println(new Product().price());'}]}
+        result=code_preview.run({'problem':json.dumps(problem),'source':'public class Product { public int price(){return 7;} }','language':'java'})
+        self.assertEqual(result['verdict'],'AC',result)
     def run_case(self,language,kind,source,code,expected,verdict='AC'):
         problem={'answer_kind':kind,'points':10,'checker':'tokens','time_limit_ms':2000,'memory_limit_mb':256,'tests':[{'input':'','output':expected,'sample':True,'test_code':code}]}
         result=code_runner.judge(source.encode(),language,problem)

@@ -453,6 +453,29 @@ async function codeRoster(base,fixture){
   assert.deepEqual(errors,[],'Roster UI JavaScript/CSP errors');
   console.log('PASS: code exam roster search/select/paste/deduplication, real account login, independent save and combined exam save, membership checks, mobile layout and opening with the selected roster');
 }
+async function codeCustomise(base,fixture){
+  const template="{{ STUDENT_ANSWER | replace({'public class ': 'class '}) }}\npublic class __tester__ { public static void main(String[] args) { {{ TEST.testcode }} } }";
+  const problem={title:'Product class',answer_kind:'class',language:'java',template,points:10,tests:[{input:'',output:'7',test_code:'System.out.println(new Product().price());',sample:true,feedback_visibility:'sample'}]};
+  const response=await fetch(base+'/api/admin/exam-configurations/save',{method:'POST',headers:{Cookie:'css_session='+fixture.admin,Origin:base,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({type:'programming',course_id:fixture.course,title:'Customise QA',languages:'java',problems:JSON.stringify([problem])})});
+  const saved=await response.json();assert.equal(response.status,200,JSON.stringify(saved));
+  await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+'/admin?section=exam&exam='+saved.id);
+  await evaluate("document.querySelector('[data-problem-select]').click()");
+  assert.equal(await evaluate("document.querySelector('[data-customise]').checked"),true);
+  assert.equal(await evaluate("document.querySelector('[data-problem-template]').value"),template);
+  await evaluate("document.querySelector('[data-problem-preview]').click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-trial-form]')"));
+  assert.equal(await evaluate("document.querySelector('dialog table th').textContent"),'Test');
+  await evaluate("document.querySelector('[data-trial-form] textarea').value='public class Product { public int price(){return 7;} }';document.querySelector('[data-trial-form]').requestSubmit()");
+  await waitFor(()=>evaluate("document.querySelector('[data-trial-status]').textContent.includes('AC')"),45000);
+  assert.equal(await evaluate("(()=>{const d=document.querySelector('dialog'),r=d.getBoundingClientRect(),last=d.querySelector('table th:last-child').getBoundingClientRect();return last.right<=r.right&&last.left>=r.left;})()"),true,'Both preview columns visible');
+  await panelScreenshot('dialog','customise-preview-ac.png');
+  await evaluate("document.querySelector('[data-trial-form] textarea').value='public class Product { public int price(){return 0;} }';document.querySelector('[data-trial-form]').requestSubmit()");
+  await waitFor(()=>evaluate("document.querySelector('[data-trial-status]').textContent.includes('WA')"),45000);
+  assert.deepEqual(errors,[],'Browser errors');
+  console.log('PASS Customise template, Test/Result preview, real Docker AC and WA');
+}
+
 (async()=>{
   fs.mkdirSync(out,{recursive:true});
   app=spawn(python,['-u',path.join(__dirname,'serve_student_qa.py')],{cwd:root,windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CSS_ROSTER_QA:['--code-roster','--code-entry','--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':'',CSS_ENROLLMENT_QA:process.argv.includes('--enrollment')?'1':'',CSS_TIMING_QA:['--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':''}});
@@ -467,6 +490,7 @@ async function codeRoster(base,fixture){
   await send('Page.enable');await send('Runtime.enable');await send('Log.enable');await send('Network.enable');
   await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
+  if(process.argv.includes('--code-customise')){await codeCustomise(base,fixture);return;}
   if(process.argv.includes('--sidebar')){await sidebarFit(base,fixture);assert.deepEqual(errors,[],'Sidebar browser JavaScript errors');return;}
   if(process.argv.includes('--code-roster')){await codeRoster(base,fixture);return;}
   if(process.argv.includes('--code-entry')){await codeEntry(base,fixture);return;}

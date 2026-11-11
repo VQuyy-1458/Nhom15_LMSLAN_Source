@@ -1,8 +1,29 @@
 """Build isolated test programs. Templates are data, never evaluated on the host."""
 import re
+import ast
 
 ANSWER = '{{ STUDENT_ANSWER }}'
 TEST = '{{ TEST.testcode }}'
+
+
+def render(template, answer, code):
+    def replace(match):
+        expression = match.group(1).strip()
+        if expression == 'TEST.testcode':
+            return code
+        if expression == 'STUDENT_ANSWER':
+            return answer
+        filtered = re.fullmatch(r'STUDENT_ANSWER\s*\|\s*replace\((.*)\)', expression, re.S)
+        if filtered:
+            try:
+                mapping = ast.literal_eval(filtered.group(1))
+            except (ValueError, SyntaxError, RecursionError) as exc:
+                raise ValueError('replace cần một bảng chuỗi thay thế hợp lệ.') from exc
+            if not isinstance(mapping, dict) or not mapping or any(not isinstance(k,str) or not k or not isinstance(v,str) for k,v in mapping.items()):
+                raise ValueError('replace chỉ nhận bảng chuỗi không rỗng.')
+            return re.sub('|'.join(re.escape(k) for k in mapping), lambda m: mapping[m.group()], answer)
+        raise ValueError('Template chỉ hỗ trợ STUDENT_ANSWER, TEST.testcode và bộ lọc replace.')
+    return re.sub(r'\{\{(.*?)\}\}', replace, template, flags=re.S)
 
 
 def validate(problem):
@@ -12,8 +33,13 @@ def validate(problem):
     template = problem.get('template', '')
     if not isinstance(template, str) or len(template) > 100000:
         raise ValueError('Template không hợp lệ hoặc quá dài.')
-    if template and (ANSWER not in template or TEST not in template):
+    expressions = [x.strip() for x in re.findall(r'\{\{(.*?)\}\}', template, re.S)]
+    if template and (not any(x == 'STUDENT_ANSWER' or x.startswith('STUDENT_ANSWER |') for x in expressions) or 'TEST.testcode' not in expressions):
         raise ValueError('Template cần chứa {{ STUDENT_ANSWER }} và {{ TEST.testcode }}.')
+    if template:
+        render(template, '', '')
+        if '{%' in template:
+            raise ValueError('Không hỗ trợ vòng lặp template; hệ thống chạy độc lập từng test.')
     for test in problem.get('tests', []):
         code = test.get('test_code', '')
         if not isinstance(code, str) or len(code) > 100000:
@@ -55,7 +81,7 @@ def build(source, language, problem, test):
         else:
             raise ValueError('Ngôn ngữ không hỗ trợ dạng bài này.')
     # Single substitution pass: markers inside submitted code are never interpreted.
-    rendered = re.sub(r'\{\{ STUDENT_ANSWER \}\}|\{\{ TEST\.testcode \}\}', lambda m: answer if m.group() == ANSWER else code, template)
+    rendered = render(template, answer, code)
     return rendered.encode('utf-8'), extras
 
 
