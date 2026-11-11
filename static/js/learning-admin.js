@@ -127,7 +127,7 @@
     const week=e.target.closest('[data-week]');if(week){weekOffset=week.dataset.week==='0'?0:weekOffset+Number(week.dataset.week);render();return;}
     const chosen=e.target.closest('[data-course]');if(chosen){choose(chosen.dataset.course);return;}
     if(e.target.closest('[data-course-back]')){choose('');return;}
-    const button=e.target.closest('[data-tab]');if(button){tab=button.dataset.tab;attendanceId='';attendancePage=1;attendanceQuery='';syncUrl();render();drawAttendanceQr();}
+    const button=e.target.closest('[data-tab]');if(button){tab=button.dataset.tab;attendanceId='';attendancePage=1;attendanceQuery='';syncUrl();render();drawAttendanceQr();window.scrollTo({top:0,behavior:'smooth'});}
   });
   content.addEventListener('submit',async e=>{
     e.preventDefault();if(busy)return;const form=e.target,f=new FormData(form);
