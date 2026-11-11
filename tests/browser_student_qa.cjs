@@ -453,6 +453,105 @@ async function codeRoster(base,fixture){
   assert.deepEqual(errors,[],'Roster UI JavaScript/CSP errors');
   console.log('PASS: code exam roster search/select/paste/deduplication, real account login, independent save and combined exam save, membership checks, mobile layout and opening with the selected roster');
 }
+
+async function courseLearningQA(base,fixture){
+  const headers={Cookie:'css_session='+fixture.admin,Origin:base,'Content-Type':'application/x-www-form-urlencoded'};
+  async function api(path,body){const r=await fetch(base+path,{method:'POST',headers,body:new URLSearchParams(body)});const result=await r.json();assert.equal(r.status,200,JSON.stringify(result));return result;}
+  const problem={title:'Sum practice',statement:'Read two integers and print their sum.',tests:[{input:'2 3',output:'5',sample:true},{input:'100 200',output:'300',sample:false}]};
+  const fields={course_id:fixture.course,languages:'python',response_type:'code',week_number:'2',problems:JSON.stringify([problem])};
+  const practice=await api('/api/admin/course-questions/save',{...fields,title:'Public sum practice',purpose:'practice'});
+  await api('/api/admin/course-questions/publish',{id:practice.id});
+  const privateQuestion=await api('/api/admin/course-questions/save',{...fields,title:'PRIVATE PRACTICAL QUESTION',purpose:'practical'});
+  const examQuestion=await api('/api/admin/course-questions/save',{...fields,title:'PRIVATE EXAM QUESTION',purpose:'exam'});
+  const studentBefore=await(await fetch(base+'/api/student/workspace',{headers:{Cookie:'css_session='+fixture.student}})).json();
+  assert(!JSON.stringify(studentBefore).includes('PRIVATE'));
+  assert(!JSON.stringify(studentBefore).includes('100 200'));
+  await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+`/admin/courses?course=${fixture.course}&tab=weekly`);
+  await evaluate("document.querySelector('[data-week-edit=new]').click()");
+  await evaluate("document.querySelector('[name=material_ids]').checked=true;document.querySelector('[name=assignment_ids]').checked=true");
+  await submit('[data-cl-form=week]',{week_number:'2',title:'TCP week QA',lesson_text:'Learn TCP streams',reading_text:'Read socket chapter'});
+  await waitFor(()=>evaluate("!document.querySelector('[data-cl-form=week]') && document.querySelector('.cl-plan').textContent.includes('TCP week QA')"));
+  assert.equal(await evaluate("document.querySelector('.cl-week-body').textContent.includes('Read socket chapter')"),true);
+  await navigate(base+`/admin/courses?course=${fixture.course}&tab=assignments`);
+  await evaluate("document.querySelector('[data-question-create]').click()");
+  await evaluate("{const s=document.querySelector('[data-question-kind]');s.value='file';s.dispatchEvent(new Event('change',{bubbles:true}));}");
+  await submit('[data-cl-form=question]',{title:'TCP report from browser',statement:'Explain TCP handshake',purpose:'practical',response_type:'file'});
+  await waitFor(()=>evaluate("!document.querySelector('[data-cl-form=question]') && document.querySelector('[data-bank-rows]').textContent.includes('TCP report from browser')"));
+  // The same editor and nv09 Customise fields must work inside course dialogs.
+  await evaluate(`document.querySelector('[data-question-edit="${privateQuestion.id}"]').click()`);
+  await evaluate("document.querySelector('[data-problem-select]').click()");
+  assert.equal(await evaluate("!!document.querySelector('[data-problem-kind]') && !!document.querySelector('[data-test-import]')"),true);
+  await evaluate("document.querySelector('[data-cl-form=question]').closest('dialog').close()");
+  await evaluate("document.querySelector('[data-practical-create]').click()");
+  await evaluate(`document.querySelector('[name=question_ids][value="${privateQuestion.id}"]').checked=true`);
+  await submit('[data-cl-form=practical]',{title:'Timed practical QA',duration_minutes:'45',week_number:'2'});
+  await waitFor(()=>evaluate("!document.querySelector('[data-cl-form=practical]') && document.querySelector('.cl-management').textContent.includes('Timed practical QA')"));
+  await evaluate("[...document.querySelectorAll('.cl-management .cl-resource-row')].find(r=>r.textContent.includes('Timed practical QA')).querySelector('[data-practical-control=start]').click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-practical-control=end]')"));
+  await screenshot('course-learning-admin.png');
+  console.log('PASS: weekly lecture/reading/resource save, code/file purpose bank, shared Customise editor and timed practical opening');
+  const exam=await api('/api/admin/exam-configurations/save',{type:'programming',course_id:fixture.course,title:'Bank import exam QA',languages:'python',problems:'[]',participant_ids:'QA001'});
+  await navigate(base+'/admin?section=exam&exam='+exam.id);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-course-import-questions]')"));
+  await evaluate("document.querySelector('[data-course-import-questions]').click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-import-confirm]')"));
+  await evaluate("document.querySelector('[data-import-confirm]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('#exam-config-form [data-program-problem]').length"),1);
+  await evaluate("document.querySelector('#exam-config-form').requestSubmit()");
+  await waitFor(()=>evaluate(`fetch('/api/admin/workspace').then(r=>r.json()).then(d=>d.exams.find(e=>e.id===${JSON.stringify(exam.id)})?.programming.problems.length===1)`));
+  await waitFor(()=>evaluate("document.readyState==='complete' && !!document.querySelector('#exam-config-form')"));
+  console.log('PASS: reusable private exam question import and persistent copied judge configuration');
+
+  await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+`/student/courses?course=${fixture.course}`);
+  await waitFor(()=>evaluate("!!document.querySelector('.cl-plan')"));
+  assert.equal(await evaluate("document.querySelector('.cl-plan').textContent.includes('TCP week QA')"),true);
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=materials`);
+  await evaluate("{const q=document.querySelector('[data-cl-filter=q]');q.value='missing text';q.dispatchEvent(new Event('input',{bubbles:true}));}");
+  assert.equal(await evaluate("document.querySelectorAll('.cl-lines [data-learning-detail]').length"),0);
+  await evaluate("{const q=document.querySelector('[data-cl-filter=q]');q.value='';q.dispatchEvent(new Event('input',{bubbles:true}));}");
+  await evaluate("document.querySelector('[data-learning-detail=material]').click()");
+  assert.equal(await evaluate("!!document.querySelector('.student-detail-dialog')"),true);
+  await evaluate("document.querySelector('[data-close-student-detail]').click()");
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=assignments`);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-exercise-open]')"));
+  await screenshot('course-learning-student.png');
+  await evaluate(`document.querySelector('[data-exercise-open="practice_${practice.id}"]').click()`);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-code-editor]')"));
+  assert.equal(await evaluate("document.querySelector('[data-code-workspace]').textContent.includes('Không giới hạn thời gian')"),true);
+  const source=['a,b=map(int,input().split())','print(a+b)'].join('\n');
+  await evaluate(`document.querySelector('[data-code-editor]').value=${JSON.stringify(source)}`);
+  await evaluate("document.querySelector('[data-exercise-run]').click()");
+  await waitFor(()=>evaluate("document.querySelector('[data-exercise-run-result]').textContent.includes('AC')"),45000);
+  const before=await evaluate("fetch('/api/student/workspace').then(r=>r.json()).then(d=>d.programming.submissions.length)");assert.equal(before,0);
+  await evaluate("document.querySelector('[data-code-submit]').requestSubmit()");
+  await waitFor(()=>evaluate("[...document.querySelectorAll('[data-code-result]')].some(r=>r.textContent.includes('AC'))"),45000);
+  const own=await evaluate("fetch('/api/student/workspace').then(r=>r.json())");
+  assert(own.programming.submissions.some(r=>r.result?.verdict==='AC'));
+  assert.equal(own.gradebooks.find(b=>b.course_id===fixture.course).items[0].homework,null);
+  assert(!JSON.stringify(own).includes('PRIVATE EXAM QUESTION'));
+  assert(!JSON.stringify(own).includes('100 200'));
+  await screenshot('course-learning-practice-ac.png');
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=assignments`);
+  await evaluate("[...document.querySelectorAll('[data-exercise-open]')].find(b=>b.textContent.includes('Timed practical QA')).click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-code-editor]')"));
+  await evaluate(`document.querySelector('[data-code-editor]').value=${JSON.stringify(source)}`);
+  await evaluate("document.querySelector('[data-code-submit]').requestSubmit()");
+  await waitFor(()=>evaluate("[...document.querySelectorAll('[data-code-result]')].some(r=>r.textContent.includes('AC'))"),45000);
+  const graded=await evaluate("fetch('/api/student/workspace').then(r=>r.json())");
+  assert.equal(graded.gradebooks.find(b=>b.course_id===fixture.course).items[0].homework,10);
+  assert.equal(graded.programming.submissions.length,2);
+
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=assignments`);await noOverflow();await screenshot('course-learning-mobile.png');
+  await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'},{name:'prefers-color-scheme',value:'dark'}]});
+  for(const size of [{width:375,height:812},{width:844,height:390},{width:768,height:1024}]){await send('Emulation.setDeviceMetricsOverride',{...size,deviceScaleFactor:1,mobile:true});await noOverflow();}
+
+  assert.deepEqual(errors,[],'JavaScript/CSP errors');
+  console.log('PASS: compact filters/details, enrolled-only public practice, real Docker sample/submit AC, private test secrecy, no practice marks and mobile layout');
+}
+
 async function codeCustomise(base,fixture){
   const template="{{ STUDENT_ANSWER | replace({'public class ': 'class '}) }}\npublic class __tester__ { public static void main(String[] args) { {{ TEST.testcode }} } }";
   const problem={title:'Product class',answer_kind:'class',language:'java',template,points:10,tests:[{input:'',output:'7',test_code:'System.out.println(new Product().price());',sample:true,feedback_visibility:'sample'}]};
@@ -490,6 +589,30 @@ async function codeCustomise(base,fixture){
   await send('Page.enable');await send('Runtime.enable');await send('Log.enable');await send('Network.enable');
   await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
+  if(process.argv.includes('--shared-bank')){
+    await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+    await send('Page.navigate',{url:base+'/admin/question-bank'});
+    await waitFor(()=>evaluate("document.querySelector('[data-bank-new]')"));
+    assert.match(await evaluate('document.body.innerText'),/Kho dùng chung/);
+    await evaluate("document.querySelector('[data-bank-new]').click()");
+    await waitFor(()=>evaluate("document.querySelector('[data-cl-form=question]')"));
+    await evaluate("document.querySelector('[data-cl-form=question] [data-problem-add]').click()");
+    assert.equal(await evaluate("document.querySelectorAll('dialog [data-program-problem]').length"),1);
+    await screenshot('shared-bank-editor.png');
+    await evaluate("document.querySelector('dialog').close();document.querySelector('[data-bank-tab=papers]').click();document.querySelector('[data-bank-new]').click()");
+    await waitFor(()=>evaluate("document.querySelector('[data-paper-form]')"));
+    await screenshot('shared-bank-paper.png');
+    await evaluate("document.querySelector('dialog').close()");
+    await navigate(base+`/admin/courses?course=${fixture.course}&tab=calendar`);
+    await evaluate("document.querySelector('[data-schedule-bulk]').click()");
+    await waitFor(()=>evaluate("document.querySelector('[data-bulk-form]')"));
+    await screenshot('shared-bank-schedule.png');
+    await evaluate("document.querySelector('dialog').close()");
+    await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+    await send('Page.navigate',{url:base+'/admin/question-bank'});await waitFor(()=>evaluate("document.querySelector('[data-bank-new]')"));await noOverflow();await screenshot('shared-bank-mobile.png');
+    assert.deepEqual(errors,[]);console.log('PASS: shared bank/editor, paper dialog, bulk schedule and mobile');return;
+  }
+  if(process.argv.includes('--course-learning')){await courseLearningQA(base,fixture);return;}
   if(process.argv.includes('--code-customise')){await codeCustomise(base,fixture);return;}
   if(process.argv.includes('--sidebar')){await sidebarFit(base,fixture);assert.deepEqual(errors,[],'Sidebar browser JavaScript errors');return;}
   if(process.argv.includes('--code-roster')){await codeRoster(base,fixture);return;}
@@ -535,21 +658,17 @@ async function codeCustomise(base,fixture){
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
   console.log('PASS: course filters across student pages, keyboard selection, Escape, popup bounds and HiDPI/mobile');
   await navigate(base+`/student/courses?course=${fixture.course}&tab=materials`);
-  const materialType='#filter-form select[name="status"]';
-  await waitFor(()=>evaluate("!!document.querySelector('#filter-form select[name=status].course-select-source')"));
-  assert.equal(await evaluate("document.querySelector('[data-student-filter-reset]').disabled"),true);
-  assert.equal(await evaluate("document.querySelectorAll('[data-list-direction]').length"),0);
-  const fileType=await evaluate("document.querySelector('#filter-form select[name=status]').options[1].value");
-  await chooseCourse(materialType,fileType);
-  await waitFor(()=>evaluate("document.querySelector('[data-student-filter-reset]').disabled===false"));
-  await evaluate("document.querySelector('[data-student-filter-reset]').click()");
-  await waitFor(()=>evaluate("document.querySelector('#filter-form select[name=status]').value==='' && document.querySelector('[data-student-filter-reset]').disabled"));
+  const materialType='[data-cl-filter=week]';
+  await waitFor(()=>evaluate("!!document.querySelector('[data-cl-filter=week]')"));
+  await chooseCourse(materialType,'0');
+  await waitFor(()=>evaluate("document.querySelector('[data-cl-filter=week]').value==='0'"));
+  await chooseCourse(materialType,'');
   await noOverflow();await screenshot('filters-student-materials-desktop.png');
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2,mobile:true});
   await noOverflow();await courseMenu(materialType);await screenshot('filters-mobile.png');
   await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
-  console.log('PASS: material type filters, live reset state, compact controls and mobile toolbar');
+  console.log('PASS: compact material lists, live week filters and mobile toolbar');
   console.log('PASS: all student screens render without page errors');
   await navigate(base+'/student/notifications');
   assert.equal(await evaluate("document.querySelectorAll('.notifications-table tbody tr').length"),10);
@@ -589,6 +708,7 @@ async function codeCustomise(base,fixture){
   console.log('PASS: notification dropdown, pagination, search, detail, read persistence and filters');
   await navigate(base+`/student/courses?course=${fixture.course}&tab=materials`);
   assert.match(await evaluate("document.querySelector('#workspace-content').textContent"),/Hướng dẫn thực hành/);
+  await evaluate("document.querySelector('[data-learning-detail=material]').click()");
   await evaluate("document.querySelector('[data-preview-url]').click()");
   await waitFor(()=>evaluate("document.querySelector('.student-preview-dialog pre')?.textContent==='Programming exercises'"));
   await evaluate("document.querySelector('.student-preview-dialog button').click()");
@@ -606,7 +726,7 @@ async function codeCustomise(base,fixture){
   assert.equal(await evaluate("document.querySelectorAll('[data-learning-row=attendance]').length"),1);
   console.log('PASS: real browser camera frames decode and automatically check in without session selection; history filters immediately');
   await navigate(base+`/student/courses?course=${fixture.course}`);
-  assert.equal(await evaluate("new URLSearchParams(location.search).get('tab')"),'materials');
+  assert.equal(await evaluate("new URLSearchParams(location.search).get('tab')"),'weekly');
   const otherCourse=await evaluate(`[...document.querySelector('[data-student-course-switch]').options].find(o=>o.value!==${JSON.stringify(fixture.course)}).value`);
   await chooseCourse('[data-student-course-switch]',otherCourse);
   await waitFor(()=>evaluate(`new URLSearchParams(location.search).get('course')===${JSON.stringify(otherCourse)}`));
@@ -614,11 +734,11 @@ async function codeCustomise(base,fixture){
   await waitFor(()=>evaluate(`new URLSearchParams(location.search).get('course')===${JSON.stringify(fixture.course)}`));
   assert.equal(await evaluate("document.querySelector('.student-course-tabs').textContent.includes('Tổng quan')"),false);
   assert.equal(await evaluate("document.querySelector('.student-course-tabs').textContent.includes('Điểm danh')"),false);
-  assert.equal(await evaluate("document.querySelector('#filter-form button[type=submit]')===null"),true);
-  await evaluate("(()=>{const input=document.querySelector('#filter-form [name=q]');input.value='không có nội dung này';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
-  await waitFor(()=>evaluate("document.querySelectorAll('[data-learning-row=material]').length===0"));
-  await evaluate("(()=>{const input=document.querySelector('#filter-form [name=q]');input.value='Hướng dẫn';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
-  await waitFor(()=>evaluate("document.querySelectorAll('[data-learning-row=material]').length===1"));
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=materials`);
+  await evaluate("(()=>{const input=document.querySelector('[data-cl-filter=q]');input.value='không có nội dung này';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await waitFor(()=>evaluate("document.querySelectorAll('[data-learning-detail=material]').length===0"));
+  await evaluate("(()=>{const input=document.querySelector('[data-cl-filter=q]');input.value='Hướng dẫn';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
+  await waitFor(()=>evaluate("document.querySelectorAll('[data-learning-detail=material]').length===1"));
   await screenshot('student-course-materials-compact.png');
   await evaluate("document.querySelector('[data-learning-detail=material]').click()");
   assert.equal(await evaluate("document.querySelector('.student-detail-dialog').textContent.includes('Các bước chuẩn bị bài tập.')"),true);

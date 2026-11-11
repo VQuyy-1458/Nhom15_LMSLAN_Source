@@ -1,0 +1,1 @@
+class Clock {int t;Clock(int h,int m){t=Math.floorMod(h*60+m,1440);}void add(int m){t=Math.floorMod(t+m,1440);}public String toString(){return String.format(Locale.ROOT,"%02d:%02d",t/60,t%60);}public boolean equals(Object o){return o instanceof Clock&&t==((Clock)o).t;}public int hashCode(){return t;}}

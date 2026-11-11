@@ -24,10 +24,20 @@ def rows():
     return read_json("programming_submissions.json", [])
 
 
+def all_exams():
+    from .exercise_bank import code_rows
+    return exam_catalog.listing() + code_rows()
+
+
 def exam(exam_id):
-    row = next((r for r in exam_catalog.listing() if r["id"] == exam_id and r["type"] == "programming"), None)
+    row = next((r for r in all_exams() if r["id"] == exam_id and r["type"] == "programming"), None)
     if not row: raise learning.LearningError(404, "Không tìm thấy kỳ thi lập trình.")
     return row
+
+
+def assigned_indices(row,sid):
+    from .question_papers import indices
+    return indices(row,sid)
 
 
 def eligible(row, sid):
@@ -55,21 +65,24 @@ def snapshot(sid):
     attempts = read_json("programming_attempts.json", {})
     result = []
     now = datetime.now(timezone.utc)
-    for row in exam_catalog.listing():
+    for row in all_exams():
         if row["type"] != "programming" or (row["state"] == "idle" and not row.get("auto_start_ready")) or not eligible(row, sid): continue
         attempt = attempts.get(row["id"] + ":" + sid)
         from .deadlines import exam_end
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
+        course = next((c for c in learning.load()['courses'] if c['id'] == row.get('course_id')), None)
+        course_closed = bool(course and course['status'] == 'completed')
         finalized = bool(attempt and attempt.get("status") == "submitted")
-        allowed = bool(attempt and not finalized and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now)
+        allowed = bool(not course_closed and attempt and not finalized and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now)
         item = {k: row.get(k) for k in ("id", "title", "description", "course_id", "duration_minutes", "state", "started_at", "scheduled_at")}
         item["assessment_type"] = row.get("assessment_type", "test")
+        item.update(activity_type=row.get('activity_type','exam'), practice=row.get('practice',False), week_number=row.get('week_number',0))
         if row.get("waiting"):
             item["state"] = "scheduled"
             item["started_at"] = row.get("started_at") or row.get("scheduled_at")
-        item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
+        item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": not course_closed and row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
         if attempt:
-            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "answer_kind": p.get("answer_kind", "program"), "language": p.get("language", ""), "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"])]
+            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "answer_kind": p.get("answer_kind", "program"), "language": p.get("language", ""), "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"]) if i in assigned_indices(row,sid)]
         result.append(item)
     return {"exams": result, "submissions": [public_submission(r) for r in rows() if r["student_id"] == sid]}
 
@@ -106,6 +119,9 @@ def control(session, form, ip, runner_ready=None, now=None):
             if row["state"] not in {"started", "scheduled"}: raise learning.LearningError(409, "Kỳ thi chưa mở.")
             row.update({"state": "ended", "ended_at": utc_now()})
         else: raise learning.LearningError(400, "Thao tác không hợp lệ.")
+        if action=='start':
+            from .question_papers import distribute
+            distribute(row)
         catalog = read_json("exam_catalog.json", [])
         row.pop("active", None)
         catalog = [r for r in catalog if r["id"] != row["id"]] + [row]
@@ -118,11 +134,13 @@ def student_submissions(sid, exam_id, problem_index):
     row = exam(exam_id)
     if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
     index = exam_catalog.integer(problem_index, "Chỉ số bài toán", 0, len(row["programming"]["problems"])-1)
+    if index not in assigned_indices(row,sid):raise learning.LearningError(403,'Câu hỏi không thuộc đề của bạn.')
     attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
     from .deadlines import exam_end
     end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
     now = datetime.now(timezone.utc)
-    allowed = bool(attempt and attempt.get("status") != "submitted" and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now and (not end or end > now))
+    course = next((c for c in learning.load()['courses'] if c['id'] == row.get('course_id')), None)
+    allowed = bool((not course or course['status'] != 'completed') and attempt and attempt.get("status") != "submitted" and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now and (not end or end > now))
     return {"submissions": [public_submission(r) for r in rows() if r["student_id"] == sid and r["exam_id"] == exam_id and r["problem_index"] == index],
             "can_submit": allowed, "server_time": utc_now(), "ends_at": attempt.get("ends_at") if attempt else None}
 
@@ -132,6 +150,8 @@ def start(session, form, ip):
     with learning.LOCK, atomic_transaction():
         row = exam(form.get("exam_id"))
         if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
+        course = next((c for c in learning.load()['courses'] if c['id'] == row.get('course_id')), None)
+        if course and course['status'] == 'completed': raise learning.LearningError(409, 'Khóa học đã tổng kết.')
         if row.get("waiting"): raise learning.LearningError(409, "Chưa đến giờ bắt đầu dự kiến của kỳ thi.")
         if row["state"] != "started": raise learning.LearningError(409, "Giảng viên chưa mở hoặc đã kết thúc kỳ thi.")
         from .deadlines import exam_end
@@ -152,6 +172,8 @@ def finish(session, form, ip):
     sid = session["user_id"]
     with learning.LOCK, atomic_transaction():
         row = exam(form.get("exam_id"))
+        if row.get('practice'):
+            raise learning.LearningError(409, 'Bài tự luyện không có bước nộp kết thúc phiên.')
         if not eligible(row, sid):
             raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
         attempts = read_json("programming_attempts.json", {})
@@ -187,6 +209,7 @@ def submit(session, form, file, ip):
         row = exam(form.get("exam_id"))
         if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
         index = exam_catalog.integer(form.get("problem_index"), "Chỉ số bài toán", 0, len(row["programming"]["problems"])-1)
+        if index not in assigned_indices(row,sid):raise learning.LearningError(403,'Câu hỏi không thuộc đề của bạn.')
         records = rows()
         if request_id:
             previous = next((r for r in records if r["student_id"] == sid and r.get("request_id") == request_id), None)
@@ -195,6 +218,8 @@ def submit(session, form, file, ip):
                     raise learning.LearningError(409, "Yêu cầu gửi lại có nội dung khác. Hãy tạo lần nộp mới.")
                 return {"ok":True, "submission":public_submission(previous)}
         attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
+        course = next((c for c in learning.load()['courses'] if c['id'] == row.get('course_id')), None)
+        if course and course['status'] == 'completed': raise learning.LearningError(409, 'Khóa học đã tổng kết.')
         if row["state"] != "started" or row.get("waiting") or not attempt or attempt.get("status") == "submitted" or learning.date_value(attempt["ends_at"]) <= datetime.now(timezone.utc): raise learning.LearningError(409, "Chưa bắt đầu, đã nộp bài hoặc đã hết thời gian nộp bài.")
         from .deadlines import exam_end
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
@@ -209,6 +234,10 @@ def submit(session, form, file, ip):
             raise learning.LearningError(400, 'Ngôn ngữ không khớp mã kiểm thử của bài toán.')
         guards.enter_context(submission_rate.guard(sid))
         record = {"id": uuid.uuid4().hex, "exam_id": row["id"], "exam_title": row["title"], "course_id": row["course_id"], "student_id": sid, "problem_index": index, "problem_title": problem["title"], "max_score": problem["points"], "language": language, "original_filename": Path(file["filename"]).name[:150], "submitted_at": utc_now(), "state": "queued", "result": None, "size_bytes": len(content), "sha256": hashlib.sha256(content).hexdigest(), "ip": ip, "grading_history": []}
+        record['paper_id']=row.get('student_papers',{}).get(sid) or next(iter(row.get('paper_ids',[])),None)
+        record['activity_type'] = row.get('activity_type', 'exam')
+        if row.get('practice'): record['practice_question_id'] = row['id']
+        elif row.get('activity_type') == 'practical': record['assignment_id'] = row['id']
         record["full_name"] = read_json("students.json").get(sid,{}).get("full_name",sid)
         record["request_id"] = request_id or None
         record["judge_image"] = code_runner.image_identity()

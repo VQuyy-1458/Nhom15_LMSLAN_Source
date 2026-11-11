@@ -20,7 +20,7 @@ def run(form):
         for key, low, high in [('points',1,1000),('time_limit_ms',100,30000),('memory_limit_mb',16,2048)]:
             problem[key] = int(problem.get(key, {'points':100,'time_limit_ms':1000,'memory_limit_mb':256}[key]))
             if not low <= problem[key] <= high: raise ValueError('Giới hạn chấm không hợp lệ.')
-        if problem.get('checker','tokens') not in {'tokens','exact'}: raise ValueError('Cách so khớp không hợp lệ.')
+        if problem.get('checker','tokens') not in {'tokens','exact','json'}: raise ValueError('Cách so khớp không hợp lệ.')
         problem.setdefault('checker','tokens')
         tests = problem.get('tests')
         if not isinstance(tests,list) or not 1 <= len(tests) <= 100: raise ValueError('Cần 1–100 test.')

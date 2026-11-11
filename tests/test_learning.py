@@ -74,6 +74,7 @@ class LearningTests(unittest.TestCase):
         return code, result
 
     def create(self, action, **fields):
+        if action == "attendance":fields.setdefault("mode","qr")
         if action == "attendance" and "event_id" not in fields:
             fields["event_id"] = self.create("event", course_id=fields["course_id"], title=fields.get("title", "Lesson"), kind="lesson", starts_at=storage.utc_now())
         code, result = self.request("/api/learning/" + action, form=fields)
@@ -810,7 +811,7 @@ class LearningTests(unittest.TestCase):
         repeated=self.request("/api/learning/check-in", "s1", {"session_id": aid, "code": admin["code"]})
         self.assertEqual(repeated[0],200)
         self.assertTrue(repeated[1]["already_checked_in"])
-        self.assertEqual(self.request("/api/learning/attendance-record", form={"session_id": aid, "student_id": "s1", "status": "late", "reason": "reason"})[0], 409)
+        self.assertEqual(self.request("/api/learning/attendance-record", form={"session_id": aid, "student_id": "s1", "status": "late", "reason": "reason"})[0], 200)
 
     def test_qr_checkin_reports_session_and_preserves_teacher_override(self):
         c=self.course()

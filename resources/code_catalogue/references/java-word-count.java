@@ -1,0 +1,1 @@
+class WordCount {Map<String,Integer> phrase(String s){Map<String,Integer> m=new TreeMap<>();java.util.regex.Matcher r=java.util.regex.Pattern.compile("[a-z0-9]+(?:'[a-z0-9]+)*").matcher(s.toLowerCase(Locale.ROOT));while(r.find())m.merge(r.group(),1,Integer::sum);return m;}}

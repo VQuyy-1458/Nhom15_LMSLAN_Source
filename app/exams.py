@@ -67,6 +67,9 @@ def distribute_exams(mode: str, config: dict | None = None) -> dict:
         raise ValueError("Chế độ phân phối không hợp lệ.")
     assignments = {}
     settings = read_json("settings.json")
+    paper_files=settings.get('exam_paper_files',[])
+    files=[f for f in files if f in paper_files] if paper_files else [f for f in files if not f.startswith('paper_')]
+    if not files:raise ValueError('Chưa có file đề phù hợp với kỳ thi đang chọn.')
     course_id = settings.get("exam_course_id")
     members = None
     if course_id:
@@ -80,7 +83,11 @@ def distribute_exams(mode: str, config: dict | None = None) -> dict:
         eligible = [(sid, data) for sid, data in eligible if sid in members]
     if not eligible:
         raise ValueError("Không có tài khoản sinh viên đang hoạt động để phát đề.")
-    if mode == "selected":
+    from .question_papers import file_distribution
+    paper_assignments=file_distribution(settings,[sid for sid,_ in eligible])
+    if paper_assignments is not None:
+        assignments=paper_assignments
+    elif mode == "selected":
         selected_files = config.get("exam_files") or []
         if isinstance(selected_files, str):
             selected_files = [selected_files]

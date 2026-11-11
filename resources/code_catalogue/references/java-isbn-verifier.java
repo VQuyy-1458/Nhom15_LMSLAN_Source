@@ -1,0 +1,1 @@
+class IsbnVerifier {boolean isValid(String s){s=s.replace("-","");if(!s.matches("[0-9]{9}[0-9X]"))return false;int sum=0;for(int i=0;i<10;i++)sum+=(10-i)*(s.charAt(i)=='X'?10:s.charAt(i)-'0');return sum%11==0;}}

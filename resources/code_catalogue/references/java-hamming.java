@@ -1,0 +1,1 @@
+class Hamming {String a,b;Hamming(String a,String b){if(a.length()!=b.length())throw new IllegalArgumentException();this.a=a;this.b=b;}int getHammingDistance(){int n=0;for(int i=0;i<a.length();i++)if(a.charAt(i)!=b.charAt(i))n++;return n;}}

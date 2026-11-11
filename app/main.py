@@ -333,6 +333,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200,target.read_bytes(),"application/octet-stream",{"Content-Disposition":f"attachment; filename*=UTF-8''{filename}"})
             if path=="/api/student/workspace":
                 sess=self._auth(req,"student"); sid=sess["user_id"]; student=self._get_user_record(sess)
+                from . import lan_attendance
+                lan_attendance.sync_student(sess,client_ip(req))
                 result=learning.snapshot(sess)
                 result.update({"student":{"student_id":sid,"full_name":student.get("full_name",sid),"must_change_password":student.get("must_change_password",False)},"exam":student_exam_snapshot(sid),"exam_submissions":read_json("submissions.json").get(sid,[]),"notifications":[n for n in read_json("notifications.json",[]) if n.get("student_id") in (None,sid)],"server_time":utc_now()})
                 result["notification_feed"]=student_notifications.feed(sid,result)
@@ -379,6 +381,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/admin/exam":"exam",
                 "/admin/settings":"exam",
                 "/admin/distribution":"exam",
+                "/admin/question-bank":"bank",
                 "/admin/accounts":"accounts",
                 "/admin/submissions":"submissions",
                 "/admin/server":"server",
@@ -389,7 +392,7 @@ class Handler(BaseHTTPRequestHandler):
                 section=admin_sections.get(route_path, req.query.get("section", ["dashboard"])[0])
                 if section in {"settings", "distribution"}:
                     section="exam"
-                allowed={"dashboard","courses","monitor","notifications","exam","accounts","submissions","server","admins"}
+                allowed={"bank","dashboard","courses","monitor","notifications","exam","accounts","submissions","server","admins"}
                 if section not in allowed: section="dashboard"
                 selected_exam = next((r for r in exam_catalog.listing() if r["id"] == req.query.get("exam", [""])[0]), None) if section == "exam" else None
                 return self._html(self._render("admin.html",session=sess,section=section,exam_engine_detail=bool(selected_exam and selected_exam["type"] == "file" and selected_exam["active"]),exam_files=list_exam_files(),settings={**read_json("settings.json"), **({"exam_state":"scheduled"} if exam_timing.waiting(read_json("settings.json").get("exam_state"),read_json("settings.json").get("exam_started_at")) else {})},monitoring=monitoring_snapshot(),course_count=len(learning.load()["courses"])))
@@ -617,6 +620,24 @@ class Handler(BaseHTTPRequestHandler):
                 write_json("settings.json", settings)
                 audit("admin.exam_participants_updated", sess["user_id"], client_ip(req), {"count": len(ids), "created": len(created)})
                 return self._json({"ok": True, "student_ids": ids, "created": created, "count": len(ids)})
+            if path == '/api/student/programming/run':
+                from . import exercise_bank
+                return self._json(exercise_bank.run_sample(self._auth(req, 'student'), f, client_ip(req)))
+            if path.startswith('/api/admin/question-papers/'):
+                from . import question_papers
+                return self._json(question_papers.manage(self._auth(req,'admin'),path.rsplit('/',1)[-1],f,client_ip(req)))
+            if path == '/api/admin/schedule/bulk':
+                from . import course_schedule
+                return self._json(course_schedule.bulk(self._auth(req,'admin'),f,client_ip(req)))
+            if path == '/api/admin/course-content/save':
+                from . import course_content
+                return self._json(course_content.save(self._auth(req, 'admin'), f, client_ip(req)))
+            if path.startswith('/api/admin/course-questions/'):
+                from . import exercise_bank
+                return self._json(exercise_bank.manage_question(self._auth(req, 'admin'), path.rsplit('/',1)[-1], f, client_ip(req)))
+            if path.startswith('/api/admin/course-practicals/'):
+                from . import exercise_bank
+                return self._json(exercise_bank.manage_session(self._auth(req, 'admin'), path.rsplit('/',1)[-1], f, client_ip(req)))
             if path=="/api/admin/exam-context":
                 sess=self._auth(req,"admin")
                 return self._json(admin_workspace.set_exam_context(sess,f,client_ip(req)))

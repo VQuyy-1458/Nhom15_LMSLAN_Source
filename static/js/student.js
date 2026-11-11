@@ -4,7 +4,7 @@
   const activityColors=window.classroomActivities;
   const $ = id => document.getElementById(id), esc = window.cssEscape;
   const content = $('workspace-content');
-  const titles = {dashboard:['Dashboard','Khóa học, bài tập và lịch học của bạn ở cùng một nơi.'],courses:['Khóa học của tôi','Tài liệu, hoạt động và kết quả trong từng khóa học.'],calendar:['Lịch học','Theo dõi buổi học, thông báo và hạn nộp bài.'],attendance:['Điểm danh','Quét QR để tự ghi nhận có mặt và xem lịch sử các buổi học.'],assignments:['Bài tập','Xem yêu cầu, nộp bài và nhận phản hồi từ giảng viên.'],exams:['Kỳ thi','Theo dõi phân phối đề, thời gian làm bài và nộp bài thi.'],history:['Lịch sử nộp bài','Kiểm tra các lần nộp và tải lại bài đã gửi.'],grades:['Kết quả học tập','Điểm và nhận xét của riêng bạn, cập nhật từ giảng viên.'],notifications:['Thông báo','Thông tin mới từ giảng viên và các khóa học của bạn.'],profile:['Tài khoản của tôi','Thông tin sinh viên và bảo mật tài khoản.']};
+  const titles = {dashboard:['Dashboard','Khóa học, bài tập và lịch học của bạn ở cùng một nơi.'],courses:['Khóa học của tôi','Tài liệu, hoạt động và kết quả trong từng khóa học.'],calendar:['Lịch học','Theo dõi buổi học, thông báo và hạn nộp bài.'],attendance:['Điểm danh','Theo dõi điểm danh tự động qua LAN và lịch sử các buổi học.'],assignments:['Bài tập','Xem yêu cầu, nộp bài và nhận phản hồi từ giảng viên.'],exams:['Kỳ thi','Theo dõi phân phối đề, thời gian làm bài và nộp bài thi.'],history:['Lịch sử nộp bài','Kiểm tra các lần nộp và tải lại bài đã gửi.'],grades:['Kết quả học tập','Điểm và nhận xét của riêng bạn, cập nhật từ giảng viên.'],notifications:['Thông báo','Thông tin mới từ giảng viên và các khóa học của bạn.'],profile:['Tài khoản của tôi','Thông tin sinh viên và bảo mật tài khoản.']};
   let data, pending, loading=false, page=1, selectedDay=dayKey(new Date()), month=selectedDay.slice(0,7), calendarScope='', filters={q:'',status:'',course:'',session:'',type:'',category:''};
   let examReceived=performance.now(), examSeconds=0, lastSignature='', pollBusy=false, submitting=false;
   const tabId=Math.random().toString(36).slice(2), tabKey='css-exam-tabs';
@@ -59,7 +59,7 @@
     const rows=window.listUi.view('student:courses',data.courses.filter(c=>(`${c.name} ${c.code} ${c.semester}`).toLocaleLowerCase('vi').includes(filters.q.toLocaleLowerCase('vi'))&&(!filters.status||c.status===filters.status)),'courses',{search:false,statusFilter:false});
     return `${window.studentWorkspace.toolbar(data,'',filters,{statusLabel:'Trạng thái',statuses:[['active','Đang học'],['completed','Đã tổng kết']]})}<div class="student-course-grid">${pagination(rows,courseCard)}</div>${!rows.length?`<section class="panel">${empty('Chưa có khóa học phù hợp','Khóa học được hiển thị khi giảng viên tạo lớp và thêm tài khoản của bạn.','book')}</section>`:''}`;
   }
-  function materials(){return window.studentWorkspace.materials(data,{scope:course(),filters,page});}
+  function materials(){return window.courseLearning.resources(data,course(),'materials',false);}
   function calendarView(){return `${toolbar()}<div class="student-grid">${calendar()}<section class="panel"><h2>Lịch học & hạn nộp sắp tới</h2>${entries().filter(e=>Date.parse(e.at)>=Date.now()).slice(0,10).map(eventRow).join('')||empty('Chưa có lịch sắp tới','Bạn sẽ thấy các buổi học và hạn nộp bài được công bố.','calendar')}</section></div>`;}
   function submissionRows(rows){return rows.map(r=>`<tr><td>${esc(r.original_filename)}<small>Lần ${r.attempt||1} · ${size(r.size_bytes)}</small></td><td>${date(r.created_at)}</td><td>${r.score===null||r.score===undefined?status('Chờ chấm','amber'):`<strong>${r.score}/10</strong>`}<small>${esc(r.feedback||'')}</small></td><td><a href="${download(r)}">Tải bài nộp</a></td></tr>`);}
   function assignmentCardSmart(a){
@@ -67,13 +67,14 @@
     const category=a.category||'GENERAL',code=a.short_code||category+'_TASK';
     return `<section class="panel assignment-detail-card"><div class="panel-heading"><div><span class="assignment-badge-line"><b class="assignment-code">${esc(code)}</b><b class="assignment-category">${esc(category)}</b></span><h2>${esc(a.title)}</h2><p class="muted">${esc(courseName(a.course_id))}</p></div>${assignmentStatus(a)}</div>${a.grading_applicable===false?'<p class="alert alert-info">Bài tập đã hết hạn trước lúc bạn tham gia khóa học, không tính vào điểm tự động.</p>':''}${a.original_filename?`<div class="student-actions"><button type="button" class="btn btn-secondary" data-preview-url="/api/learning/preview/assignments/${a.id}">Xem đề bài</button><a class="btn btn-ghost" data-has-preview="true" href="/api/learning/files/assignments/${a.id}">Tải đề: ${esc(a.original_filename)}</a></div>`:''}<p class="student-description">${esc(a.description||'Giảng viên chưa bổ sung yêu cầu.')}</p><div class="student-assignment-meta"><span><i class="fa fa-calendar-o"></i> Hạn ${date(a.due_at)}</span><span><i class="fa fa-repeat"></i> Đã nộp ${records.length}/${a.max_attempts} lần</span><span><i class="fa fa-file-text-o"></i> Bài nộp file</span></div>${blocked?`<div class="alert alert-info">${closed?'Khóa học đã tổng kết.':over?'Đã hết hạn nộp bài.':'Bạn đã sử dụng hết số lần nộp.'} Lịch sử bài nộp vẫn được lưu bên dưới.</div>`:`<div class="student-upload"><form class="stack-form" data-action="assignment-upload" data-deadline-form data-expires-at="${esc(a.due_at)}"><input type="hidden" name="assignment_id" value="${a.id}"><label for="file-${a.id}">File bài làm</label><input id="file-${a.id}" type="file" name="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.zip,.png,.jpg,.jpeg" required><p class="muted">Tối đa 20 MiB. Nộp tài liệu, hình ảnh hoặc ZIP đúng theo yêu cầu của giảng viên. Bài lập trình có chấm test được làm trong Bộ chấm code online.</p><div><button class="btn btn-primary"><i class="fa fa-cloud-upload"></i> ${records.length?'Nộp lại file':'Nộp file bài làm'}</button></div></form></div>`}<details ${new URLSearchParams(location.search).get('assignment')===a.id?'open':''}><summary>Lịch sử nộp bài (${records.length})</summary>${window.listUi.controls("student:assignment-attempts:"+a.id,"submissions")}${records.length?table(['Bài nộp','Thời gian','Điểm / Nhận xét','Tải về'],submissionRows(window.listUi.view('student:assignment-attempts:'+a.id,records,'submissions'))):empty('Chưa có lần nộp nào','Chọn file bài làm và nhấn Nộp file bài làm.','cloud-upload')}</details></section>`;
   }
-  function assignmentsView(){const selected=course();if(!selected)return window.studentWorkspace.assignmentCoursePicker(data,{filters,page});const c=data.courses.find(row=>row.id===selected);return c?window.studentWorkspace.assignmentCourse(data,c,{filters,page}):`<section class="panel">${empty('Không tìm thấy khóa học','Khóa học không tồn tại hoặc bạn chưa được cấp quyền.','lock')}</section>`;}
+  function assignmentsView(){const selected=course();if(!selected)return window.courseLearning.assignmentPicker(data);const c=data.courses.find(row=>row.id===selected);return c?window.courseLearning.assignmentCourse(data,c):`<section class="panel">${empty('Không tìm thấy khóa học','Khóa học không tồn tại hoặc bạn chưa được cấp quyền.','lock')}</section>`;}
   function attendanceView(){return window.studentWorkspace.attendance(data,{scope:course(),filters,page});}
   function examsView(){
     const id=new URLSearchParams(location.search).get('exam');
     if(!id)return window.studentWorkspace.exams(data,{scope:course(),filters,page});
-    const back=course()?`/student/courses?course=${course()}&tab=exams`:'/student/exams';
-    const heading=`<div><a class="btn btn-ghost" href="${back}"><i class="fa fa-arrow-left"></i> Danh sách kỳ thi</a></div>`;
+    const selectedExam=data.programming.exams.find(e=>e.id===id),exerciseMode=selectedExam?.activity_type&&selectedExam.activity_type!=='exam';
+    const back=exerciseMode?`/student/assignments?course=${selectedExam.course_id}`:course()?`/student/courses?course=${course()}&tab=exams`:'/student/exams';
+    const heading=`<div><a class="btn btn-ghost" href="${back}"><i class="fa fa-arrow-left"></i> ${exerciseMode?'Bài tập của khóa học':'Danh sách kỳ thi'}</a></div>`;
     if(id==='file'&&data.exam.assigned&&(!course()||data.exam.course_id===course()))return heading+fileExamView();
     const exam=data.programming.exams.find(e=>e.id===id&&(!course()||e.course_id===course()));
     return (exam&&new URLSearchParams(location.search).has('problem')?'':heading)+(exam?window.programmingUi.student({...data,programming:{...data.programming,exams:[exam]}},course()):`<section class="panel">${empty('Không tìm thấy kỳ thi','Bạn chưa được cấp quyền hoặc kỳ thi chưa được mở.','lock')}</section>`);
@@ -136,7 +137,7 @@
     const url=new URL(location.href);if(url.pathname!=='/student/courses'||!url.searchParams.get('course'))return;
     const tab=url.searchParams.get('tab');
     if(tab==='attendance'){url.pathname='/student/attendance';url.searchParams.delete('tab');}
-    else if(!['materials','assignments','calendar','exams','grades'].includes(tab))url.searchParams.set('tab','materials');
+    else if(!['weekly','announcements','materials','assignments','calendar','exams','grades'].includes(tab))url.searchParams.set('tab','weekly');
     history.replaceState(null,'',url.pathname+url.search);
   }
   window.listUi.on('student',()=>{page=1;render();refreshDetail();});
@@ -149,9 +150,12 @@
       const url=new URL(location.href);url.searchParams.delete('course');history.replaceState(null,'',url.pathname+url.search);page=1;
     }
     const v=view(), c=data.courses.find(c=>c.id===course());
+    const exercise=data.programming?.exams.find(e=>e.id===new URLSearchParams(location.search).get('exam'));
+    window.courseLearning.setContext(data,c?.id||exercise?.course_id||'',false);
     document.querySelector('.page-title').classList.toggle('hidden',(v==='courses'||v==='assignments')&&!!c);
     $('page-heading').textContent=v==='courses'&&c?c.name:titles[v][0];$('page-description').textContent=v==='courses'&&c?`${c.code} · ${c.semester}`:titles[v][1];$('header-location').textContent=titles[v][0];
     document.title=`${titles[v][0]} · LAN-LMS`;
+    if(v==='exams'&&exercise?.activity_type&&exercise.activity_type!=='exam'){const title=exercise.practice?'Luyện tập code':'Thực hành code';$('page-heading').textContent=title;$('header-location').textContent=title;$('page-description').textContent=exercise.practice?'Bài tự luyện không tính điểm khóa học.':'Làm bài trong thời gian giảng viên đã mở cho cả lớp.';document.title=title+' · LAN-LMS';}
     document.querySelectorAll('[data-view]').forEach(a=>{a.classList.toggle('active',a.dataset.view===v);if(a.dataset.view===v)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     $('assignment-badge').textContent=data.assignments.filter(a=>assignmentState(a)==='not_submitted'&&!courseDone(a.course_id)).length;
     window.studentNotifications.setData(data.notification_feed||[]);

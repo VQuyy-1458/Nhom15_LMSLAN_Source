@@ -1,0 +1,1 @@
+class IsogramChecker {boolean isIsogram(String s){Set<Integer> seen=new HashSet<>();return s.toLowerCase(Locale.ROOT).codePoints().filter(Character::isLetter).allMatch(seen::add);}}

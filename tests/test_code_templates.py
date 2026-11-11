@@ -113,6 +113,10 @@ class TemplateDockerTests(unittest.TestCase):
         source='import java.util.*;\nclass Student { int value=7; }\npublic class J05005 { public static void main(String[] args){ System.out.println(new Student().value); } }'
         self.run_case('java','program',source,'','7')
 
+    def test_named_entry_on_one_line_after_helper_and_comment(self):
+        source='/* public class Fake {} */ import java.util.*; class Student { int value=7; } public class J05005 { public static void main(String[] args){ System.out.println(new Student().value); } }'
+        self.run_case('java','program',source,'','7')
+
     def test_java_method(self):
         self.run_case('java','method','int add(int a,int b){return a+b;}','System.out.println(add(2,3));','5')
 

@@ -84,6 +84,21 @@ def _remove_container(name):
 
 
 def matches(actual, expected, checker):
+    if checker=='json':
+        def object_value(pairs):
+            result={}
+            for key,value in pairs:
+                if key in result:raise ValueError('duplicate key')
+                result[key]=value
+            return result
+        def invalid_constant(value):raise ValueError(value)
+        def equal(a,b):
+            if isinstance(a,bool) or isinstance(b,bool):return type(a) is type(b) and a==b
+            if isinstance(a,dict) and isinstance(b,dict):return a.keys()==b.keys() and all(equal(a[k],b[k]) for k in a)
+            if isinstance(a,list) and isinstance(b,list):return len(a)==len(b) and all(equal(x,y) for x,y in zip(a,b))
+            return (type(a) is type(b) or isinstance(a,(int,float)) and isinstance(b,(int,float))) and a==b
+        try:return equal(json.loads(actual,object_pairs_hook=object_value,parse_constant=invalid_constant),json.loads(expected,object_pairs_hook=object_value,parse_constant=invalid_constant))
+        except (ValueError,TypeError,RecursionError):return False
     # Normalize OS line endings; exact mode preserves spaces and final newlines.
     actual, expected = actual.replace("\r\n", "\n"), expected.replace("\r\n", "\n")
     return actual.split() == expected.split() if checker == "tokens" else actual == expected
@@ -174,6 +189,29 @@ def judge(source, language, problem, progress=None, image=None):
     return {'verdict':'AC' if passed==total else next(t['verdict'] for t in results if t['verdict']!='AC'), 'score':round(problem['points']*passed/total,2),'passed':passed,'total':total,'compile_log':'','tests':results}
 
 
+def java_public_class(source):
+    """Find the top-level public type, ignoring comments and string literals."""
+    clean = re.sub(rb'"""[\s\S]*?"""|//[^\r\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'', b' ', source)
+    depth, public, type_name = 0, False, False
+    for token in re.findall(rb'[A-Za-z_$][\w$]*|[{};]', clean):
+        if depth == 0:
+            if type_name:
+                return token.decode('ascii')
+            if token == b'public':
+                public = True
+            elif public and token in {b'class', b'record', b'enum'}:
+                type_name = True
+            elif token == b';':
+                public = False
+        if token == b'{':
+            depth += 1
+        elif token == b'}':
+            depth -= 1
+            if depth == 0:
+                public = False
+    return 'Main'
+
+
 def _judge_program(source, language, problem, progress=None, image=None, extra_sources=None):
     if language not in LANGUAGES:
         raise ValueError("Ngôn ngữ không hợp lệ.")
@@ -189,9 +227,7 @@ def _judge_program(source, language, problem, progress=None, image=None, extra_s
         java_entry = 'Main'
         if language == 'java':
             # A complete Java program may use any public entry class, e.g. J05005.
-            match = re.search(rb'(?m)^\s*public\s+(?:final\s+)?class\s+([A-Za-z_$][\w$]*)\b', source)
-            if match:
-                java_entry = match.group(1).decode('ascii')
+            java_entry = java_public_class(source)
         filename = java_entry + '.java' if language == 'java' else LANGUAGES[language]
         (folder / filename).write_bytes(source.removeprefix(b"\xef\xbb\xbf"))
         for name, content in (extra_sources or {}).items():

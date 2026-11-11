@@ -1,0 +1,1 @@
+class RotationalCipher {int k;RotationalCipher(int k){this.k=k;}String rotate(String s){StringBuilder r=new StringBuilder();for(char c:s.toCharArray()){if(c>='a'&&c<='z')c=(char)('a'+(c-'a'+k)%26);else if(c>='A'&&c<='Z')c=(char)('A'+(c-'A'+k)%26);r.append(c);}return r.toString();}}
