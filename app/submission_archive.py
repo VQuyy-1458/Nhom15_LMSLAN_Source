@@ -24,13 +24,16 @@ def _history(row, code=False):
     return history
 
 
-def _index():
+def _index(session=None):
     data = learning.load()
     courses = {c["id"]: c for c in data["courses"]}
     tasks = {a["id"]: a for a in data["assignments"]}
     students = read_json("students.json")
     rows = []
     def add(key, kind, row, sid, activity_id, title, path, root, when, attempt=None):
+        if session and session["role"]=="teacher":
+            from . import permissions
+            if not permissions.manages(session,permissions.submission_parent(row)):return
         code = kind == "code"
         history = _history(row, code)
         result = row.get("result")
@@ -129,9 +132,9 @@ def _filtered(rows, query):
     return _sorted(result, query)
 
 
-def listing(query):
+def listing(query, session=None):
     with learning.LOCK:
-        all_rows = _index()
+        all_rows = _index(session)
         rows = _filtered(all_rows, query)
         total = len(rows)
         stats = {"total": total, "students": len({r["student_id"] for r in rows}), "pending": sum(r["status"] in {"pending", "queued", "running"} for r in rows), "missing": sum(not r["available"] for r in rows)}
@@ -147,15 +150,15 @@ def listing(query):
         return {"rows": [public(r) for r in rows[(page-1)*10:page*10]], "total": total, "display_total": len(rows), "page": page, "pages": pages, "stats": stats, "activities": [{"id": activity_id, **activity} for activity_id,activity in sorted(activities.items(),key=lambda p:p[1]["title"].casefold())]}
 
 
-def find(key):
-    row = next((r for r in _index() if r["id"] == key), None)
+def find(key, session=None):
+    row = next((r for r in _index(session) if r["id"] == key), None)
     if not row: raise learning.LearningError(404, "Không tìm thấy bản ghi bài nộp.")
     return row
 
 
-def detail(key):
+def detail(key, session=None):
     with learning.LOCK:
-        indexed = _index(); row = next((r for r in indexed if r["id"] == key), None)
+        indexed = _index(session); row = next((r for r in indexed if r["id"] == key), None)
         if not row: raise learning.LearningError(404, "Không tìm thấy bản ghi bài nộp.")
         history = sorted((r for r in indexed if r["student_id"] == row["student_id"] and r["activity_id"] == row["activity_id"]), key=lambda r:r["attempt"])
         snapshot = row["_row"].get("assignment_snapshot") or row["_row"].get("exam_snapshot")
@@ -165,9 +168,9 @@ def detail(key):
         return {"submission": public(row), "attempts": [public(r) for r in history], "grading_history": row["_history"], "record": programming.public_submission(row["_row"], True) if row["kind"] == "code" else {"score": row["score"], "feedback": row["_row"].get("feedback", ""), "graded_at": row["_row"].get("graded_at")}, "readonly": row["_readonly"], "snapshot": snapshot}
 
 
-def file_for(key):
+def file_for(key, session=None):
     with learning.LOCK:
-        row = find(key)
+        row = find(key,session)
         if not row["available"]: raise learning.LearningError(404, "Bản ghi còn được lưu nhưng file gốc không còn tồn tại (dữ liệu cũ).")
         return row["_path"], row["filename"]
 
@@ -175,7 +178,7 @@ def file_for(key):
 @mutation
 def grade(session, form, ip):
     with learning.LOCK:
-        row = find(form.get("id"))
+        row = find(form.get("id"),session)
         if row["kind"] == "code": raise learning.LearningError(400, "Dùng Chấm lại để chấm mã nguồn với bộ test đã lưu.")
         if row["_readonly"]: raise learning.LearningError(409, "Khóa học đã tổng kết, chỉ được xem lại kết quả.")
         if row["kind"] == "assignment":
@@ -203,12 +206,12 @@ def _csv(rows):
     return ("\ufeff"+buffer.getvalue()).encode("utf-8")
 
 
-def export_csv(query):
-    with learning.LOCK: return _csv(_filtered(_index(),query))
+def export_csv(query, session=None):
+    with learning.LOCK: return _csv(_filtered(_index(session),query))
 
 
-def export_zip(query):
-    with learning.LOCK: rows = _filtered(_index(),query)
+def export_zip(query, session=None):
+    with learning.LOCK: rows = _filtered(_index(session),query)
     if len(rows)>1000 or sum(r["size_bytes"] for r in rows if r["available"])>100*1024*1024:
         raise learning.LearningError(413, "Gói tải vượt 1.000 bản ghi hoặc 100 MiB. Hãy lọc theo lớp, sinh viên hoặc bài trước khi tải.")
     stream = tempfile.TemporaryFile()

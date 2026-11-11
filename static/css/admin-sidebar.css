@@ -45,7 +45,7 @@
   .admin-sidebar-unified:not(.student-shell) .sidebar-user{min-height:56px;padding:8px 23px}
   .admin-sidebar-unified:not(.student-shell) .sidebar-nav{padding:6px 10px;gap:1px}
   .admin-sidebar-unified:not(.student-shell) .sidebar-label{padding:4px 12px 2px}
-  .admin-sidebar-unified:not(.student-shell) .sidebar-nav a{min-height:34px;padding:7px 12px}
+  .admin-sidebar-unified:not(.student-shell) .sidebar-nav a{min-height:32px;padding:6px 12px}
   .admin-sidebar-unified:not(.student-shell) .sidebar-footer{min-height:28px;padding:6px 23px}
 }
 @media(max-height:640px){
@@ -79,4 +79,12 @@
   .admin-sidebar-unified:not(.student-shell) .sidebar-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:0 6px}
   .admin-sidebar-unified:not(.student-shell) .sidebar-label{grid-column:1/-1}
   .admin-sidebar-unified:not(.student-shell) .sidebar-nav a{min-width:0;min-height:30px;padding:5px 12px}
+}
+.management-scope{display:inline-flex;align-items:center;padding:6px 10px;border:1px solid #dae4f3;border-radius:8px;background:#f3f7fd;color:#526987;font-size:11px;white-space:nowrap}
+@media(max-width:760px){.management-scope{max-width:150px;white-space:normal;text-align:center;font-size:10px;padding:4px 7px}}
+@media(max-height:440px){
+  .admin-sidebar-unified:not(.student-shell) .sidebar-nav a{min-height:23px;padding:3px 10px;line-height:17px;font-size:11px}
+  .admin-sidebar-unified:not(.student-shell) .sidebar-label{padding:1px 10px;line-height:12px;font-size:8px}
+  .admin-sidebar-unified:not(.student-shell) .sidebar-user{min-height:34px;padding:1px 23px}
+  .admin-sidebar-unified:not(.student-shell) .sidebar-footer{min-height:20px;padding:2px 23px}
 }

@@ -1,0 +1,15 @@
+.classification-fields{padding:16px;border:1px solid #dce5ef;border-radius:10px;margin:12px 0;min-width:0}.classification-fields legend{font-weight:600;font-size:14px}.classification-fields label{display:grid;gap:7px;min-width:0}.classification-fields select[multiple]{min-height:100px;width:100%;padding:8px}.classification-filters{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}.classification-filters label{display:grid;gap:6px;flex:1;min-width:140px;font-size:12px}.classification-filters select{width:100%;min-height:38px;padding:8px;border:1px solid #dce5ef;border-radius:7px;background:#fff}.classification-badges{display:inline-flex;gap:6px;flex-wrap:wrap;margin:4px 0}.classification-badges:empty{display:none}#classification-page>.panel{margin-bottom:20px}#classification-page form{margin:14px 0}#classification-page select[multiple]{min-height:100px}#classification-page .student-row{gap:12px;flex-wrap:wrap}@media(max-width:640px){.classification-filters label{flex-basis:40%;min-width:0}}
+#classification-page .student-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #edf1f6}
+.course-teacher-assignment{padding:18px;border:1px solid #dce5ef;border-radius:10px}
+.course-teacher-assignment h3{margin:0;font-size:16px}
+.course-teacher-assignment fieldset{display:grid;gap:7px;padding:12px;border:1px solid #e1e7ef;border-radius:8px}
+.teacher-assignment-option{display:flex!important;align-items:center;gap:10px;padding:9px;border-radius:7px;background:#f6f8fc;cursor:pointer}
+.teacher-assignment-option input[type=checkbox]{width:18px;height:18px;flex:0 0 18px;margin:0;padding:0;accent-color:#3569d8}
+.teacher-assignment-option span{display:flex;flex-direction:column;gap:4px}
+.teacher-assignment-option small{color:#71829b;font-size:12px}
+#question-bank pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;background:#f5f7fb;padding:12px;border-radius:6px}
+#question-bank .resource-line-body{min-width:0;overflow-wrap:anywhere}
+.exam-bank-list{display:grid;gap:8px;max-height:340px;overflow:auto;margin:12px 0}
+.exam-bank-list [data-exam-bank-row][hidden]{display:none!important}
+.exam-bank-list [data-paper-row][hidden],[data-practice-row][hidden]{display:none!important}
+[data-library-code],[data-library-file],[data-paper-distribution]{min-width:0;border:1px solid #dce5ef;border-radius:10px;padding:16px}

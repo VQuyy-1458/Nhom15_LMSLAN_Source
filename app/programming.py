@@ -13,6 +13,7 @@ from pathlib import Path
 from . import code_runner, exam_catalog, learning, submission_rate
 from .config import RUNTIME_DIR
 from .storage import read_json, write_json, utc_now, audit, atomic_transaction, save_payload, on_rollback, after_commit
+from .question_library import practice_rows, assigned_indices, allocate
 
 FILES = RUNTIME_DIR / "programming-submissions"
 _pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="code-judge")
@@ -26,11 +27,20 @@ def rows():
 
 def exam(exam_id):
     row = next((r for r in exam_catalog.listing() if r["id"] == exam_id and r["type"] == "programming"), None)
-    if not row: raise learning.LearningError(404, "Không tìm thấy kỳ thi lập trình.")
+    if not row:
+        from .programming_assignments import listing
+        row = next((r for r in listing() if r["id"] == exam_id), None)
+    if not row:
+        row = next((r for r in practice_rows() if r["id"] == exam_id), None)
+    if not row: raise learning.LearningError(404, "Không tìm thấy kỳ thi hoặc bài tập lập trình.")
     return row
 
 
 def eligible(row, sid):
+    if row.get("archived") or row.get("published") is False:
+        return False
+    if row.get("paper_distribution") == "random" and sid not in row.get("student_problem_sets", {}):
+        return False
     course = learning.load()["courses"]
     c = next((c for c in course if c["id"] == row["course_id"]), None)
     return sid in row["participants"] and (not row["course_id"] or c and (c.get("student_ids") is None or sid in c["student_ids"]))
@@ -53,23 +63,55 @@ def snapshot(sid):
     attempts = read_json("programming_attempts.json", {})
     result = []
     now = datetime.now(timezone.utc)
-    for row in exam_catalog.listing():
-        if row["type"] != "programming" or (row["state"] == "idle" and not row.get("auto_start_ready")) or not eligible(row, sid): continue
+    from .programming_assignments import listing
+    for row in exam_catalog.listing() + listing() + practice_rows(sid):
+        distributed = bool(row.get("distributed_at") and row.get("published"))
+        if row["type"] != "programming" or (row["state"] == "idle" and not row.get("auto_start_ready") and not distributed) or not eligible(row, sid): continue
         attempt = attempts.get(row["id"] + ":" + sid)
         from .deadlines import exam_end
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
         finalized = bool(attempt and attempt.get("status") == "submitted")
         allowed = bool(attempt and not finalized and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now)
+        course_closed = row.get("activity_type") == "assignment" and next((c.get("status") == "completed" for c in learning.load()["courses"] if c["id"] == row["course_id"]), False)
+        if course_closed:
+            allowed = False
         item = {k: row.get(k) for k in ("id", "title", "description", "course_id", "duration_minutes", "state", "started_at", "scheduled_at")}
         item["assessment_type"] = row.get("assessment_type", "test")
+        item["activity_type"] = row.get("activity_type", "exam")
+        item["practice"] = row.get("practice", False)
+        item["topic"] = row.get("topic", "")
+        for key in ("topic_ids","difficulty","classification_languages","content_type"):
+            if key in row:item[key]=copy.deepcopy(row[key])
+        item["due_at"] = row.get("due_at")
+        if row["state"] == "idle" and distributed and not row.get("waiting"):
+            item["state"] = "distributed"
         if row.get("waiting"):
             item["state"] = "scheduled"
             item["started_at"] = row.get("started_at") or row.get("scheduled_at")
-        item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
+        item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": not course_closed and row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
         if attempt:
-            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"])]
+            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"]) if i in assigned_indices(row,sid)]
         result.append(item)
     return {"exams": result, "submissions": [public_submission(r) for r in rows() if r["student_id"] == sid]}
+
+
+def writable_problem(sid, form):
+    row = exam(form.get("exam_id"))
+    if not eligible(row, sid):
+        raise learning.LearningError(403, "Bạn không được giao bài này.")
+    index = exam_catalog.integer(form.get("problem_index"), "Chỉ số bài toán", 0, len(row["programming"]["problems"])-1)
+    if index not in assigned_indices(row,sid):raise learning.LearningError(403,"Câu hỏi không thuộc bộ đề được giao cho bạn.")
+    attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
+    now = datetime.now(timezone.utc)
+    if row["state"] != "started" or row.get("waiting") or not attempt or attempt.get("status") == "submitted" or learning.date_value(attempt["ends_at"]) <= now:
+        raise learning.LearningError(409, "Chưa mở bài, bài đã kết thúc hoặc đã hết hạn.")
+    from .deadlines import exam_end
+    end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
+    if end and end <= now:
+        raise learning.LearningError(409, "Đã hết hạn nộp bài.")
+    if row.get("activity_type") == "assignment":
+        learning.course_access(learning.load(), row["course_id"], {"role": "student", "user_id": sid}, write=True)
+    return row, row["programming"]["problems"][index]
 
 
 def control(session, form, ip, runner_ready=None, now=None):
@@ -77,7 +119,11 @@ def control(session, form, ip, runner_ready=None, now=None):
     if action == "start" and not (code_runner.ready() if runner_ready is None else runner_ready): raise learning.LearningError(409, "Docker/image bộ chấm chưa sẵn sàng. Chạy Docker và tạo image classroom-judge:1 trước.")
     with learning.LOCK, atomic_transaction():
         row = exam(form.get("exam_id"))
-        if action == "start":
+        from .permissions import require_content
+        require_content(session,row)
+        if row.get("activity_type") == "assignment":
+            raise learning.LearningError(409, "Dùng chức năng quản lý bài tập để giao bài.")
+        if action in {"start", "publish"}:
             if row["state"] != "idle": raise learning.LearningError(409, "Kỳ thi không ở trạng thái bản nháp.")
             problems = row["programming"]["problems"]
             if not problems or any(not p["tests"] for p in problems): raise learning.LearningError(400, "Mỗi bài toán cần ít nhất một test case trước khi mở thi.")
@@ -94,12 +140,20 @@ def control(session, form, ip, runner_ready=None, now=None):
                     raise learning.LearningError(409, "Danh sách dự thi có sinh viên không còn thuộc khóa học hoặc tài khoản đã khóa. Hãy cập nhật danh sách trước khi mở thi.")
             else:
                 participants = sorted(s for s in members if students[s].get("active", True))
+            if not participants:
+                raise learning.LearningError(400, "Chưa có sinh viên được phân phối đề.")
+            allocate(row, participants)
             now = now or datetime.now(timezone.utc)
             from .exam_timing import window
             begins, ends = window(row.get("scheduled_at"), row["duration_minutes"], now)
             if ends <= now:
                 raise learning.LearningError(409, "Lịch thi đã hết thời gian. Hãy điều chỉnh giờ bắt đầu trước khi mở.")
-            row.update({"state": "started", "started_at": begins.isoformat(), "ends_at": ends.isoformat(), "participants": participants})
+            if action == "publish":
+                row.update(published=True, distributed_at=utc_now(), participants=participants, participants_configured=True)
+            else:
+                if row.get("distribution_mode") == "manual" and not row.get("published"):
+                    raise learning.LearningError(409, "Hãy phân phối đề cho danh sách sinh viên trước khi mở thi.")
+                row.update({"state": "started", "started_at": begins.isoformat(), "ends_at": ends.isoformat(), "participants": participants})
         elif action == "end":
             if row["state"] not in {"started", "scheduled"}: raise learning.LearningError(409, "Kỳ thi chưa mở.")
             row.update({"state": "ended", "ended_at": utc_now()})
@@ -112,15 +166,52 @@ def control(session, form, ip, runner_ready=None, now=None):
         return {"ok": True}
 
 
+def results(session, exam_id):
+    """Per-student best score per problem, with unfinished grading visible."""
+    from . import permissions
+    with learning.LOCK:
+        row = exam(exam_id)
+        permissions.require_content(session, row)
+        records = [r for r in rows() if r["exam_id"] == exam_id]
+        students = read_json("students.json")
+        attempts = read_json("programming_attempts.json", {})
+        problems = row["programming"]["problems"]
+        total = sum(p["points"] for p in problems)
+        items = []
+        for sid in row.get("participants", []):
+            own = [r for r in records if r["student_id"] == sid]
+            marks = []
+            for index, problem in enumerate(problems):
+                if index not in assigned_indices(row,sid):
+                    marks.append(None)
+                    continue
+                scores = [public_submission(r, True)["effective_score"] for r in own if r["problem_index"] == index]
+                marks.append(max((v for v in scores if v is not None), default=0))
+            attempt = attempts.get(exam_id + ":" + sid)
+            pending = sum(r["state"] in {"queued", "running"} for r in own)
+            score=sum(m for m in marks if m is not None)
+            maximum=sum(problems[i]["points"] for i in assigned_indices(row,sid))
+            items.append({"student_id": sid, "full_name": students.get(sid, {}).get("full_name", sid),
+                          "problem_scores": marks, "score": score, "max_score": maximum,
+                          "score_10": round(10 * score / maximum, 2) if maximum else None,
+                          "submission_count": len(own), "pending": pending,
+                          "errors": sum(r.get("state") == "error" for r in own),
+                          "status": "grading" if pending else "submitted" if attempt and attempt.get("status") == "submitted" else "in_progress" if attempt else "not_started"})
+        return {"exam_id": exam_id, "problems": [{"title": p["title"], "points": p["points"]} for p in problems], "results": items}
+
+
 def student_submissions(sid, exam_id, problem_index):
     row = exam(exam_id)
     if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
     index = exam_catalog.integer(problem_index, "Chỉ số bài toán", 0, len(row["programming"]["problems"])-1)
+    if index not in assigned_indices(row,sid):raise learning.LearningError(403,"Câu hỏi không thuộc bộ đề của bạn.")
     attempt = read_json("programming_attempts.json", {}).get(row["id"] + ":" + sid)
     from .deadlines import exam_end
     end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
     now = datetime.now(timezone.utc)
     allowed = bool(attempt and attempt.get("status") != "submitted" and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now and (not end or end > now))
+    if row.get("activity_type") == "assignment" and any(c["id"] == row["course_id"] and c["status"] == "completed" for c in learning.load()["courses"]):
+        allowed = False
     return {"submissions": [public_submission(r) for r in rows() if r["student_id"] == sid and r["exam_id"] == exam_id and r["problem_index"] == index],
             "can_submit": allowed, "server_time": utc_now(), "ends_at": attempt.get("ends_at") if attempt else None}
 
@@ -130,6 +221,8 @@ def start(session, form, ip):
     with learning.LOCK, atomic_transaction():
         row = exam(form.get("exam_id"))
         if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
+        if row.get("activity_type") == "assignment":
+            learning.course_access(learning.load(), row["course_id"], session, write=True)
         if row.get("waiting"): raise learning.LearningError(409, "Chưa đến giờ bắt đầu dự kiến của kỳ thi.")
         if row["state"] != "started": raise learning.LearningError(409, "Giảng viên chưa mở hoặc đã kết thúc kỳ thi.")
         from .deadlines import exam_end
@@ -150,6 +243,8 @@ def finish(session, form, ip):
     sid = session["user_id"]
     with learning.LOCK, atomic_transaction():
         row = exam(form.get("exam_id"))
+        if row.get("activity_type") == "assignment":
+            raise learning.LearningError(409, "Bài tập nhận các lần nộp đến hạn, không kết thúc như kỳ thi.")
         if not eligible(row, sid):
             raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
         attempts = read_json("programming_attempts.json", {})
@@ -185,6 +280,7 @@ def submit(session, form, file, ip):
         row = exam(form.get("exam_id"))
         if not eligible(row, sid): raise learning.LearningError(403, "Bạn không thuộc danh sách dự thi.")
         index = exam_catalog.integer(form.get("problem_index"), "Chỉ số bài toán", 0, len(row["programming"]["problems"])-1)
+        if index not in assigned_indices(row,sid):raise learning.LearningError(403,"Câu hỏi không thuộc bộ đề của bạn.")
         records = rows()
         if request_id:
             previous = next((r for r in records if r["student_id"] == sid and r.get("request_id") == request_id), None)
@@ -198,6 +294,7 @@ def submit(session, form, file, ip):
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
         if common_end and common_end <= datetime.now(timezone.utc): raise learning.LearningError(409, "Đã hết thời gian nộp bài của kỳ thi.")
         if not runner_ready: raise learning.LearningError(503, "Bộ chấm chưa sẵn sàng, vui lòng thử lại.")
+        writable_problem(sid, form)
         if language not in row["programming"]["languages"] or language not in code_runner.LANGUAGES: raise learning.LearningError(400, "Ngôn ngữ không được phép trong kỳ thi.")
         if Path(file["filename"]).suffix.lower() != Path(code_runner.LANGUAGES[language]).suffix: raise learning.LearningError(400, "Phần mở rộng file không khớp ngôn ngữ đã chọn.")
         pending = [r for r in records if r["state"] in {"queued", "running"}]
@@ -206,6 +303,7 @@ def submit(session, form, file, ip):
         guards.enter_context(submission_rate.guard(sid))
         record = {"id": uuid.uuid4().hex, "exam_id": row["id"], "exam_title": row["title"], "course_id": row["course_id"], "student_id": sid, "problem_index": index, "problem_title": problem["title"], "max_score": problem["points"], "language": language, "original_filename": Path(file["filename"]).name[:150], "submitted_at": utc_now(), "state": "queued", "result": None, "size_bytes": len(content), "sha256": hashlib.sha256(content).hexdigest(), "ip": ip, "grading_history": []}
         record["full_name"] = read_json("students.json").get(sid,{}).get("full_name",sid)
+        record["activity_type"] = row.get("activity_type", "exam")
         record["request_id"] = request_id or None
         record["judge_image"] = code_runner.image_identity()
         folder = FILES / record["id"]
@@ -266,6 +364,9 @@ def rejudge(session, form, ip):
     with learning.LOCK, atomic_transaction():
         records = rows(); row = next((r for r in records if r["id"] == form.get("submission_id")), None)
         if not row: raise learning.LearningError(404, "Không tìm thấy bài nộp.")
+        from . import permissions
+        permissions.require_content(session,permissions.submission_parent(row))
+        if row.get("course_id"): learning.course_access(learning.load(),row["course_id"],session,write=True)
         if row["state"] in {"queued", "running"}: raise learning.LearningError(409, "Bài đã ở trong hàng đợi chấm.")
         if not row.get("grading_history") and row.get("result"):
             row["grading_history"] = [{"id": "legacy", "result": copy.deepcopy(row["result"]), "graded_at": row.get("graded_at"), "graded_by": "judge"}]

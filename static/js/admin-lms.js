@@ -13,6 +13,31 @@
   const empty=(title,message)=>`<div class="bridge-empty"><i class="fa fa-folder-open-o"></i><h3>${esc(title)}</h3><p>${esc(message)}</p></div>`;
   const stat=(icon,color,label,value)=>`<article class="stat-card"><span class="stat-icon ${color}"><i class="fa fa-${icon}"></i></span><div><p>${label}</p><strong>${value}</strong></div></article>`;
   const enrolled=id=>data.students.filter(s=>{const c=data.courses.find(c=>c.id===id);return c&&(c.student_ids===null||c.student_ids.includes(s.student_id));});
+  function scopedWorkspace(){
+    const ids=new Set(data.courses.filter(c=>!scope||c.id===scope).map(c=>c.id));
+    const scoped={...data,courses:data.courses.filter(c=>ids.has(c.id))};
+    for(const key of ['events','assignments','exams','programming_assignments'])scoped[key]=(data[key]||[]).filter(r=>ids.has(r.course_id));
+    return scoped;
+  }
+  function calendarView(){window.teacherCalendar.mount($('teaching-calendar-overview'),scopedWorkspace());}
+  function classNotifications(){
+    const current=scopedWorkspace(),courses=current.courses.filter(c=>c.status!=='completed');
+    const items=window.listUi.view('teaching:announcements',current.events.filter(e=>e.kind==='announcement'),'notifications');
+    const now=new Date(Date.now()+7*3600000).toISOString().slice(0,16);
+    $('class-notifications-overview').innerHTML=`<section class="panel"><h2>Đăng thông báo cho lớp học</h2><p class="muted">Học viên trong khóa học sẽ thấy thông báo trong mục Thông báo và Học theo tuần.</p>${courses.length?`<form class="stack-form" id="class-notification-form"><input type="hidden" name="kind" value="announcement"><label>Khóa học<select name="course_id" required>${courses.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label><label>Tiêu đề<input name="title" required maxlength="200"></label><label>Nội dung<textarea name="description" required rows="4" maxlength="10000"></textarea></label><label>Thời gian hiển thị (giờ Việt Nam)<input name="starts_at" type="datetime-local" required value="${now}"></label><button class="btn btn-primary">Đăng thông báo</button><p class="ref-form-error" role="alert" data-class-notification-error></p></form>`:'<p class="muted">Chưa có khóa học đang hoạt động trong phạm vi của bạn.</p>'}</section><section class="panel"><h2>Thông báo lớp học đã đăng</h2>${window.listUi.controls('teaching:announcements','notifications')}<div class="resource-lines">${items.map(e=>`<details class="resource-line activity-surface" data-activity="announcement"><summary><span class="resource-line-title">${esc(e.title)}</span><span class="resource-line-meta">${esc(name(e.course_id))} · ${date(e.starts_at)}</span></summary><div class="resource-line-body"><p class="student-description">${esc(e.description||'')}</p></div></details>`).join('')||'<p class="muted">Chưa có thông báo lớp học.</p>'}</div></section>`;
+  }
+  document.addEventListener('submit',async event=>{
+    const form=event.target;if(form.id!=='class-notification-form')return;
+    event.preventDefault();if(form.dataset.sending)return;form.dataset.sending='true';
+    const button=form.querySelector('button');button.disabled=true;
+    try{
+      const body=new FormData(form);body.set('starts_at',new Date(body.get('starts_at')+'+07:00').toISOString());
+      await window.cssRequest('/api/learning/event',{method:'POST',body});
+      await load();window.cssToast('Đã đăng thông báo cho lớp học.','success');
+    }catch(error){form.querySelector('[data-class-notification-error]').textContent=error.message;}
+    finally{delete form.dataset.sending;button.disabled=false;}
+  });
+  window.listUi.on('teaching',()=>{if(section==='class-notifications')classNotifications();});
   function context(){
     const node=$('admin-course-context');if(!node)return;
     node.innerHTML=`<form id="admin-scope-form"><label for="admin-course-picker"><i class="fa fa-book"></i> Khóa học</label><select id="admin-course-picker" name="course"><option value="">Tất cả khóa học</option>${data.courses.map(c=>`<option value="${c.id}" ${scope===c.id?'selected':''}>${esc(c.name)} · ${esc(c.code)}</option>`).join('')}</select></form><a class="bridge-text-link" href="${scope?courseUrl(scope):'/admin/courses'}">${scope?'Mở không gian khóa học':'Xem danh sách khóa học'} <i class="fa fa-arrow-right"></i></a>`;
@@ -33,12 +58,12 @@
   window.listUi.on('dashboard',()=>dashboard());
   function dashboard(){
     const active=window.listUi.view('dashboard:courses',data.courses.filter(c=>c.status==='active'),'courses',{statusFilter:false});
-    $('admin-dashboard-overview').innerHTML=`<div class="stats-grid bridge-statistics">${stat('book','blue','Khóa học',data.stats.courses)}${stat('users','green','Sinh viên',data.stats.students)}${stat('file-text-o','amber','Bài chờ chấm',data.stats.pending)}${stat('shield','violet','Kỳ thi đang chạy',data.stats.running_exams)}</div><div class="teacher-dashboard-calendar" id="teacher-dashboard-calendar"></div><section class="panel bridge-teaching"><div class="panel-heading"><h2>Khóa học đang giảng dạy</h2><a class="bridge-text-link" href="/admin/courses">Xem tất cả <i class="fa fa-arrow-right"></i></a></div><div class="bridge-course-grid">${active.slice(0,6).map(courseCard).join('')}</div>${!active.length?empty('Chưa có khóa học đang giảng dạy','Tạo khóa học, thêm sinh viên và đăng nội dung để bắt đầu.')+'<a class="btn btn-primary" href="/admin/courses">Mở Khóa học</a>':''}</section><div class="bridge-dashboard-actions"><a class="btn btn-secondary" href="${pageUrl('monitor','')}"><i class="fa fa-desktop"></i> Giám sát sinh viên</a><a class="btn btn-secondary" href="${pageUrl('submissions','')}"><i class="fa fa-cloud-download"></i> Xem bài nộp</a><a class="btn btn-secondary" href="${pageUrl('exam','')}"><i class="fa fa-sliders"></i> Cấu hình kỳ thi</a></div>`;
+    $('admin-dashboard-overview').innerHTML=`<div class="stats-grid bridge-statistics">${stat('book','blue','Khóa học',data.stats.courses)}${stat('users','green','Sinh viên',data.stats.students)}${stat('file-text-o','amber','Bài chờ chấm',data.stats.pending)}${stat('shield','violet','Kỳ thi đang chạy',data.stats.running_exams)}</div><div class="teacher-dashboard-calendar" id="teacher-dashboard-calendar"></div><section class="panel bridge-teaching"><div class="panel-heading"><h2>Khóa học đang giảng dạy</h2><a class="bridge-text-link" href="/admin/courses">Xem tất cả <i class="fa fa-arrow-right"></i></a></div><div class="bridge-course-grid">${active.slice(0,6).map(courseCard).join('')}</div>${!active.length?empty('Chưa có khóa học đang giảng dạy',window.lmsRole==='teacher'?'Admin cần phân công khóa học cho bạn.':'Tạo khóa học, thêm sinh viên và đăng nội dung để bắt đầu.')+'<a class="btn btn-primary" href="/admin/courses">Mở Khóa học</a>':''}</section><div class="bridge-dashboard-actions">${window.lmsRole==='teacher'?`<a class="btn btn-secondary" href="${pageUrl('calendar','')}"><i class="fa fa-calendar"></i> Lịch giảng dạy</a>`:`<a class="btn btn-secondary" href="${pageUrl('monitor','')}"><i class="fa fa-desktop"></i> Giám sát sinh viên</a>`}<a class="btn btn-secondary" href="${pageUrl('submissions','')}"><i class="fa fa-cloud-download"></i> Xem bài nộp</a><a class="btn btn-secondary" href="${pageUrl('exam','')}"><i class="fa fa-sliders"></i> Cấu hình kỳ thi</a></div>`;
     window.teacherCalendar.mount($('teacher-dashboard-calendar'),data);
   }
   function examOverview(){window.examConfig.render(data);}
   function submissions(){window.submissionArchive.mount(data);}
-  async function load(){try{data=await window.cssRequest('/api/admin/workspace'+(scope?'?course='+encodeURIComponent(scope):''));window.submissionDeadlines.sync(data.server_time);context();if($('admin-course-count'))$('admin-course-count').textContent=data.courses.length;if($('live-status'))$('live-status').textContent='Đã kết nối';if(section==='dashboard')dashboard();if(section==='exam')examOverview();if(section==='submissions')submissions();$('admin-workspace-error').classList.add('hidden');}catch(error){$('admin-workspace-error').textContent=error.message;$('admin-workspace-error').classList.remove('hidden');}}
+  async function load(){try{data=await window.cssRequest('/api/admin/workspace'+(scope?'?course='+encodeURIComponent(scope):''));window.submissionDeadlines.sync(data.server_time);context();if($('admin-course-count'))$('admin-course-count').textContent=data.courses.length;if($('live-status'))$('live-status').textContent='Đã kết nối';if(section==='dashboard')dashboard();if(section==='calendar')calendarView();if(section==='class-notifications')classNotifications();if(section==='exam')examOverview();if(section==='submissions')submissions();$('admin-workspace-error').classList.add('hidden');}catch(error){$('admin-workspace-error').textContent=error.message;$('admin-workspace-error').classList.remove('hidden');}}
   load();
   let deadlinePolling=false;
   async function pollDeadlines(){

@@ -52,7 +52,7 @@ def initialize_enrollments():
 def gradebook(data, course, student_ids):
     now = datetime.now(timezone.utc)
     weights = course.get("weights", WEIGHTS)
-    tasks = [a for a in data["assignments"] if a["course_id"] == course["id"]]
+    tasks = [a for a in data["assignments"] if a["course_id"] == course["id"] and not a.get("practice")]
     closed = [a for a in data["attendance"] if a["course_id"] == course["id"] and (a["closed"] or date_value(a["expires_at"]) <= now)]
     students = read_json("students.json")
     from .course_grades import exam_marks
@@ -76,6 +76,8 @@ def gradebook(data, course, student_ids):
             score = latest.get("score") if latest else (0 if task_due[task["id"]] else None)
             if task_due[task["id"]] or score is not None:
                 homework.append(score)
+        from .programming_assignments import homework_scores
+        homework.extend(homework_scores(course["id"], sid))
         if homework and all(score is not None for score in homework):
             values["homework"] = round(sum(homework) / len(homework), 2)
         for component in ("midterm", "final"):
@@ -176,7 +178,10 @@ def find(data, collection, item_id):
 
 def course_access(data, course_id, session, write=False):
     course = find(data, "courses", course_id)
-    if session["role"] != "admin" and course.get("student_ids") is not None and session["user_id"] not in course["student_ids"]:
+    from . import permissions
+    if session["role"] == "teacher":
+        permissions.require_course(session,course_id)
+    elif session["role"] != "admin" and course.get("student_ids") is not None and session["user_id"] not in course["student_ids"]:
         raise LearningError(403, "Bạn không thuộc khóa học này.")
     if write and course["status"] == "completed":
         raise LearningError(409, "Khóa học đã tổng kết, chỉ được xem dữ liệu.")
@@ -234,7 +239,10 @@ def record_student_presence(student_id):
 def own_submission(data, submission_id, session):
     row = find(data, "submissions", submission_id)
     course_access(data, row["course_id"], session)
-    if session["role"] != "admin" and row["student_id"] != session["user_id"]:
+    if session["role"] == "teacher":
+        from . import permissions
+        permissions.require_content(session,permissions.submission_parent(row))
+    elif session["role"] != "admin" and row["student_id"] != session["user_id"]:
         raise LearningError(403, "Bạn chỉ được xem bài nộp của mình.")
     return row
 
@@ -243,13 +251,29 @@ def snapshot(session):
     """Return only enrolled course data, personal results, and public file metadata."""
     with LOCK:
         data = load()
-        admin = session["role"] == "admin"
+        from . import permissions
+        admin = permissions.staff(session)
         sid = session["user_id"]
-        courses = [c for c in data["courses"] if admin or c.get("student_ids") is None or sid in c["student_ids"]]
+        courses = [c for c in data["courses"] if permissions.course_allowed(session,c["id"])]
+        if session["role"]=="teacher":
+            data=copy.deepcopy(data)
+            for key in ("materials","events","assignments","attendance"):
+                data[key]=[r for r in data[key] if permissions.manages(session,r)]
+            task_ids={r["id"] for r in data["assignments"]};event_ids={r["id"] for r in data["events"]}
+            data["submissions"]=[r for r in data["submissions"] if r["assignment_id"] in task_ids]
+            data["session_contents"]=[r for r in data["session_contents"] if r["event_id"] in event_ids]
+        elif session["role"]=="student":
+            data=copy.deepcopy(data)
+            for key in ("materials","events","assignments"):
+                data[key]=[r for r in data[key] if r.get("published",True) and not r.get("archived")]
+            event_ids={r["id"] for r in data["events"]}
+            data["session_contents"]=[r for r in data["session_contents"] if r["event_id"] in event_ids]
         ids = {c["id"] for c in courses}
         students = read_json("students.json")
         course_by_id = {c["id"]: c for c in courses}
         result = {"courses": copy.deepcopy(courses)}
+        from .classification import DIFFICULTIES, LANGUAGES
+        result["classification"]={"topics":read_json("topics.json",[]),"difficulties":DIFFICULTIES,"languages":LANGUAGES}
         for course in result["courses"]:
             if admin:
                 course["enrollments"] = {k: enrollments.info(course, k, students) for k in enrollments.member_ids(course, students)}
@@ -280,8 +304,11 @@ def snapshot(session):
                 row["excluded_student_ids"] = [k for k in enrollments.member_ids(c, students) if not enrollments.applies(c, k, row, "attendance", students)]
         if admin:
             result["students"] = [{"student_id": k, "full_name": v.get("full_name", ""), "active": v.get("active", True)} for k, v in read_json("students.json").items()]
+            if session["role"]=="teacher":
+                result["students"]=[s for s in result["students"] if any(c.get("student_ids") is None or s["student_id"] in c["student_ids"] for c in courses)]
         students = read_json("students.json")
         result["gradebooks"] = [gradebook(data, c, [sid] if not admin else [k for k in students if c.get("student_ids") is None or k in c["student_ids"]]) for c in courses]
+        if session["role"]=="teacher":result["gradebooks"]=[]
         return result
 
 
@@ -312,6 +339,11 @@ def file_for(kind, item_id, session):
         elif kind in {"materials", "assignments"}:
             row = find(data, kind, item_id)
             course_access(data, row["course_id"], session)
+            if session["role"]=="student" and (not row.get("published",True) or row.get("archived")):
+                raise LearningError(403,"Nội dung chưa được công bố.")
+            if session["role"]=="teacher":
+                from .permissions import require_content
+                require_content(session,row)
         else:
             raise LearningError(404, "Không tìm thấy file.")
         if not row.get("stored_name"):
@@ -360,12 +392,14 @@ def preview_path(path, name, pdf_url):
 def mutate(session, action, form, files, ip):
     with LOCK, atomic_transaction(), ExitStack() as guards:
         data = load()
-        admin = session["role"] == "admin"
+        from . import permissions
+        permissions.learning_action(session,action,form,data)
+        admin = permissions.staff(session)
         sid = session["user_id"]
         response = None
         if action != "submit" and action != "check-in" and not admin:
             raise LearningError(403, "Chỉ giảng viên được quản lý nội dung học tập.")
-        row = {"id": secrets.token_hex(10), "created_at": utc_now()}
+        row = {"id": secrets.token_hex(10), "created_at": utc_now(),"created_by":session["user_id"]}
         if action == "course":
             members = form.get("student_ids", "").replace(",", " ").split()
             if any(k not in read_json("students.json") for k in members):
@@ -418,11 +452,12 @@ def mutate(session, action, form, files, ip):
                 if not existing:
                     event = {"id": secrets.token_hex(10), "created_at": utc_now(), "course_id": course_id,
                              "title": title, "topic": "", "description": "", "starts_at": starts, "ends_at": ends,
-                             "location": location, "kind": "lesson", "recurring": True}
+                             "location": location, "kind": "lesson", "recurring": True,"created_by":session["user_id"]}
                     data["events"].append(event)
                     created += 1
                 else:
                     for event in existing:
+                        permissions.require_content(session,event)
                         if event.get("ends_at") != ends:
                             event["ends_at"] = ends
                             updated += 1
@@ -447,6 +482,7 @@ def mutate(session, action, form, files, ip):
             material_id = text(form, "material_id", 80, False)
             assignment_id = text(form, "assignment_id", 80, False)
             for collection, item_id in (("materials", material_id), ("assignments", assignment_id)):
+                if item_id and session["role"]=="teacher": permissions.require_content(session,find(data,collection,item_id))
                 if item_id and find(data, collection, item_id)["course_id"] != event["course_id"]:
                     raise LearningError(400, "Nội dung không thuộc khóa học.")
             existing = next((r for r in data["session_contents"] if r["event_id"] == event["id"]), None)
@@ -472,7 +508,7 @@ def mutate(session, action, form, files, ip):
                 if existing:
                     return {"ok": True, "id": existing["id"]}
             title = lesson["title"] if lesson else "" if bulk_lesson else text(form, "title")
-            row.update({"course_id": course_id, "title": title, "topic": text(form, "topic", 200, False), "description": text(form, "description", 10000, False)})
+            row.update({"course_id": course_id, "title": title, "topic": text(form, "topic", 200, False), "description": text(form, "description", 10000, False),"published":True})
             if action == "material":
                 row.update(save_file(files.get("file")))
                 data["materials"].append(row)
@@ -565,6 +601,8 @@ def mutate(session, action, form, files, ip):
             if admin:
                 raise LearningError(403, "Chỉ tài khoản sinh viên được nộp bài.")
             assignment = find(data, "assignments", text(form, "assignment_id", 80))
+            if not assignment.get("published",True) or assignment.get("archived"):
+                raise LearningError(403,"Bài tập chưa được công bố.")
             course_access(data, assignment["course_id"], session, write=True)
             if assignment.get("closed_at") or date_value(assignment["due_at"]) <= datetime.now(timezone.utc):
                 raise LearningError(409, "Đã hết hạn nộp bài.")
@@ -579,6 +617,8 @@ def mutate(session, action, form, files, ip):
             if len(prior) >= assignment["max_attempts"]:
                 raise LearningError(409, "Bạn đã dùng hết số lần nộp bài.")
             guards.enter_context(submission_rate.guard(sid))
+            if assignment.get("accepted_extensions") and Path((files.get("file") or {}).get("filename", "")).suffix.lower() not in assignment["accepted_extensions"]:
+                raise LearningError(400, "Định dạng file không đúng yêu cầu của câu hỏi.")
             row.update(save_file(files.get("file")))
             row.update({"course_id": assignment["course_id"], "assignment_id": assignment["id"], "assignment_title": assignment["title"], "student_id": sid, "ip": ip, "request_id": key, "score": None, "feedback": "", "attempt": len(prior) + 1, "grading_history": []})
             row["assignment_snapshot"] = {k: assignment.get(k) for k in ("title","description","due_at","max_attempts")}

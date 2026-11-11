@@ -2,6 +2,7 @@
 (() => {
   'use strict';
   const esc=window.cssEscape;
+  const practiceLabel='Tự luyện tập';
   const languages={c:'C',cpp:'C++',java:'Java',python:'Python'};
   const filenames={c:'main.c',cpp:'main.cpp',java:'Main.java',python:'main.py'};
   const templates={
@@ -19,8 +20,22 @@
   function problemUrl(e,index){const url=new URL(location.href);url.searchParams.set('exam',e.id);url.searchParams.delete('problem');if(index!==undefined)url.searchParams.set('problem',String(index));return url.pathname+url.search;}
   const codeLabel=index=>index<26?String.fromCharCode(65+index):String(index+1);
   function best(rows,index){return Math.max(0,...rows.filter(r=>r.problem_index===index&&Number.isFinite(r.effective_score)).map(r=>r.effective_score));}
-  function deadline(e){return `<span class="code-deadline">Còn lại <strong data-deadline-countdown data-expires-at="${esc(e.attempt?.ends_at||e.ends_at||'')}">--:--</strong></span>`;}
+  function deadline(e){
+    if(e.practice)return '<span class="code-deadline">Tự luyện · Không tính điểm khóa học</span>';
+    if(e.activity_type==='assignment')return `<span class="code-deadline">Hạn nộp <strong>${esc(new Date(e.ends_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',dateStyle:'short',timeStyle:'short'}))}</strong></span>`;
+    return `<span class="code-deadline">Còn lại <strong data-deadline-countdown data-expires-at="${esc(e.attempt?.ends_at||e.ends_at||'')}">--:--</strong></span>`;
+  }
+  function homeworkEntry(e){
+    if(e.practice)return `<div class="alert alert-info"><p>Bài tự luyện, không tính vào điểm khóa học. Bạn có thể chạy thử và lưu các lần nộp của mình.</p>${e.can_start?`<button type="button" class="btn btn-primary" data-code-start="${esc(e.id)}">Bắt đầu luyện tập</button>`:'<p>Hiện chưa nhận lượt luyện tập mới.</p>'}</div>`;
+    return `<div class="alert alert-info"><p>Hạn nộp: ${esc(new Date(e.ends_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}))}. Bạn có thể chạy thử và nộp nhiều lần đến hạn.</p>${e.can_start?`<button type="button" class="btn btn-primary" data-code-start="${esc(e.id)}">Mở bài tập</button>`:'<p>Đã hết hạn nộp bài.</p>'}</div>`;
+  }
+  function runControls(){
+    return `<div class="code-run-controls"><h3>Chạy thử trước khi nộp</h3><label>Chế độ chạy<select name="run_mode"><option value="samples">Test mẫu công khai</option><option value="custom">Input tự nhập</option></select></label><label>Input tự nhập<textarea name="stdin" rows="3" maxlength="100000" placeholder="Chọn chế độ Input tự nhập để dùng dữ liệu này"></textarea></label><button type="button" class="btn btn-secondary" data-code-run>Chạy thử</button><p class="muted">Chạy thử không ghi điểm hoặc tạo lần nộp. Test ẩn chỉ được chạy khi nộp bài.</p><pre class="code-output" data-code-run-result role="status"></pre></div>`;
+  }
   function entry(e){
+    if(e.activity_type==='assignment')return homeworkEntry(e);
+    if(e.state==='distributed')return `<section class="code-entry" data-code-entry="${esc(e.id)}"><h3>Đề thi đã được phân phối</h3><p>Chờ giảng viên mở kỳ thi. Đề bài sẽ hiển thị sau khi bạn vào làm bài; hiện tại chưa bắt đầu tính giờ.</p></section>`;
+
     const time=value=>value?`<time datetime="${esc(value)}">${esc(new Date(value).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',dateStyle:'short',timeStyle:'medium'}))}</time>`:'Chưa xác định';
     const end=Date.parse(e.ends_at),waiting=e.state==='scheduled',ticking=e.state==='started'&&Number.isFinite(end),allowed=e.can_start&&ticking&&end>window.submissionDeadlines.now();
     const clockEnd=waiting?e.started_at:e.ends_at;
@@ -37,17 +52,17 @@
       }
       const problemRows=window.listUi.view('programming:problems:'+e.id,e.problems.map(p=>({...p,best_score:best(rows,p.index),verdict:(()=>{const last=rows.filter(r=>r.problem_index===p.index).at(-1);return last?(last.state==='queued'||last.state==='running'?last.state:last.result?.verdict):'none';})()})),'problems');
       const max=e.problems.reduce((n,p)=>n+p.points,0),score=e.problems.reduce((n,p)=>n+best(rows,p.index),0);
-      return `<section class="panel code-exam" data-code-problem-list="${esc(e.id)}"><div class="panel-heading"><div><p class="eyebrow">THI LẬP TRÌNH</p><h2>${esc(e.title)}</h2><p class="muted">${e.duration_minutes} phút · ${e.languages.map(l=>languages[l]).join(' / ')}</p></div>${e.attempt?deadline(e):''}</div><p class="student-description">${esc(e.description||'Chọn một bài toán để đọc đề và viết lời giải.')}</p>${!e.attempt?entry(e):''}${e.attempt?`<div class="code-list-heading"><h3>Danh sách bài toán</h3><span><strong>${score}/${max}</strong> điểm tốt nhất</span></div>${window.listUi.controls('programming:problems:'+e.id,'problems')}<div class="table-wrap"><table class="code-problem-table"><thead><tr><th>Bài</th><th>Tên bài toán</th><th>Điểm tốt nhất</th><th>Lần nộp</th><th>Kết quả gần nhất</th><th></th></tr></thead><tbody>${problemRows.map(p=>{
+      return `<section class="panel code-exam" data-code-problem-list="${esc(e.id)}"><div class="panel-heading"><div><p class="eyebrow">${e.practice?practiceLabel:e.activity_type==='assignment'?'BÀI TẬP LẬP TRÌNH':'THI LẬP TRÌNH'}</p><h2>${esc(e.title)}</h2><p class="muted">${e.practice?practiceLabel:e.activity_type==='assignment'?'Bài tập lập trình':e.duration_minutes+' phút'} · ${e.languages.map(l=>languages[l]).join(' / ')}</p></div>${e.attempt?deadline(e):''}</div><p class="student-description">${esc(e.description||'Chọn một bài toán để đọc đề và viết lời giải.')}</p>${!e.attempt?entry(e):''}${e.attempt?`<div class="code-list-heading"><h3>Danh sách bài toán</h3><span><strong>${score}/${max}</strong> điểm tốt nhất</span></div>${window.listUi.controls('programming:problems:'+e.id,'problems')}<div class="table-wrap"><table class="code-problem-table"><thead><tr><th>Bài</th><th>Tên bài toán</th><th>Điểm tốt nhất</th><th>Lần nộp</th><th>Kết quả gần nhất</th><th></th></tr></thead><tbody>${problemRows.map(p=>{
         const attempts=rows.filter(r=>r.problem_index===p.index),last=attempts[attempts.length-1];
         return `<tr><td><span class="code-letter">${codeLabel(p.index)}</span></td><td><a class="student-list-title" data-code-problem="${p.index}" href="${esc(problemUrl(e,p.index))}">${esc(p.title)}</a><small>${p.time_limit_ms} ms · ${p.memory_limit_mb} MB</small></td><td><strong>${best(rows,p.index)}/${p.points}</strong></td><td>${attempts.length}</td><td>${last?window.programmingUi.status(last):'<span class="muted">Chưa nộp</span>'}</td><td><a class="btn btn-secondary btn-small" href="${esc(problemUrl(e,p.index))}">${e.can_submit?'Làm bài':'Xem bài'}</a></td></tr>`;
-      }).join('')}</tbody></table></div><p class="muted">Chọn tên bài để mở trang làm bài. Mỗi bài có lịch sử nộp và kết quả riêng.</p>${e.finalized?`<div class="alert alert-info">Bạn đã nộp bài và kết thúc kỳ thi lúc ${esc(new Date(e.submitted_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}))}. Phiên giám sát đã dừng.</div>`:`<div class="code-submit-bar"><p>Nộp bài sớm sẽ khóa toàn bộ bài thi và dừng giám sát. Thao tác này không thể hoàn tác.</p><button type="button" class="btn btn-primary" data-code-finish="${esc(e.id)}"><i class="fa fa-check-circle"></i> Nộp bài và kết thúc thi</button></div>`}`:''}</section>`;
+      }).join('')}</tbody></table></div><p class="muted">Chọn tên bài để mở trang làm bài. Mỗi bài có lịch sử nộp và kết quả riêng.</p>${e.activity_type==='assignment'?'':e.finalized?`<div class="alert alert-info">Bạn đã nộp bài và kết thúc kỳ thi lúc ${esc(new Date(e.submitted_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}))}. Phiên giám sát đã dừng.</div>`:`<div class="code-submit-bar"><p>Nộp bài sớm sẽ khóa toàn bộ bài thi và dừng giám sát. Thao tác này không thể hoàn tác.</p><button type="button" class="btn btn-primary" data-code-finish="${esc(e.id)}"><i class="fa fa-check-circle"></i> Nộp bài và kết thúc thi</button></div>`}`:''}</section>`;
     }).join('');
   }
   function workspace(e,p,rows){
     const selected=read(key(e,p.index,'selected'));
     const language=e.languages.includes(selected)?selected:e.languages[0];
     const saved=draft(e,p.index,language);
-    return `<div class="code-workspace" data-code-workspace data-exam-id="${esc(e.id)}" data-problem-index="${p.index}"><nav class="code-breadcrumb" aria-label="Điều hướng bài thi"><a href="${esc(problemUrl(e))}"><i class="fa fa-arrow-left"></i> Danh sách bài</a><span>/</span><span>Bài ${codeLabel(p.index)}</span></nav><header class="code-workspace-header"><div><p class="eyebrow">${esc(e.title)}</p><h1>${codeLabel(p.index)}. ${esc(p.title)}</h1></div>${deadline(e)}</header><div class="code-workspace-grid"><section class="panel code-statement"><h2>Đề bài</h2><div class="code-limits"><span>${p.points} điểm</span><span>${p.time_limit_ms} ms / test</span><span>${p.memory_limit_mb} MB</span></div><p class="student-description">${esc(p.statement||'Giảng viên chưa bổ sung đề bài.')}</p><h3>Ví dụ</h3>${p.samples.map((t,i)=>`<div class="code-sample"><h4>Ví dụ ${i+1}</h4><strong>Input</strong><pre class="code-output">\n${esc(t.input)}</pre><strong>Output</strong><pre class="code-output">\n${esc(t.output)}</pre></div>`).join('')||'<p class="muted">Bài này không có test mẫu công khai.</p>'}</section><section class="panel code-solution"><form data-code-submit data-allowed="${e.can_submit}" data-expires-at="${esc(e.attempt.ends_at)}"><input type="hidden" name="exam_id" value="${esc(e.id)}"><input type="hidden" name="problem_index" value="${p.index}"><div class="code-solution-toolbar"><label for="code-language">Ngôn ngữ biên dịch<select id="code-language" name="language">${e.languages.map(l=>`<option value="${l}" ${l===language?'selected':''}>${languages[l]}</option>`).join('')}</select></label><button class="btn btn-secondary btn-small" type="button" data-code-upload><i class="fa fa-upload"></i> Tải file lên</button><input class="code-file-input" type="file" name="file" aria-label="Tải file mã nguồn" accept="${e.languages.map(l=>'.'+filenames[l].split('.').pop()).join(',')}"></div><div class="code-editor-caption"><strong data-code-filename>${esc(saved.filename)}</strong><span data-code-draft-status>Nháp riêng cho bài và ngôn ngữ này</span></div><label class="sr-only" for="code-source">Mã nguồn lời giải</label><div class="code-editor-shell"><pre class="code-line-numbers" aria-hidden="true">1</pre><textarea id="code-source" class="code-editor" name="source" data-code-editor spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-describedby="code-editor-help">${esc(saved.source)}</textarea></div><p class="muted" id="code-editor-help">Đọc stdin, ghi stdout. Tab: thụt dòng · Ctrl+Enter: submit · Tối đa 100 KB. Java dùng public class Main.</p><div class="code-submit-bar"><p data-code-submit-message role="status"></p><button type="submit" class="btn btn-primary" ${e.can_submit?'':'disabled'}><i class="fa fa-paper-plane"></i> Submit bài</button></div><p class="ref-form-error" data-code-error role="alert"></p><p class="alert alert-info" data-code-closed ${e.can_submit?'hidden':''}>Đã đóng nhận bài. Bạn vẫn có thể xem đề, bản nháp và lịch sử.</p></form></section></div><section class="panel code-problem-history"><div class="panel-heading"><div><h2>Lịch sử submit · Bài ${codeLabel(p.index)}</h2><p class="muted">Tự cập nhật trạng thái biên dịch, chấm test và kết quả.</p></div><span data-code-history-connection role="status"></span></div><div data-code-problem-history>${history(rows.filter(r=>r.problem_index===p.index),'programming:history:'+e.id+':'+p.index)}</div></section></div>`;
+    return `<div class="code-workspace" data-code-workspace data-exam-id="${esc(e.id)}" data-problem-index="${p.index}"><nav class="code-breadcrumb" aria-label="Điều hướng bài thi"><a href="${esc(problemUrl(e))}"><i class="fa fa-arrow-left"></i> Danh sách bài</a><span>/</span><span>Bài ${codeLabel(p.index)}</span></nav><header class="code-workspace-header"><div><p class="eyebrow">${esc(e.title)}</p><h1>${codeLabel(p.index)}. ${esc(p.title)}</h1></div>${deadline(e)}</header><div class="code-workspace-grid"><section class="panel code-statement"><h2>Đề bài</h2><div class="code-limits"><span>${p.points} điểm</span><span>${p.time_limit_ms} ms / test</span><span>${p.memory_limit_mb} MB</span></div><p class="student-description">${esc(p.statement||'Giảng viên chưa bổ sung đề bài.')}</p><h3>Ví dụ</h3>${p.samples.map((t,i)=>`<div class="code-sample"><h4>Ví dụ ${i+1}</h4><strong>Input</strong><pre class="code-output">\n${esc(t.input)}</pre><strong>Output</strong><pre class="code-output">\n${esc(t.output)}</pre></div>`).join('')||'<p class="muted">Bài này không có test mẫu công khai.</p>'}</section><section class="panel code-solution"><form data-code-submit data-allowed="${e.can_submit}" data-expires-at="${esc(e.attempt.ends_at)}"><input type="hidden" name="exam_id" value="${esc(e.id)}"><input type="hidden" name="problem_index" value="${p.index}"><div class="code-solution-toolbar"><label for="code-language">Ngôn ngữ biên dịch<select id="code-language" name="language">${e.languages.map(l=>`<option value="${l}" ${l===language?'selected':''}>${languages[l]}</option>`).join('')}</select></label><button class="btn btn-secondary btn-small" type="button" data-code-upload><i class="fa fa-upload"></i> Tải file lên</button><input class="code-file-input" type="file" name="file" aria-label="Tải file mã nguồn" accept="${e.languages.map(l=>'.'+filenames[l].split('.').pop()).join(',')}"></div><div class="code-editor-caption"><strong data-code-filename>${esc(saved.filename)}</strong><span data-code-draft-status>Nháp riêng cho bài và ngôn ngữ này</span></div><label class="sr-only" for="code-source">Mã nguồn lời giải</label><div class="code-editor-shell"><pre class="code-line-numbers" aria-hidden="true">1</pre><textarea id="code-source" class="code-editor" name="source" data-code-editor spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-describedby="code-editor-help">${esc(saved.source)}</textarea></div><p class="muted" id="code-editor-help">Đọc stdin, ghi stdout. Tab: thụt dòng · Ctrl+Enter: submit · Tối đa 100 KB. Java dùng public class Main.</p><div class="code-submit-bar"><p data-code-submit-message role="status"></p><button type="submit" class="btn btn-primary" ${e.can_submit?'':'disabled'}><i class="fa fa-paper-plane"></i> Submit bài</button></div>${runControls()}<p class="ref-form-error" data-code-error role="alert"></p><p class="alert alert-info" data-code-closed ${e.can_submit?'hidden':''}>Đã đóng nhận bài. Bạn vẫn có thể xem đề, bản nháp và lịch sử.</p></form></section></div><section class="panel code-problem-history"><div class="panel-heading"><div><h2>Lịch sử submit · Bài ${codeLabel(p.index)}</h2><p class="muted">Tự cập nhật trạng thái biên dịch, chấm test và kết quả.</p></div><span data-code-history-connection role="status"></span></div><div data-code-problem-history>${history(rows.filter(r=>r.problem_index===p.index),'programming:history:'+e.id+':'+p.index)}</div></section></div>`;
   }
   function history(rows,id){const visible=window.listUi.view(id,rows,'submissions');return window.listUi.controls(id,'submissions')+(visible.map(r=>renderResult(r)).join('')||'<p class="muted">Chưa có lần submit nào cho bài này.</p>');}
   function current(){return document.querySelector('[data-code-workspace]');}
@@ -66,7 +81,8 @@
   function updateDeadline(form,allowed){
     if(allowed!==undefined)form.dataset.allowed=String(allowed);
     const closed=form.dataset.allowed!=='true'||Date.parse(form.dataset.expiresAt)<=window.submissionDeadlines.now();
-    form.querySelector('[type=submit]').disabled=closed||!!form.dataset.sending;
+    form.querySelector('[type=submit]').disabled=closed||!!form.dataset.sending||!!form.dataset.running;
+    const run=form.querySelector('[data-code-run]');if(run)run.disabled=closed||!!form.dataset.sending||!!form.dataset.running;
     form.querySelector('[data-code-closed]').hidden=!closed;
   }
   function sync(data){
@@ -153,9 +169,25 @@
       editor.setRangeText('\n'+indent,editor.selectionStart,editor.selectionEnd,'end');save(editor.form);
     }
   });
+  document.addEventListener('click',async event=>{
+    const button=event.target.closest('[data-code-run]');if(!button)return;
+    const form=button.closest('form');if(form.dataset.running||form.dataset.sending||form.dataset.uploading)return;
+    const output=form.querySelector('[data-code-run-result]');
+    if(form.dataset.allowed!=='true'||Date.parse(form.dataset.expiresAt)<=window.submissionDeadlines.now()){updateDeadline(form);return;}
+    form.dataset.running='true';updateDeadline(form);output.textContent='Đang biên dịch và chạy thử…';
+    try{
+      if(form.elements.file.files.length)await upload(form,form.elements.file.files[0]);
+      save(form);
+      const body=new URLSearchParams({exam_id:form.elements.exam_id.value,problem_index:form.elements.problem_index.value,language:form.elements.language.value,source:form.elements.source.value,run_mode:form.elements.run_mode.value,stdin:form.elements.stdin.value});
+      const response=await window.cssRequest('/api/student/programming/run',{method:'POST',body});
+      const result=response.result;
+      output.textContent=[response.mode==='custom'?'Kết quả chạy với input tự nhập (không tính điểm)':'Kết quả test mẫu (không tính điểm)',result.verdict,result.compile_log||'',...(result.tests||[]).map(t=>`Test ${t.index}: ${t.verdict}\nOutput:\n${t.actual||''}${t.stderr?'\nStderr:\n'+t.stderr:''}`)].filter(Boolean).join('\n\n');
+    }catch(error){output.textContent=error.message;}
+    finally{delete form.dataset.running;if(form.isConnected)updateDeadline(form);}
+  });
   document.addEventListener('submit',async event=>{
     const form=event.target;if(!form.matches('[data-code-submit]'))return;event.preventDefault();
-    if(form.dataset.sending||form.dataset.uploading)return;
+    if(form.dataset.sending||form.dataset.uploading||form.dataset.running)return;
     const error=form.querySelector('[data-code-error]');error.textContent='';
     if(form.dataset.allowed!=='true'||Date.parse(form.dataset.expiresAt)<=window.submissionDeadlines.now()){updateDeadline(form);return;}
     form.dataset.sending='true';updateDeadline(form);
@@ -177,5 +209,5 @@
     finally{delete form.dataset.sending;if(form.isConnected)updateDeadline(form);}
   });
   setInterval(()=>{const form=current()?.querySelector('form');if(form)updateDeadline(form);refresh();},1500);
-  window.programmingStudent={render,mount,sync,busy:()=>!!current()?.querySelector('form[data-sending],form[data-uploading]'),configure(options){renderResult=options.result;}};
+  window.programmingStudent={render,mount,sync,busy:()=>!!current()?.querySelector('form[data-sending],form[data-uploading],form[data-running]'),configure(options){renderResult=options.result;}};
 })();

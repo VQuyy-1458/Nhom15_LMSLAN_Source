@@ -1,4 +1,11 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+for(const [template,consumer] of [['admin','admin-courses-design'],['student','student-workspace']]){
+  const html=fs.readFileSync(`templates/${template}.html`,'utf8');
+  const dependency=html.indexOf('/static/js/resource-weeks.js');
+  assert(dependency>=0,`${template} must load resource-weeks.js`);
+  assert(dependency<html.indexOf(`/static/js/${consumer}.js`),`${template} must load week helpers before consumers`);
+  assert(html.includes('/static/css/resource-weeks.css'),`${template} must load compact list styles`);
+}
 const handlers={};
 const document={addEventListener(name,fn){handlers[name]=fn;},querySelectorAll(){return [];}};
 const context={document,window:{cssEscape:v=>String(v??'').replaceAll('<','&lt;'),classroomActivities:{kind:v=>v},listUi:{view:(_,rows)=>rows,controls:()=>''}}};
@@ -46,3 +53,51 @@ for(const type of ['materials','assignments']){
   }
 }
 console.log('Resource weeks: explicit topics, lesson links, no date guessing, filters, compact rows and actions passed.');
+vm.runInContext(fs.readFileSync('static/js/programming-assignments.js','utf8'),context);
+data.programming_assignments=[
+  {id:'pa_official',course_id:'c',title:'Official code homework',topic:'Week 2',due_at:'2026-12-01T00:00:00Z',state:'started',participants:['s1'],programming:{problems:[{}],languages:['python']}},
+  {id:'pa_draft',course_id:'c',title:'Draft code homework',due_at:'2026-12-01T00:00:00Z',state:'idle',participants:[],programming:{problems:[{}],languages:['python']}},
+  {id:'pa_other',course_id:'other',title:'Other course code homework',state:'started'}
+];
+const course={id:'c',status:'active'};
+let combined=context.window.courseDesign.teaching(data,course,'assignments');
+assert(combined.includes('data-assignment-list'));
+assert(combined.includes('data-pa-published="pa_official"'));
+assert.equal((combined.match(/data-pa-published="pa_official"/g)||[]).length,1);
+assert(combined.includes('section=submissions'));
+assert(combined.includes('data-pa-results="pa_official"'));
+assert(!combined.includes('Draft code homework'));assert(!combined.includes('Other course code homework'));
+const drafts=context.window.programmingAssignmentsUI.adminList(data,course);
+assert(drafts.includes('Draft code homework'));assert(!drafts.includes('Official code homework'));assert(!drafts.includes('data-pa-official'));
+select('course:assignments:c','unassigned');
+combined=context.window.courseDesign.teaching(data,course,'assignments');
+assert(!combined.includes('Official code homework'));
+select('course:assignments:c','2');
+combined=context.window.courseDesign.teaching(data,course,'assignments');assert(combined.includes('Official code homework'));
+console.log('Unified homework list: published code/file assignments share week filters; drafts and other courses excluded.');
+data.programming={exams:[
+  {id:'pa_student',course_id:'c',activity_type:'assignment',state:'started',title:'Student code homework',topic:'Week 3',due_at:'2099-12-01T00:00:00Z',languages:['python'],can_start:true},
+  {id:'pa_hidden_draft',course_id:'c',activity_type:'assignment',state:'idle',title:'Student draft'},
+  {id:'exam_only',course_id:'c',activity_type:'exam',state:'started',title:'Separate exam'},
+  {id:'pa_foreign',course_id:'other',activity_type:'assignment',state:'started',title:'Foreign homework',languages:['java']}
+],submissions:[]};
+let studentCombined=context.window.studentWorkspace.assignments(data,options);
+assert(studentCombined.includes('data-student-assignment-list'));
+assert(studentCombined.includes('data-learning-detail="assignment"'));
+assert.equal((studentCombined.match(/data-programming-assignment="pa_student"/g)||[]).length,1);
+assert.equal((studentCombined.match(/data-resource-week-filter=/g)||[]).length,1);
+assert(studentCombined.includes('tab=assignments&exam=pa_student'));
+for(const text of ['Student draft','Separate exam','Foreign homework'])assert(!studentCombined.includes(text));
+select('student:assignments:c','2');
+studentCombined=context.window.studentWorkspace.assignments(data,options);
+assert(!studentCombined.includes('Student code homework'));assert(studentCombined.includes('data-learning-detail="assignment"'));
+select('student:assignments:c','3');
+studentCombined=context.window.studentWorkspace.assignments(data,options);
+assert(studentCombined.includes('Student code homework'));assert(!studentCombined.includes('data-learning-detail="assignment"'));
+select('student:assignments:c','all');
+studentCombined=context.window.studentWorkspace.assignments(data,{...options,filters:{...options.filters,status:'submitted'}});
+assert(!studentCombined.includes('Student code homework'));
+data.programming.submissions.push({exam_id:'pa_student'});
+studentCombined=context.window.studentWorkspace.assignments(data,{...options,filters:{...options.filters,status:'submitted'}});
+assert(studentCombined.includes('Student code homework'));
+console.log('Student unified list: one week filter, file/code actions, course isolation, drafts excluded and submit status passed.');

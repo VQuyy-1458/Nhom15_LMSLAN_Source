@@ -22,6 +22,8 @@ def update(session, form, ip):
         row = next((e for e in exam_catalog.listing() if e["id"] == exam_id), None)
         if not row:
             raise learning.LearningError(404, "Không tìm thấy kỳ thi.")
+        from .permissions import require_content
+        require_content(session,row)
         if row["state"] == "ended":
             raise learning.LearningError(409, "Kỳ thi đã kết thúc; không sửa thời gian của lịch sử thi.")
         if row.get("course_id"):

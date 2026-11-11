@@ -15,7 +15,7 @@ async function readyProcess(proc,stream,pattern){return new Promise((resolve,rej
 let nextId=1,dialogDecision=true;const callbacks=new Map(),errors=[],dialogEvents=[];
 function send(method,params={}){return new Promise((resolve,reject)=>{const id=nextId++,timer=setTimeout(()=>{callbacks.delete(id);reject(new Error(`CDP timeout: ${method}`));},12000);callbacks.set(id,{resolve,reject,timer});socket.send(JSON.stringify({id,method,params}));});}
 async function evaluate(expression){const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw new Error(r.exceptionDetails.text+' '+JSON.stringify(r.exceptionDetails.exception));return r.result.value;}
-async function navigate(url){const prior=await evaluate('performance.timeOrigin');await send('Page.navigate',{url});await waitFor(()=>evaluate(`performance.timeOrigin!==${prior} && location.pathname===${JSON.stringify(new URL(url).pathname)} && document.readyState==='complete' && document.querySelector('#workspace-content .panel, #learning-content .panel, #learning-content .ref-page-head, #admin-dashboard-overview .bridge-teaching, #admin-course-picker, #accounts, #server-info, #admin-accounts, #notifications') && !document.querySelector('.student-loading')`));}
+async function navigate(url){const prior=await evaluate('performance.timeOrigin');await send('Page.navigate',{url});await waitFor(()=>evaluate(`performance.timeOrigin!==${prior} && location.pathname===${JSON.stringify(new URL(url).pathname)} && document.readyState==='complete' && document.querySelector('#workspace-content .panel, #learning-content .panel, #learning-content .ref-page-head, #admin-dashboard-overview .bridge-teaching, #admin-course-picker, #accounts, #server-info, #admin-accounts, #notifications, #classification-page .panel, #teaching-calendar-overview .panel, #class-notifications-overview .panel') && !document.querySelector('.student-loading')`));}
 async function submit(selector,values){await evaluate(`(()=>{const f=document.querySelector(${JSON.stringify(selector)});f.dataset.qaSubmitted='true';${Object.entries(values).map(([key,value])=>`f.elements.namedItem(${JSON.stringify(key)}).value=${JSON.stringify(value)};`).join('')}f.requestSubmit();})()`);await waitFor(()=>evaluate(`!document.querySelector(${JSON.stringify(selector)})?.dataset.qaSubmitted`));}
 async function screenshot(name,captureBeyondViewport=true){const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport});fs.writeFileSync(path.join(out,name),Buffer.from(shot.data,'base64'));}
 async function panelScreenshot(selector,name){const clip=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()`);const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip});fs.writeFileSync(path.join(out,name),Buffer.from(shot.data,'base64'));}
@@ -39,7 +39,7 @@ async function courseGradesOrder(){
 }
 async function sidebarFit(base,fixture,restoreMetrics={width:1440,height:1100,deviceScaleFactor:1,mobile:false}){
   const sizes=[{width:1536,height:738},{width:1366,height:768},{width:1280,height:650},{width:1024,height:576},{width:1280,height:480},{width:390,height:664},{width:844,height:390},{width:568,height:320}];
-  const pages=[{role:'student',path:'/student/dashboard',count:10},{role:'admin',path:'/admin?section=accounts',count:9},{role:'admin',path:'/admin?section=monitor',count:9},{role:'admin',path:'/admin/courses',count:9}];
+  const pages=[{role:'student',path:'/student/dashboard',count:10},{role:'admin',path:'/admin?section=accounts',count:12},{role:'admin',path:'/admin?section=monitor',count:12},{role:'admin',path:'/admin/courses',count:12}];
   for(const screen of pages){
     await send('Network.setCookie',{name:'css_session',value:fixture[screen.role],url:base,httpOnly:true,sameSite:'Strict'});
     for(const size of sizes){
@@ -444,9 +444,205 @@ async function codeRoster(base,fixture){
   assert.deepEqual(errors,[],'Roster UI JavaScript/CSP errors');
   console.log('PASS: code exam roster search/select/paste/deduplication, real account login, independent save and combined exam save, membership checks, mobile layout and opening with the selected roster');
 }
+async function classificationFlow(base,fixture){
+  await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+'/admin?section=classification');
+  const commonManagementLinks=await evaluate("[...document.querySelectorAll('[data-shared-management-nav] a')].map(a=>{const u=new URL(a.href);u.searchParams.delete('course');return u.pathname+u.search;})");
+  for(const name of ['Browser loops','Browser arrays']){
+    await evaluate(`(()=>{const f=document.querySelector('[data-tax-action="topics/save"]');f.elements.name.value=${JSON.stringify(name)};f.requestSubmit();})()`);
+    await waitFor(()=>evaluate(`document.querySelector('#classification-page').textContent.includes(${JSON.stringify(name)})`));
+  }
+  await evaluate(`(()=>{const f=document.querySelector('[data-tax-action="teachers/save"]');f.elements.id.value='browser-teacher';f.elements.full_name.value='Browser Teacher';f.elements.password.value='teacher-pass';f.requestSubmit();})()`);
+  await waitFor(()=>evaluate("document.querySelector('[name=teacher_choice]')?.value==='browser-teacher'"));
+  const pendingCourse=await evaluate(`(()=>{const f=[...document.querySelectorAll('[data-tax-action="courses/teachers"]')].find(f=>f.elements.course_id.value!==${JSON.stringify(fixture.course)});const box=f.querySelector('[name=teacher_choice]');box.checked=true;box.dispatchEvent(new Event('change',{bubbles:true}));return f.elements.course_id.value;})()`);
+  await evaluate(`(()=>{const f=[...document.querySelectorAll('[data-tax-action="courses/teachers"]')].find(f=>f.elements.course_id.value===${JSON.stringify(fixture.course)});const choice=f.querySelector('[name=teacher_choice]');choice.checked=true;choice.dispatchEvent(new Event('change',{bubbles:true}));f.requestSubmit();})()`);
+  await waitFor(()=>evaluate(`window.cssRequest('/api/admin/classification').then(d=>d.courses.find(c=>c.id===${JSON.stringify(fixture.course)}).teacher_ids.includes('browser-teacher'))`));
+  await waitFor(()=>evaluate(`(()=>{const f=[...document.querySelectorAll('[data-tax-action="courses/teachers"]')].find(f=>f.elements.course_id.value===${JSON.stringify(fixture.course)});return f.querySelector('[data-assignment-saved]').textContent.includes('Browser Teacher');})()`));
+  assert.equal(await evaluate(`(()=>{const f=[...document.querySelectorAll('[data-tax-action="courses/teachers"]')].find(f=>f.elements.course_id.value===${JSON.stringify(pendingCourse)});return f.querySelector('[name=teacher_choice]').checked;})()`),true,'Saving one course keeps unsaved selections in other courses');
+  await evaluate("fetch('/login',{method:'POST',body:new URLSearchParams({username:'browser-teacher',password:'teacher-pass'})}).then(r=>r.status)");
+  await navigate(base+'/admin?section=dashboard');
+  await waitFor(()=>evaluate("!!document.querySelector('#teacher-dashboard-calendar .teacher-month')"));
+  assert.equal(await evaluate("document.querySelector('.bridge-statistics .stat-card:first-child strong').textContent"),'1');
+  assert.equal(await evaluate(`!!document.querySelector('.bridge-dashboard-actions a[href*="section=monitor"]')`),false);
+  await navigate(base+'/admin?section=calendar');
+  await waitFor(()=>evaluate("!!document.querySelector('#teaching-calendar-overview .teacher-month')"));
+  await navigate(base+'/admin?section=class-notifications');
+  await waitFor(()=>evaluate("!!document.querySelector('#class-notification-form')"));
+  await evaluate("(()=>{const f=document.querySelector('#class-notification-form');f.elements.title.value='Teacher class announcement';f.elements.description.value='Read chapter 1';f.requestSubmit();})()");
+  await waitFor(()=>evaluate("document.querySelector('#class-notifications-overview').textContent.includes('Teacher class announcement')&&!document.querySelector('#class-notification-form').dataset.sending"));
+  await navigate(base+`/admin/courses?course=${fixture.course}&tab=assignments`);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-pa-create]')"));
+  assert.equal(await evaluate("document.querySelector('[data-user-role]').dataset.userRole"),'teacher');
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('[data-shared-management-nav] a')].map(a=>{const u=new URL(a.href);u.searchParams.delete('course');return u.pathname+u.search;})"),commonManagementLinks);
+  assert.equal(await evaluate("document.querySelector('.sidebar-brand').getAttribute('href')"),'/admin/courses');
+  assert.equal(await evaluate("document.querySelector('[data-management-scope]').dataset.managementScope"),'assigned');
+  assert.equal(await evaluate("!!document.querySelector('[data-system-management-nav]')"),false);
+  assert.equal(await evaluate(`!!document.querySelector('.sidebar-nav a[href*="section=accounts"]')`),false);
+  const due=new Date(Date.now()+86400000+7*3600000).toISOString().slice(0,16);
+  await evaluate(`(()=>{document.querySelector('[data-pa-create]').click();document.querySelector('[data-problem-add]').click();document.querySelector('[data-test-add]').click();const f=document.querySelector('[data-pa-save]');f.elements.title.value='Classified homework';f.elements.due_at.value=${JSON.stringify(due)};f.elements.difficulty.value='hard';[...f.elements.topic_ids_choice.options].forEach(n=>n.selected=true);f.elements.classification_language_choice.value='python';f.querySelectorAll('[name=language]').forEach(n=>n.checked=n.value==='python');f.querySelector('[data-problem-title]').value='Sum';f.querySelector('[data-test-input]').value='1 2';f.querySelector('[data-test-output]').value='3';f.querySelector('[data-test-sample]').checked=true;f.requestSubmit();})()`);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-pa-assign]')&&!document.querySelector('[data-pa-save]')"));
+  const row=await evaluate("window.cssRequest('/api/admin/workspace').then(d=>d.programming_assignments.find(r=>r.title==='Classified homework'))");
+  assert.equal(row.created_by,'browser-teacher');assert.equal(row.difficulty,'hard');assert.equal(row.topic_ids.length,2);
+  await evaluate("document.querySelector('[data-pa-assign]').click();document.querySelector('[data-pa-give]').requestSubmit()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-pa-published]')"));
+  assert.equal(await evaluate("!!document.querySelector('[data-pa-drafts] [data-pa-assign]')"),false);
+  await navigate(base+'/admin?section=classification');
+  await evaluate(`document.querySelector('[data-question-create]').click();document.querySelector('[data-problem-add]').click();document.querySelector('[data-test-add]').click();const f=document.querySelector('[data-tax-action="questions/save"]');f.querySelector('[data-problem-title]').value='Owned bank question';f.querySelector('[data-test-input]').value='1 2';f.querySelector('[data-test-output]').value='3';f.requestSubmit()`);
+  await waitFor(()=>evaluate(`!document.querySelector('[data-tax-action="questions/save"]')&&document.querySelector('#classification-page').textContent.includes('Owned bank question')`));
+  assert.equal(await evaluate("fetch('/api/admin/topics/save',{method:'POST',body:new URLSearchParams({name:'Denied topic'})}).then(r=>r.status)"),403);
+  assert.equal(await evaluate("fetch('/api/admin/accounts').then(r=>r.status)"),403);
+  await screenshot('classification-teacher-desktop.png');await noOverflow();
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await noOverflow();
+  assert.deepEqual(errors,[],'Classification JavaScript errors');
+  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
+  await evaluate(`(()=>{const f=document.querySelector('[data-bank-search]');f.elements.query.value='no-matching-question';f.requestSubmit()})()`);
+  assert.equal(await evaluate("document.querySelectorAll('#question-bank [data-question-reuse]').length===0"),true);
+  await evaluate(`(()=>{const f=document.querySelector('[data-bank-search]');f.elements.query.value='Owned bank';f.requestSubmit()})()`);
+  assert.equal(await evaluate("document.querySelectorAll('#question-bank [data-question-reuse]').length"),1);
+  await evaluate(`document.querySelector('#question-bank [data-question-reuse]').click()`);
+  await evaluate(`(()=>{const select=document.querySelector('dialog [name=target_type]');select.value='exam';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await submit('dialog [data-tax-action="questions/reuse"]',{target_type:'exam',title:'Bank reused exam',duration_minutes:'30'});
+  await waitFor(()=>evaluate(`!document.querySelector('dialog[open]')&&document.querySelector('#classification-page').textContent.includes('Bank reused exam')`));
+  const reused=await evaluate(`fetch('/api/admin/classification').then(r=>r.json()).then(d=>d.content.find(r=>r.title==='Bank reused exam'))`);
+  assert.equal(reused.state,'idle');assert.equal(reused.programming.problems[0].tests[0].output,'3');
+  assert.deepEqual(errors,[],'Question bank JavaScript/CSP errors');
+  await evaluate(`window.cssRequest('/api/admin/questions/save',{method:'POST',body:new URLSearchParams({course_id:${JSON.stringify(reused.course_id)},languages:${JSON.stringify(reused.programming.languages.join(','))},problems:${JSON.stringify(JSON.stringify([{...reused.programming.problems[0],title:'Second bank question'}]))}})})`);
+  await navigate(base+'/admin?section=exam');
+  await evaluate("document.querySelector('[data-exam-create]').click()");
+  await waitFor(()=>evaluate("document.querySelectorAll('[data-bank-question]').length===2"));
+  assert.equal(await evaluate("document.querySelector('[data-exam-bank]').hidden"),false);
+  await evaluate(`(()=>{const f=document.querySelector('#exam-create-form');f.elements.title.value='Multi bank exam';f.querySelectorAll('[data-bank-question]').forEach(n=>n.checked=true);f.dispatchEvent(new Event('change',{bubbles:true}));f.requestSubmit();})()`);
+  await waitFor(()=>evaluate("document.querySelector('#exam-config-form [name=title]')?.value==='Multi bank exam'"));
+  assert.equal(await evaluate("document.querySelectorAll('#exam-config-form [data-program-problem]').length"),2);
+  assert.equal(await evaluate("document.querySelectorAll('#exam-config-form [data-program-test]').length"),2);
+  await waitFor(()=>evaluate("document.querySelectorAll('#exam-config-form [data-bank-question]').length===2"));
+  assert.equal(await evaluate("document.querySelectorAll('#exam-config-form [data-bank-question]:checked:disabled').length"),2);
+  const savedPage=await evaluate('performance.timeOrigin');
+  await evaluate("document.querySelector('#exam-config-form').requestSubmit()");
+  await waitFor(()=>evaluate(`performance.timeOrigin!==${savedPage}&&document.querySelectorAll('#exam-config-form [data-bank-question]:checked:disabled').length===2`));
+  assert.equal(await evaluate("document.querySelectorAll('#exam-config-form [data-program-problem]').length"),2);
+  assert.equal(await evaluate("document.querySelectorAll('#exam-config-form [data-program-test]').length"),2);
+  assert.deepEqual(errors,[],'Multi-select question bank JavaScript errors');
+  await waitFor(()=>evaluate("!!document.querySelector('[data-code-control=publish]')&&!document.querySelector('#exam-config-form [data-bank-question]:not(:disabled)')"));
+  assert.equal(await evaluate("document.querySelector('[data-code-control=start]').disabled"),true);
+  const beforePublish=await evaluate('performance.timeOrigin');
+  await evaluate("document.querySelector('[data-code-control=publish]').click()");
+  await waitFor(()=>evaluate(`performance.timeOrigin!==${beforePublish}&&document.querySelector('[data-code-control=start]')?.disabled===false`));
+  const published=await evaluate("fetch('/api/admin/workspace').then(r=>r.json()).then(d=>d.exams.find(e=>e.title==='Multi bank exam'))");
+  assert.equal(published.published,true);assert(published.distributed_at);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-code-admin-results] table')"));
+  const recipients=await evaluate(`fetch('/api/admin/programming/submissions?exam=${published.id}').then(r=>r.json())`);
+  assert.equal(recipients.results.length,published.participants.length);
+  assert.deepEqual(errors,[],'Programming exam distribution JavaScript errors');
+  await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+`/student/exams?course=${published.course_id}&exam=${published.id}`);
+  await waitFor(()=>evaluate(`!!document.querySelector('[data-code-entry="${published.id}"]')`));
+  assert.equal(await evaluate("document.querySelectorAll('[data-code-problem]').length"),0);
+  assert.equal(await evaluate("document.querySelectorAll('[data-code-start]').length"),0);
+  await noOverflow();
+  await questionWorkflows(base,fixture);
+  console.log('PASS: taxonomy admin UI, teacher account/login, course assignment, owned homework metadata, question editor, forbidden admin access and desktop/mobile.');
+}
+async function questionWorkflows(base,fixture){
+  await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+'/admin?section=classification');
+  await evaluate(`(()=>{document.querySelector('[data-question-create]').click();const f=document.querySelector('[data-tax-action="questions/save"]');f.elements.purpose.value='practice';f.querySelector('[data-problem-add]').click();f.querySelector('[data-test-add]').click();f.querySelector('[data-problem-title]').value='Public practice code';f.querySelector('[data-test-input]').value='1 2';f.querySelector('[data-test-output]').value='3';f.querySelector('[data-test-sample]').checked=true;f.requestSubmit();})()`);
+  await waitFor(()=>evaluate(`!document.querySelector('dialog[open]')&&document.querySelector('#question-bank').textContent.includes('Public practice code')`));
+  let bank=await evaluate("fetch('/api/admin/classification').then(r=>r.json())");
+  const code=bank.content.find(q=>q.title==='Public practice code');
+  await evaluate(`document.querySelector('#question-bank [data-tax-post="questions/publish"][data-item-id="${code.id}"]').click()`);
+  await waitFor(()=>evaluate(`!document.querySelector('#question-bank [data-tax-post="questions/publish"][data-item-id="${code.id}"]')`));
+  await evaluate(`(()=>{document.querySelector('[data-question-create]').click();const f=document.querySelector('[data-tax-action="questions/save"]');f.elements.response_type.value='file';f.elements.response_type.dispatchEvent(new Event('change',{bubbles:true}));f.elements.purpose.value='practice';f.elements.file_title.value='Public practice report';f.elements.file_statement.value='Explain TCP and submit a PDF.';f.requestSubmit();})()`);
+  await waitFor(()=>evaluate(`!document.querySelector('dialog[open]')&&document.querySelector('#question-bank').textContent.includes('Public practice report')`));
+  bank=await evaluate("fetch('/api/admin/classification').then(r=>r.json())");
+  const file=bank.content.find(q=>q.title==='Public practice report');assert.equal(file.response_type,'file');
+  await evaluate(`document.querySelector('#question-bank [data-tax-post="questions/publish"][data-item-id="${file.id}"]').click()`);
+  await waitFor(()=>evaluate(`!document.querySelector('#question-bank [data-tax-post="questions/publish"][data-item-id="${file.id}"]')`));
+  await evaluate(`(()=>{document.querySelector('[data-paper-create]').click();const f=document.querySelector('[data-tax-action="papers/save"]');f.elements.title.value='Reusable file paper';f.elements.response_type.value='file';f.elements.response_type.dispatchEvent(new Event('change',{bubbles:true}));const q=f.querySelector('[data-paper-question][value="${file.id}"]');q.checked=true;q.dispatchEvent(new Event('change',{bubbles:true}));f.requestSubmit();})()`);
+  await waitFor(()=>evaluate(`!document.querySelector('dialog[open]')&&document.querySelector('#paper-library').textContent.includes('Reusable file paper')`));
+  bank=await evaluate("fetch('/api/admin/classification').then(r=>r.json())");const paper=bank.papers.find(p=>p.title==='Reusable file paper');assert.equal(paper.question_ids.length,1);
+  await evaluate(`document.querySelector('[data-tax-post="papers/publish"][data-item-id="${paper.id}"]').click()`);
+  await waitFor(()=>evaluate(`!document.querySelector('[data-tax-post="papers/publish"][data-item-id="${paper.id}"]')`));
+  await navigate(base+'/admin?section=exam');
+  await evaluate("document.querySelector('[data-exam-create]').click()");
+  await waitFor(()=>evaluate(`!!document.querySelector('[name=blueprint_id] option[value="${paper.id}"]')`));
+  await evaluate(`(()=>{const f=document.querySelector('#exam-create-form');f.elements.title.value='File sitting from reusable paper';f.elements.course_id.value='${fixture.course}';f.elements.blueprint_id.value='${paper.id}';f.elements.blueprint_id.dispatchEvent(new Event('change',{bubbles:true}));f.requestSubmit();})()`);
+  await waitFor(()=>evaluate(`document.querySelector('#exam-config-form [name=title]')?.value==='File sitting from reusable paper'`));
+  assert.equal(await evaluate("document.querySelector('#exam-config-form [name=type]').value"),'file');
+  assert.equal(await evaluate("!!document.querySelector('[data-file-paper-control=distribute]')"),true);
+  await navigate(base+`/admin/courses?course=${fixture.course}&tab=assignments`);
+  await evaluate("document.querySelector('[data-pa-create]').click()");
+  await waitFor(()=>evaluate(`!!document.querySelector('[data-pa-save] [data-bank-question][value="${code.id}"]')`));
+  const due=new Date(Date.now()+7*86400000+7*3600000).toISOString().slice(0,16);
+  await evaluate(`(()=>{const f=document.querySelector('[data-pa-save]');f.elements.title.value='Practical code selected from bank';f.elements.due_at.value=${JSON.stringify(due)};f.querySelector('[data-bank-question][value="${code.id}"]').checked=true;f.requestSubmit();})()`);
+  await waitFor(()=>evaluate("!document.querySelector('[data-pa-save]')&&document.body.textContent.includes('Practical code selected from bank')"));
+  const practical=await evaluate("fetch('/api/admin/workspace').then(r=>r.json()).then(d=>d.programming_assignments.find(a=>a.title==='Practical code selected from bank'))");
+  assert.equal(practical.programming.problems.length,1);
+  await navigate(base+'/admin?section=exam');await evaluate("document.querySelector('[data-exam-create]').click()");
+  await waitFor(()=>evaluate("document.querySelectorAll('#exam-create-form [data-bank-question]').length>=2"));
+  await evaluate(`(()=>{const f=document.querySelector('#exam-create-form');f.elements.type.value='programming';f.elements.type[0]?.dispatchEvent(new Event('change',{bubbles:true}));f.elements.course_id.value='${fixture.course}';f.elements.title.value='Random code paper';f.elements.paper_distribution.value='random';f.elements.questions_per_student.value='1';[...f.querySelectorAll('[data-bank-question]')].slice(0,2).forEach(n=>n.checked=true);f.requestSubmit();})()`);
+  await waitFor(()=>evaluate("document.querySelector('#exam-config-form [name=title]')?.value==='Random code paper'"));
+  assert.equal(await evaluate("document.querySelector('#exam-config-form [name=paper_distribution]').value"),'random');
+  await evaluate("document.querySelector('[data-code-control=publish]').click()");
+  await waitFor(()=>evaluate("document.querySelector('[data-code-control=start]')?.disabled===false"));
+  const random=await evaluate("fetch('/api/admin/workspace').then(r=>r.json()).then(d=>d.exams.find(e=>e.title==='Random code paper'))");
+  assert.equal(Object.keys(random.student_problem_sets).length,random.participants.length);
+  assert(Object.values(random.student_problem_sets).every(set=>set.length===1));
+  await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+'/student/assignments?mode=practice');
+  await waitFor(()=>evaluate("document.querySelectorAll('[data-practice-row]').length===2"));
+  await noOverflow();
+  await evaluate("document.querySelector('[data-practice-row][data-format=code] a').click()");
+  await waitFor(()=>evaluate(`!!document.querySelector('[data-code-start="practice_${code.id}"]')`));
+  await evaluate(`document.querySelector('[data-code-start="practice_${code.id}"]').click()`);
+  await waitFor(()=>evaluate("document.querySelectorAll('[data-code-problem]').length===1"));
+  assert.deepEqual(errors,[],'Question purposes, file questions, reusable papers and self-practice UI errors');
+  console.log('PASS: file/code question editor, purpose, reusable file paper, sitting creation and enrolled-student self-practice');
+}
+async function homeworkFlow(base,fixture){
+  await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+`/admin/courses?course=${fixture.course}&tab=assignments`);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-pa-create]')"));
+  await evaluate("document.querySelector('[data-pa-create]').click();document.querySelector('[data-problem-add]').click();document.querySelector('[data-test-add]').click()");
+  const due=new Date(Date.now()+7*86400000+7*3600000).toISOString().slice(0,16);
+  await evaluate(`(()=>{const f=document.querySelector('[data-pa-save]');f.elements.title.value='Homework browser QA';f.elements.due_at.value=${JSON.stringify(due)};f.querySelectorAll('[name=language]').forEach(n=>n.checked=n.value==='python');f.querySelector('[data-problem-title]').value='Sum';f.querySelector('[data-problem-statement]').value='Print sum';f.querySelector('[data-test-input]').value='1 2';f.querySelector('[data-test-output]').value='3';f.querySelector('[data-test-sample]').checked=true;f.requestSubmit();})()`);
+  await waitFor(()=>evaluate("!document.querySelector('[data-pa-save]')&&!!document.querySelector('[data-pa-assign]')"));
+  const id=await evaluate("document.querySelector('[data-pa-assign]').dataset.paAssign");
+  assert.equal(await evaluate("document.querySelectorAll('[data-pa-drafts] [data-pa-assign]').length"),1);
+  const assignPage=await evaluate('performance.timeOrigin');
+  await evaluate("document.querySelector('[data-pa-assign]').click();document.querySelector('[data-pa-give]').requestSubmit()");
+  await waitFor(()=>evaluate("!document.querySelector('[data-pa-give]')&&!document.querySelector('[data-pa-assign]')&&!!document.querySelector('[data-pa-results]')"));
+  assert.equal(await evaluate('performance.timeOrigin'),assignPage,'Giving homework updates in place');
+  assert.equal(await evaluate("document.querySelectorAll('[data-assignment-list] [data-pa-results]').length"),1);
+  assert.equal(await evaluate("document.querySelectorAll('[data-pa-drafts] .resource-line').length"),0);
+  await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=assignments`);
+  assert(await evaluate("document.body.textContent.includes('Homework browser QA')"));
+  assert.equal(await evaluate("document.querySelectorAll('[data-student-assignment-list] [data-programming-assignment]').length"),1);
+  assert.equal(await evaluate("document.querySelectorAll('[data-student-assignment-list] [data-resource-week-filter]').length"),1);
+  assert.equal(await evaluate("!!window.studentWorkspace.programmingAssignments"),false);
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=assignments&exam=${id}`);
+  await waitFor(()=>evaluate("!!document.querySelector('[data-code-start]')"));
+  await evaluate("document.querySelector('[data-code-start]').click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-code-problem]')"));
+  assert.equal(await evaluate("!!document.querySelector('[data-code-finish]')"),false);
+  await evaluate("document.querySelector('[data-code-problem]').click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-code-editor]')"));
+  await evaluate("document.querySelector('[data-code-editor]').value='print(3)';document.querySelector('[data-code-run]').click()");
+  await waitFor(()=>evaluate("document.querySelector('[data-code-run-result]')?.textContent.includes('AC')"));
+  assert.equal(await evaluate("document.querySelectorAll('[data-code-result]').length"),0);
+  await evaluate("document.querySelector('[data-code-submit]').requestSubmit()");
+  await waitFor(()=>evaluate("document.querySelector('[data-code-result]')?.textContent.includes('100/100')"),20000);
+  const marks=await evaluate("window.cssRequest('/api/student/workspace').then(d=>d.gradebooks.find(b=>b.course_id==="+JSON.stringify(fixture.course)+").items[0].homework)");
+  assert.equal(marks,10);
+  await screenshot('programming-homework-desktop.png');await noOverflow();
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await noOverflow();
+  assert.deepEqual(errors,[],'Homework JavaScript errors');
+  console.log('PASS: homework UI create, give, edit code, sample run without submission, submit, grade and saved homework score; desktop/mobile.');
+}
 (async()=>{
   fs.mkdirSync(out,{recursive:true});
-  app=spawn(python,['-u',path.join(__dirname,'serve_student_qa.py')],{cwd:root,windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CSS_ROSTER_QA:['--code-roster','--code-entry','--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':'',CSS_ENROLLMENT_QA:process.argv.includes('--enrollment')?'1':'',CSS_TIMING_QA:['--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':''}});
+  app=spawn(python,['-u',path.join(__dirname,'serve_student_qa.py')],{cwd:root,windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CSS_ROSTER_QA:['--code-roster','--code-entry','--timing','--auto-exams','--programming-homework','--classification'].some(flag=>process.argv.includes(flag))?'1':'',CSS_ENROLLMENT_QA:process.argv.includes('--enrollment')?'1':'',CSS_TIMING_QA:['--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':''}});
   const fixture=JSON.parse(await readyProcess(app,'stdout',/QA_READY ([^\r\n]+)/));
   const base=`http://127.0.0.1:${fixture.port}`;
   browser=spawn(chrome,['--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
@@ -459,6 +655,8 @@ async function codeRoster(base,fixture){
   await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
   if(process.argv.includes('--sidebar')){await sidebarFit(base,fixture);assert.deepEqual(errors,[],'Sidebar browser JavaScript errors');return;}
+  if(process.argv.includes('--classification')){await classificationFlow(base,fixture);return;}
+  if(process.argv.includes('--programming-homework')){await homeworkFlow(base,fixture);return;}
   if(process.argv.includes('--code-roster')){await codeRoster(base,fixture);return;}
   if(process.argv.includes('--code-entry')){await codeEntry(base,fixture);return;}
   if(process.argv.includes('--enrollment')){await enrollmentFlow(base,fixture);return;}

@@ -83,6 +83,406 @@ class LearningTests(unittest.TestCase):
     def course(self, members="s1"):
         return self.create("course", name="Course", code="CS1", semester="2026", student_ids=members)
 
+    def programming_homework(self, course=None):
+        course = course or self.course("s1,s2")
+        fields = {"course_id": course, "title": "Programming homework", "topic": "Tuần 1",
+                  "due_at": (datetime.now(timezone.utc)+timedelta(days=7)).isoformat(), "languages": "python",
+                  "problems": json.dumps([{"title": "Sum", "points": 100, "tests": [
+                      {"input": "1 2", "output": "3", "sample": True},
+                      {"input": "secret-input", "output": "secret-output", "sample": False}]}])}
+        code, result = self.request("/api/admin/programming-assignments/save", form=fields)
+        self.assertEqual(code, 200, result)
+        return course, result["id"], fields
+
+    def teacher_context(self):
+        course=self.course("s1,s2");other=self.course("s2")
+        for name in ("t1","t2"):
+            code,result=self.request("/api/admin/teachers/save",form={"id":name,"full_name":name,"password":"teacher-pass"})
+            self.assertEqual(code,200,result)
+            self.tokens[name]=new_session(name,"teacher","127.0.0.1","test")
+        for cid,ids in ((course,["t1","t2"]),(other,["t2"])):
+            self.assertEqual(self.request("/api/admin/courses/teachers",form={"course_id":cid,"teacher_ids":json.dumps(ids)})[0],200)
+        fields={"course_id":course,"title":"Teacher homework","due_at":self.future,"languages":"python",
+                "problems":json.dumps([{"title":"Sum","tests":[{"input":"1 2","output":"3","sample":True}]}])}
+        return course,other,fields
+
+    def test_teacher_account_login_scoped_workspace_and_admin_only_endpoints(self):
+        course,other,fields=self.teacher_context()
+        self.assertEqual(self.request("/login",form={"username":"t1","password":"teacher-pass"})[0],303)
+        self.assertEqual(self.request("/admin","t1")[0],200)
+        code,workspace=self.request("/api/admin/workspace","t1")
+        self.assertEqual(code,200,workspace)
+        self.assertEqual([c["id"] for c in workspace["courses"]],[course])
+        self.assertEqual(workspace["session_role"],"teacher")
+        self.assertNotIn("password_hash",json.dumps(workspace))
+        self.assertEqual(self.request("/api/admin/workspace?course="+other,"t1")[0],403)
+        for path in ("/api/admin/admins","/api/admin/accounts","/api/admin/server-info","/admin?section=accounts","/admin?section=monitor"):
+            self.assertEqual(self.request(path,"t1")[0],403,path)
+        for path,form in (("topics/save",{"name":"Forbidden"}),("teachers/save",{"id":"evil"}),("courses/teachers",{"course_id":course,"teacher_ids":'["t1"]'})):
+            self.assertEqual(self.request('/api/admin/'+path,"t1",form)[0],403,path)
+        self.assertEqual(self.request("/api/learning/course","t1",{"name":"Forbidden"})[0],403)
+        self.assertEqual(self.request("/api/admin/programming-assignments/save","t1",{**fields,"course_id":other})[0],403)
+
+    def test_admin_teacher_share_management_ui_without_merging_permissions(self):
+        import re
+        course,other,fields=self.teacher_context()
+        pages={role:self.request('/admin/courses?course='+course,role)[1].decode('utf-8') for role in ('admin','t1')}
+        common={role:html.split('data-shared-management-nav>',1)[1].split('</div>',1)[0] for role,html in pages.items()}
+        self.assertEqual(re.findall(r'href="([^"]+)"',common['admin']),re.findall(r'href="([^"]+)"',common['t1']))
+        self.assertIn('data-system-management-nav',pages['admin'])
+        self.assertNotIn('data-system-management-nav',pages['t1'])
+        self.assertIn('data-management-scope="system"',pages['admin'])
+        self.assertIn('data-management-scope="assigned"',pages['t1'])
+        for html in pages.values():
+            self.assertIn('class="sidebar-brand" href="/admin/courses"',html)
+            self.assertIn('QUẢN LÝ',html)
+        self.assertEqual(self.request('/api/admin/accounts','t1')[0],403)
+        self.assertEqual(self.request('/api/admin/workspace?course='+other,'t1')[0],403)
+
+    def test_course_teacher_assignment_rejects_missing_selection_and_reads_back_saved_ids(self):
+        course,other,fields=self.teacher_context()
+        previous=learning.find(learning.load(),'courses',course)['teacher_ids']
+        self.assertEqual(self.request('/api/admin/courses/teachers',form={'course_id':course})[0],400)
+        self.assertEqual(learning.find(learning.load(),'courses',course)['teacher_ids'],previous)
+        code,result=self.request('/api/admin/courses/teachers',form={'course_id':course,'teacher_ids':'["t1"]'})
+        self.assertEqual(code,200,result)
+        self.assertEqual(result['teacher_ids'],['t1'])
+        self.assertEqual(result['course_id'],course)
+        self.assertEqual([c['id'] for c in self.request('/api/admin/workspace','t1')[1]['courses']],[course])
+        saved=next(c for c in self.request('/api/admin/classification')[1]['courses'] if c['id']==course)
+        self.assertEqual(saved['teacher_ids'],['t1'])
+        self.assertEqual(self.request('/api/admin/courses/teachers',form={'course_id':course,'teacher_ids':'[]'})[0],200)
+        self.assertEqual(self.request('/api/admin/workspace','t1')[1]['courses'],[])
+
+    def test_teacher_dashboard_calendar_and_class_notifications_remain_scoped(self):
+        course,other,fields=self.teacher_context()
+        self.create('course-members',course_id=course,student_ids='s1')
+        for section in ('dashboard','calendar','class-notifications'):
+            for role in ('admin','t1'):
+                code,html=self.request('/admin?section='+section,role)
+                self.assertEqual(code,200,html)
+            self.assertEqual(self.request('/admin?section='+section+'&course='+other,'t1')[0],403)
+        for alias in ('/admin/dashboard','/admin/calendar','/admin/class-notifications'):
+            self.assertEqual(self.request(alias,'t1')[0],200)
+        form={'course_id':course,'title':'Owned class notice','kind':'announcement','description':'Read chapter 1','starts_at':self.future}
+        code,result=self.request('/api/learning/event','t1',form)
+        self.assertEqual(code,200,result)
+        self.assertEqual(self.request('/api/learning/event','t1',{**form,'course_id':other})[0],403)
+        self.assertEqual(self.request('/api/learning/event','t2',{**form,'course_id':other,'title':'Foreign notice'})[0],200)
+        workspace=self.request('/api/admin/workspace','t1')[1]
+        self.assertEqual(workspace['stats']['courses'],1)
+        self.assertEqual(workspace['stats']['students'],1)
+        self.assertEqual([e['title'] for e in workspace['events']],['Owned class notice'])
+        self.assertIn('Owned class notice',json.dumps(self.request('/api/student/notifications','s1')[1]))
+        self.assertNotIn('Owned class notice',json.dumps(self.request('/api/student/notifications','s2')[1]))
+        for endpoint in ('/api/admin/accounts','/api/admin/admins','/api/admin/server-info','/api/admin/monitor'):
+            self.assertEqual(self.request(endpoint,'t1')[0],403)
+
+    def test_teacher_ownership_cannot_be_bypassed_with_course_or_resource_ids(self):
+        course,other,fields=self.teacher_context()
+        code,result=self.request("/api/admin/programming-assignments/save","t1",fields)
+        self.assertEqual(code,200,result);item=result["id"]
+        for action,extra in (("save",fields),("delete",{}),("assign",{"student_ids":"s1"})):
+            self.assertEqual(self.request('/api/admin/programming-assignments/'+action,'t2',{**extra,"id":item})[0],403,action)
+        self.assertEqual(self.request('/api/admin/programming/submissions?exam='+item,'t2')[0],403)
+        self.assertEqual(self.request('/api/admin/programming-assignments/assign','t1',{"id":item,"student_ids":"s1"})[0],200)
+        self.assertEqual(self.request('/api/student/programming/start','t1',{"exam_id":item})[0],403)
+        self.assertEqual(self.request('/api/student/programming/start','s2',{"exam_id":item})[0],403)
+        self.assertEqual(self.request('/api/student/programming/start','s1',{"exam_id":item})[0],200)
+        hidden=self.request('/api/admin/workspace','t2')[1]
+        self.assertFalse(any(r['id']==item for r in hidden['programming_assignments']))
+        self.assertEqual(self.request('/api/admin/courses/teachers',form={"course_id":course,"teacher_ids":'["t2"]'})[0],200)
+        self.assertEqual(self.request('/api/admin/programming/submissions?exam='+item,'t1')[0],403)
+        self.assertEqual(self.request('/api/admin/workspace','t1')[1]['courses'],[])
+
+    def test_taxonomy_multiple_topics_single_difficulty_archive_and_owner_checks(self):
+        course,other,fields=self.teacher_context()
+        for name in ('Loops','Arrays'):
+            self.assertEqual(self.request('/api/admin/topics/save',form={"name":name})[0],200)
+        topics=storage.read_json('topics.json');ids=[t['id'] for t in topics]
+        fields.update(topic_ids=json.dumps(ids),difficulty='hard',classification_languages='["python"]')
+        code,result=self.request('/api/admin/programming-assignments/save','t1',fields)
+        self.assertEqual(code,200,result);item=result['id']
+        row=storage.read_json('programming_assignments.json')[0]
+        self.assertEqual(row['created_by'],'t1');self.assertEqual(row['topic_ids'],ids);self.assertEqual(row['difficulty'],'hard')
+        for role in ('t2','s1'):
+            self.assertEqual(self.request('/api/admin/classification/assign',role,{"content_type":"assignment","id":item,"difficulty":"easy"})[0],403)
+        self.assertEqual(self.request('/api/admin/classification/assign','t1',{"content_type":"assignment","id":item,"difficulty":"impossible"})[0],400)
+        self.assertEqual(self.request('/api/admin/topics/archive',form={"id":ids[0]})[0],200)
+        self.assertFalse(storage.read_json('topics.json')[0]['active'])
+        self.assertEqual(self.request('/api/admin/programming-assignments/save','t1',{**fields,'id':item,'title':'Updated'})[0],200)
+        self.assertEqual(self.request('/api/admin/programming-assignments/save','t1',{**fields,'title':'New with archived topic'})[0],400)
+        self.assertEqual(self.request('/api/admin/classification/assign','t1',{"content_type":"assignment","id":item,"difficulty":"easy","topic_ids":json.dumps(ids[1:])})[0],200)
+
+    def test_teacher_exam_question_ownership_publication_and_roster_permissions(self):
+        course,other,fields=self.teacher_context()
+        exam_fields={**fields,'type':'programming','assessment_type':'test'}
+        code,result=self.request('/api/admin/exam-configurations/save','t1',exam_fields)
+        self.assertEqual(code,200,result);eid=result['id']
+        for path,form in (('exam-configurations/save',{**exam_fields,'id':eid}),('programming/control',{'exam_id':eid,'action':'end'}),('programming/participants',{'exam_id':eid,'student_ids':'s1'}),('exam-timing',{'exam_id':eid,'duration_minutes':'10'})):
+            self.assertEqual(self.request('/api/admin/'+path,'t2',form)[0],403,path)
+        self.assertEqual(self.request('/api/admin/exam-preflight?exam='+eid,'t2')[0],403)
+        self.assertEqual(self.request('/api/admin/exam-preflight?exam='+eid,'t1')[0],200)
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','t1',{**exam_fields,'participant_ids':'unknown'})[0],403)
+        self.assertNotIn('unknown',storage.read_json('students.json'))
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','t1',{**exam_fields,'type':'file'})[0],403)
+        code,result=self.request('/api/admin/questions/save','t1',fields)
+        self.assertEqual(code,200,result)
+        question=storage.read_json('questions.json')[0]
+        self.assertEqual(question['created_by'],'t1');self.assertFalse(question['published'])
+        self.assertEqual(self.request('/api/admin/questions/publish','t2',{'id':question['id']})[0],403)
+        self.assertEqual(self.request('/api/admin/questions/publish','t1',{'id':question['id']})[0],200)
+        self.assertEqual(self.request('/api/admin/questions/save','t1',{**fields,'id':question['id']})[0],409)
+        self.assertEqual(self.request('/api/admin/classification','s1')[0],403)
+        self.assertNotIn('questions',self.request('/api/student/workspace','s1')[1])
+        self.assertEqual(self.request('/api/admin/questions/archive','t1',{'id':question['id']})[0],200)
+        self.assertTrue(storage.read_json('questions.json')[0]['archived'])
+
+    def test_bank_exam_distribution_attempt_grading_and_summary(self):
+        course,other,fields=self.teacher_context()
+        source={**fields,'problems':json.dumps([{'title':'Bank Sum','points':100,'tests':[{'input':'1 2','output':'3','sample':True},{'input':'91 8','output':'99','sample':False}]}])}
+        self.assertEqual(self.request('/api/admin/questions/save','t1',source)[0],200)
+        qid=storage.read_json('questions.json')[0]['id']
+        form={**fields,'type':'programming','distribution_mode':'manual','scheduled_at':self.future,'question_ids':json.dumps([qid]),'problems':'[]'}
+        code,result=self.request('/api/admin/exam-configurations/save','t1',form)
+        self.assertEqual(code,200,result);eid=result['id']
+        self.assertFalse(programming.exam(eid)['auto_start_ready'])
+        self.assertFalse(any(e['id']==eid for e in programming.snapshot('s1')['exams']))
+        publish={'exam_id':eid,'action':'publish'}
+        self.assertEqual(self.request('/api/admin/programming/control','t2',publish)[0],403)
+        self.assertEqual(self.request('/api/admin/programming/control','s1',publish)[0],403)
+        self.assertEqual(self.request('/api/admin/programming/participants','t1',{'exam_id':eid,'student_ids':'s1'})[0],200)
+        with patch.object(code_runner,'ready',return_value=False):
+            self.assertEqual(self.request('/api/admin/programming/control','t1',publish)[0],200)
+        self.assertTrue(programming.exam(eid)['auto_start_ready'])
+        shown=next(e for e in programming.snapshot('s1')['exams'] if e['id']==eid)
+        self.assertEqual(shown['state'],'scheduled');self.assertEqual(shown['problems'],[])
+        self.assertFalse(any(e['id']==eid for e in programming.snapshot('s2')['exams']))
+        self.assertEqual(self.request('/api/student/programming/start','s1',{'exam_id':eid})[0],409)
+        saved=programming.exam(eid)
+        form.update(id=eid,scheduled_at='',question_ids='[]',problems=json.dumps(saved['programming']['problems']))
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','t1',form)[0],200)
+        self.assertEqual(next(e for e in programming.snapshot('s1')['exams'] if e['id']==eid)['state'],'distributed')
+        with patch.object(code_runner,'ready',return_value=True),patch.object(programming,'schedule'):
+            self.assertEqual(self.request('/api/admin/programming/control','t1',{'exam_id':eid,'action':'start'})[0],200)
+            self.assertEqual(self.request('/api/student/programming/start','s1',{'exam_id':eid})[0],200)
+            code,result=self.request('/api/student/programming/submit','s1',{'exam_id':eid,'problem_index':'0','language':'python'},file=('main.py',b'print(sum(map(int,input().split())))'))
+            self.assertEqual(code,200,result);submission=result['submission']['id']
+            report=self.request('/api/admin/programming/submissions?exam='+eid,'t1')[1]
+            self.assertEqual(report['results'][0]['pending'],1)
+            grade={'verdict':'AC','score':100,'passed':2,'total':2,'compile_log':'','tests':[{'index':1,'sample':True,'verdict':'AC','input':'1 2','expected':'3','actual':'3'},{'index':2,'sample':False,'verdict':'AC','input':'91 8','expected':'99','actual':'99'}]}
+            with patch.object(code_runner,'judge',return_value=grade):programming._work(submission)
+            report=self.request('/api/admin/programming/submissions?exam='+eid,'t1')[1]
+            self.assertEqual(report['results'][0]['score'],100)
+            self.assertEqual(report['results'][0]['score_10'],10)
+            self.assertEqual(report['results'][0]['pending'],0)
+            self.assertEqual(len(programming.rows()[0]['grading_history']),1)
+            own=self.request('/api/student/programming/submissions?exam='+eid+'&problem=0','s1')[1]
+            self.assertNotIn('input',own['submissions'][0]['result']['tests'][1])
+            self.assertEqual(self.request('/api/student/programming/finish','s1',{'exam_id':eid})[0],200)
+            self.assertEqual(self.request('/api/student/programming/submit','s1',{'exam_id':eid,'problem_index':'0','language':'python'},file=('main.py',b'print(3)'))[0],409)
+        self.assertEqual(self.request('/api/admin/programming/submissions?exam='+eid,'t2')[0],403)
+        self.assertEqual(self.request('/api/admin/programming/submissions?exam='+eid,'s1')[0],403)
+
+    def test_create_exam_with_bank_questions_is_atomic_and_authorized(self):
+        course,other,fields=self.teacher_context()
+        ids=[]
+        for title in ('First','Second'):
+            self.assertEqual(self.request('/api/admin/questions/save','t1',{**fields,'problems':fields['problems'].replace('Sum',title)})[0],200)
+            ids.append(storage.read_json('questions.json')[-1]['id'])
+        form={**fields,'type':'programming','problems':'[]','question_ids':json.dumps(ids),'title':'Bank exam'}
+        code,result=self.request('/api/admin/exam-configurations/save','t1',form)
+        self.assertEqual(code,200,result)
+        exam=next(e for e in storage.read_json('exam_catalog.json') if e['id']==result['id'])
+        self.assertEqual(result['problem_count'],2)
+        self.assertEqual([p['title'] for p in exam['programming']['problems']],['First','Second'])
+        self.assertEqual(exam['state'],'idle')
+        from app import exam_preflight
+        empty={**exam,'programming':{'languages':['python'],'problems':[]}}
+        _,report=exam_preflight._snapshot(exam['id'],row=empty)
+        check=next(c for c in report['checks'] if c['label']=='B\u00e0i to\u00e1n v\u00e0 test case')
+        self.assertFalse(check['ok']);self.assertIn('ng\u00e2n h\u00e0ng',check['detail'])
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','t2',form)[0],403)
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','s1',form)[0],403)
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','t1',{**form,'languages':'cpp'})[0],400)
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','t1',{**form,'question_ids':json.dumps([ids[0],'missing'])})[0],404)
+        self.assertEqual(self.request('/api/admin/questions/archive','t1',{'id':ids[0]})[0],200)
+        self.assertEqual(self.request('/api/admin/exam-configurations/save','t1',form)[0],409)
+        self.assertEqual(len([e for e in storage.read_json('exam_catalog.json') if e['title']=='Bank exam']),1)
+        self.assertEqual(exam['programming']['problems'][0]['tests'][0]['output'],'3')
+
+    def test_question_bank_reuse_copies_tests_and_protects_drafts(self):
+        course,other,fields=self.teacher_context()
+        self.assertEqual(self.request('/api/admin/questions/save','t1',fields)[0],200)
+        question=storage.read_json('questions.json')[0];qid=question['id']
+        reuse={'id':qid,'target_type':'assignment','course_id':course,'due_at':self.future,'title':'From bank'}
+        self.assertEqual(self.request('/api/admin/questions/reuse','s1',reuse)[0],403)
+        self.assertEqual(self.request('/api/admin/questions/reuse','t2',reuse)[0],403)
+        self.assertEqual(self.request('/api/admin/questions/reuse','t1',{**reuse,'course_id':other})[0],403)
+        self.assertEqual(self.request('/api/admin/questions/reuse','t1',{**reuse,'due_at':'invalid'})[0],400)
+        self.assertEqual(storage.read_json('programming_assignments.json',[]),[])
+        code,result=self.request('/api/admin/questions/reuse','t1',reuse)
+        self.assertEqual(code,200,result);aid=result['id']
+        saved=storage.read_json('programming_assignments.json')[0]
+        self.assertEqual(saved['state'],'idle');self.assertEqual(saved['participants'],[])
+        self.assertEqual(saved['programming'],question['programming'])
+        self.assertEqual(saved['created_by'],'t1')
+        self.assertEqual(self.request('/api/admin/questions/save','t1',{**fields,'id':qid,'problems':fields['problems'].replace('Sum','Changed')})[0],200)
+        self.assertEqual(storage.read_json('programming_assignments.json')[0]['programming']['problems'][0]['title'],'Sum')
+        code,result=self.request('/api/admin/questions/reuse','t1',{**reuse,'target_type':'exam','duration_minutes':'30'})
+        self.assertEqual(code,200,result);eid=result['id']
+        self.assertEqual(self.request('/api/admin/questions/reuse','t1',{**reuse,'target_type':'exam','target_id':eid})[0],200)
+        exam=next(e for e in storage.read_json('exam_catalog.json') if e['id']==eid)
+        self.assertEqual(len(exam['programming']['problems']),2);self.assertEqual(exam['state'],'idle')
+        self.assertEqual(self.request('/api/admin/questions/reuse','t1',{**reuse,'target_type':'assignment','target_id':eid})[0],404)
+        self.assertEqual(self.request('/api/admin/programming-assignments/assign','t1',{'id':aid,'student_ids':'s1'})[0],200)
+        self.assertEqual(self.request('/api/admin/questions/reuse','t1',{**reuse,'target_id':aid})[0],409)
+        self.assertEqual(self.request('/api/admin/questions/publish','t1',{'id':qid})[0],200)
+        code,result=self.request('/api/admin/questions/reuse','t1',{**reuse,'target_type':'question'})
+        self.assertEqual(code,200,result)
+        clone=next(q for q in storage.read_json('questions.json') if q['id']==result['id'])
+        self.assertFalse(clone['published']);self.assertEqual(clone['source_question_id'],qid)
+        self.assertEqual(self.request('/api/admin/questions/archive','t1',{'id':qid})[0],200)
+        self.assertEqual(self.request('/api/admin/questions/reuse','t1',reuse)[0],409)
+        self.assertEqual(len(storage.read_json('programming_assignments.json')),1)
+
+    def test_teacher_file_preview_archive_and_rejudge_are_owner_scoped(self):
+        course,other,fields=self.teacher_context()
+        _,record=self.request('/api/learning/assignment','t1',{'course_id':course,'title':'Owned file task','due_at':self.future},file=('task.txt',b'Private task'))
+        task=record['id']
+        self.assertEqual(self.request('/api/learning/files/assignments/'+task,'t1')[0],200)
+        self.assertEqual(self.request('/api/learning/files/assignments/'+task,'t2')[0],403)
+        self.assertEqual(self.request('/api/learning/preview/assignments/'+task,'t2')[0],403)
+        code,submitted=self.request('/api/learning/submit','s1',{'assignment_id':task,'request_id':'teacher-file-1'},file=('answer.py',b'print(3)'))
+        self.assertEqual(code,200,submitted)
+        key=urllib.parse.quote('assignment:'+submitted['id'],safe='')
+        self.assertEqual(self.request('/api/admin/archive/list','t1')[1]['total'],1)
+        self.assertEqual(self.request('/api/admin/archive/list','t2')[1]['total'],0)
+        self.assertEqual(self.request('/api/admin/archive/detail?id='+key,'t2')[0],403)
+        self.assertEqual(self.request('/api/admin/archive/download?id='+key,'t2')[0],403)
+        self.assertEqual(self.request('/api/admin/archive/grade','t2',{'id':'assignment:'+submitted['id'],'score':'10'})[0],403)
+        self.assertEqual(self.request('/api/learning/grade','t1',{'submission_id':submitted['id'],'score':'9'})[0],200)
+        self.assertEqual(self.request('/api/learning/grade','t2',{'submission_id':submitted['id'],'score':'10'})[0],403)
+        data=learning.load();data['assignments'][0]['published']=False;storage.write_json('learning.json',data)
+        self.assertEqual(self.request('/api/learning/files/assignments/'+task,'s1')[0],403)
+
+    def test_teacher_deactivation_revokes_session_and_cannot_steal_legacy_content(self):
+        course,other,fields=self.teacher_context()
+        _,admin_item=self.request('/api/admin/programming-assignments/save',form=fields)
+        self.assertEqual(self.request('/api/admin/programming-assignments/save','t1',{**fields,'id':admin_item['id'],'created_by':'t1'})[0],403)
+        self.assertEqual(self.request('/api/admin/teachers/save',form={'id':'t1','full_name':'t1','active':'false'})[0],200)
+        self.assertEqual(self.request('/api/admin/workspace','t1')[0],401)
+
+    def test_teacher_code_source_rejudge_exports_and_student_hidden_tests(self):
+        course,other,fields=self.teacher_context()
+        item=self.request('/api/admin/programming-assignments/save','t1',fields)[1]['id']
+        self.assertEqual(self.request('/api/admin/programming-assignments/assign','t1',{'id':item,'student_ids':'s1'})[0],200)
+        self.request('/api/student/programming/start','s1',{'exam_id':item})
+        with patch.object(code_runner,'ready',return_value=True),patch.object(programming,'schedule'):
+            code,receipt=self.request('/api/student/programming/submit','s1',{'exam_id':item,'problem_index':'0','language':'python','request_id':'owned-code'},file=('answer.py',b'print(3)'))
+            self.assertEqual(code,200,receipt)
+        sid=receipt['submission']['id']
+        with patch.object(code_runner,'judge',return_value={'verdict':'AC','score':100,'passed':1,'total':1,'tests':[],'compile_log':''}):
+            programming._work(sid)
+        self.assertEqual(self.request('/api/programming/source/'+sid,'t1')[0],200)
+        self.assertEqual(self.request('/api/programming/source/'+sid,'t2')[0],403)
+        self.assertEqual(self.request('/api/admin/programming/rejudge','t2',{'submission_id':sid})[0],403)
+        self.assertEqual(self.request('/api/admin/archive/list','t2')[1]['total'],0)
+        self.assertNotIn('Teacher homework',self.request('/api/admin/archive/csv','t2')[1].decode('utf-8-sig'))
+        with patch.object(programming,'schedule'):
+            self.assertEqual(self.request('/api/admin/programming/rejudge','t1',{'submission_id':sid})[0],200)
+
+    def test_programming_homework_full_flow_and_sample_runs_do_not_count_as_submissions(self):
+        course, item, fields = self.programming_homework()
+        self.assertFalse(any(e["id"] == item for e in self.request("/api/student/workspace", "s1")[1]["programming"]["exams"]))
+        self.assertEqual(self.request("/api/admin/programming-assignments/assign", form={"id": item, "student_ids": "s1"})[0], 200)
+        self.assertFalse(any(e["id"] == item for e in self.request("/api/student/workspace", "s2")[1]["programming"]["exams"]))
+        self.assertEqual(self.request("/api/student/programming/start", "s1", {"exam_id": item})[0], 200)
+        form = {"exam_id": item, "problem_index": "0", "language": "python", "source": "print(3)"}
+        result = {"verdict": "AC", "score": 100, "passed": 1, "total": 1, "compile_log": "", "tests": [
+            {"index": 1, "sample": True, "verdict": "AC", "input": "1 2", "expected": "3", "actual": "3", "stderr": ""}]}
+        with patch.object(code_runner, "ready", return_value=True), patch.object(code_runner, "judge", return_value=result) as judge:
+            code, run = self.request("/api/student/programming/run", "s1", form)
+            self.assertEqual(code, 200, run)
+            self.assertNotIn("score", run["result"])
+            self.assertEqual(len(judge.call_args.args[2]["tests"]), 1)
+            self.assertNotIn("secret-input", json.dumps(judge.call_args.args[2]))
+        self.assertEqual(programming.rows(), [])
+        self.assertIsNone(self.request("/api/student/workspace", "s1")[1]["gradebooks"][0]["items"][0]["homework"])
+        # Use the same persistent submit/queue/snapshot engine as exams.
+        with patch.object(code_runner, "ready", return_value=True), patch.object(programming, "schedule"):
+            code, receipt = self.request("/api/student/programming/submit", "s1", {**form, "request_id": "hw-1"}, file=("answer.py", b"print(3)"))
+            self.assertEqual(code, 200, receipt)
+            self.assertEqual(self.request("/api/student/programming/submit", "s1", {**form, "request_id": "hw-1"}, file=("answer.py", b"print(3)"))[1]["submission"]["id"], receipt["submission"]["id"])
+        graded = {"verdict": "WA", "score": 50, "passed": 1, "total": 2, "compile_log": "", "tests": []}
+        with patch.object(code_runner, "judge", return_value=graded) as judge:
+            programming._work(receipt["submission"]["id"])
+            self.assertEqual(len(judge.call_args.args[2]["tests"]), 2)
+        workspace = self.request("/api/student/workspace", "s1")[1]
+        self.assertEqual(workspace["gradebooks"][0]["items"][0]["homework"], 5)
+        self.assertEqual(workspace["programming"]["submissions"][0]["activity_type"], "assignment")
+        self.assertEqual(len(programming.rows()[0]["grading_history"]), 1)
+        self.assertEqual(self.request("/api/programming/source/"+receipt["submission"]["id"], "s2")[0], 404)
+        self.assertEqual(self.request("/api/admin/programming-assignments/save", form={**fields,"id":item})[0], 409)
+        self.assertEqual(self.request("/api/admin/programming-assignments/delete", form={"id":item})[0], 409)
+        with patch.object(programming, "schedule"):
+            self.assertEqual(self.request("/api/admin/programming/rejudge", form={"submission_id":receipt["submission"]["id"]})[0], 200)
+        with patch.object(code_runner, "judge", return_value={**graded,"score":100,"verdict":"AC","passed":2}):
+            programming._work(receipt["submission"]["id"])
+        self.assertEqual(len(programming.rows()[0]["grading_history"]), 2)
+        self.assertEqual(self.request("/api/student/workspace", "s1")[1]["gradebooks"][0]["items"][0]["homework"], 10)
+
+    def test_programming_homework_permissions_deadlines_custom_input_and_completed_course(self):
+        course, item, fields = self.programming_homework()
+        self.assertEqual(self.request("/api/admin/programming-assignments/save", "s1", fields)[0], 403)
+        self.assertEqual(self.request("/api/admin/programming-assignments/assign", form={"id":item,"student_ids":"unknown"})[0], 400)
+        self.assertEqual(self.request("/api/admin/programming-assignments/assign", form={"id":item,"student_ids":"s1"})[0], 200)
+        form={"exam_id":item,"problem_index":"0","language":"python","source":"print(3)","run_mode":"custom","stdin":"7 8"}
+        self.assertEqual(self.request("/api/student/programming/run", "s2", form)[0], 403)
+        self.assertEqual(self.request("/api/student/programming/run", "s1", form)[0], 409)
+        self.request("/api/student/programming/start", "s1", {"exam_id":item})
+        with patch.object(code_runner,"ready",return_value=True),patch.object(code_runner,"judge",return_value={"verdict":"WA","score":0,"tests":[{"verdict":"WA","actual":"15","expected":""}],"compile_log":""}) as judge:
+            code, result=self.request("/api/student/programming/run","s1",form)
+            self.assertEqual(code,200,result)
+            self.assertEqual(result["result"]["verdict"],"OK")
+            self.assertNotIn("expected",result["result"]["tests"][0])
+            self.assertEqual(judge.call_args.args[2]["tests"][0]["input"],"7 8")
+        self.assertEqual(self.request("/api/student/programming/run","s1",{**form,"language":"java"})[0],400)
+        self.assertEqual(self.request("/api/student/programming/run","s1",{**form,"problem_index":"99"})[0],400)
+        from app import programming_assignments
+        rows=programming_assignments.listing();rows[0]["ends_at"]=rows[0]["due_at"]=(datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat();storage.write_json(programming_assignments.STORE,rows)
+        self.assertEqual(self.request("/api/student/programming/run","s1",form)[0],409)
+        self.assertEqual(self.request("/api/student/workspace","s1")[1]["gradebooks"][0]["items"][0]["homework"],0)
+        rows[0]["ends_at"]=rows[0]["due_at"]=fields["due_at"];storage.write_json(programming_assignments.STORE,rows)
+        data=learning.load();data["courses"][0]["status"]="completed";storage.write_json("learning.json",data)
+        self.assertEqual(self.request("/api/student/programming/run","s1",form)[0],409)
+        self.assertEqual(self.request("/api/admin/programming-assignments/delete",form={"id":item})[0],409)
+        self.assertFalse(self.request("/api/student/programming/submissions?exam="+item+"&problem=0","s1")[1]["can_submit"])
+        self.assertFalse(next(e for e in self.request("/api/student/workspace","s1")[1]["programming"]["exams"] if e["id"]==item)["can_submit"])
+
+    def test_programming_homework_draft_validation_and_deletion(self):
+        course, item, fields=self.programming_homework()
+        self.assertEqual(self.request("/api/admin/programming-assignments/save",form={**fields,"id":item,"title":"Edited"})[0],200)
+        for invalid in ({"languages":"ruby"},{"problems":"[]"},{"problems":"not json"},{"due_at":"bad"}):
+            self.assertEqual(self.request("/api/admin/programming-assignments/save",form={**fields,"id":item,**invalid})[0],400)
+        self.assertEqual(self.request("/api/admin/programming-assignments/delete",form={"id":item})[0],200)
+        self.assertEqual(self.request("/api/admin/programming-assignments/assign",form={"id":item,"student_ids":"s1"})[0],404)
+
+    def test_stale_admin_page_uses_current_cookie_and_explains_role_mismatch(self):
+        course, item, fields = self.programming_homework()
+        # An admin page can remain visible after another tab logs in as a student.
+        self.assertEqual(self.request("/admin/courses?course="+course)[0], 200)
+        before = storage.read_json("programming_assignments.json")
+        code, error = self.request("/api/admin/programming-assignments/save", "s1", fields)
+        self.assertEqual(code, 403)
+        self.assertIn("s1", error["detail"])
+        self.assertIn("Học viên", error["detail"])
+        self.assertIn("Admin", error["detail"])
+        self.assertIn("cookie", error["detail"])
+        self.assertEqual(storage.read_json("programming_assignments.json"), before)
+        code, result = self.request("/api/admin/programming-assignments/save", "admin", {**fields,"id":item})
+        self.assertEqual(code, 200, result)
+
     def test_schedule_generate_uses_vietnam_time_without_zoneinfo_and_deduplicates(self):
         course = self.course()
         form = {"course_id": course, "title": "Lesson", "start_date": "2026-11-01",

@@ -32,7 +32,10 @@
     const dialog=window.adminDesign.modal('Buổi học & điểm danh',`<h3>${esc(lesson.title)}</h3><p class="muted">${timeRange} · ${esc(lesson.location||'Chưa đặt địa điểm')}</p><p>${esc(lesson.description||'')}</p>${session?`<p>${session.open?'Điểm danh đang mở':'Phiên điểm danh đã kết thúc'}.</p><button type="button" class="btn btn-primary" data-lesson-attendance="${session.id}">Xem chi tiết điểm danh</button>`:closed?'<p class="muted">Khóa học đã tổng kết.</p>':`<form class="stack-form" data-action="attendance"><input type="hidden" name="course_id" value="${selected}"><input type="hidden" name="event_id" value="${id}"><label>Thời lượng điểm danh<select name="duration_minutes"><option value="5">5 phút</option><option value="10">10 phút</option><option value="15" selected>15 phút</option><option value="30">30 phút</option><option value="60">60 phút</option></select></label><button class="btn btn-primary">Bắt đầu điểm danh</button></form>`}`);
     dialog.querySelector('[data-lesson-attendance]')?.addEventListener('click',()=>{dialog.close();openAttendance(session.id);});
   }
-  function landing(){return window.courseDesign.landing(data,{search,status:statusFilter});}
+  function landing(){
+    if(window.lmsRole==='teacher'&&!data.courses.length)return '<section class="panel"><h1>Khóa học được phân công</h1><p class="muted">Tài khoản này chưa có khóa học được phân công. Admin cần chọn giáo viên và lưu trong mục Phân loại & phân quyền.</p><button type="button" class="btn btn-secondary" data-courses-refresh>Tải lại danh sách</button></section>';
+    return window.courseDesign.landing(data,{search,status:statusFilter});
+  }
   function courseHeader(c){return window.courseDesign.header(data,c,tab);}
   function overviewPanel(c,readonly){return window.courseDesign.overview(data,c);}
   function updateGradeTotal(row){
@@ -54,27 +57,31 @@
     output.textContent=complete?String(rounded):'—';
     output.title='Tự tính theo trọng số đã lưu. Bấm Lưu điểm để lưu thay đổi.';
   }
+  window.classificationUI?.onChange(()=>{render();drawAttendanceQr();});
+  window.resourceWeeks.onChange(()=>{render();drawAttendanceQr();});
   window.listUi.on('course',()=>{attendancePage=1;render();drawAttendanceQr();});
   function render(){
+    window.classificationUI?.setCatalog(data.classification);
     if($('admin-course-count'))$('admin-course-count').textContent=data.courses.length;
     document.querySelectorAll('.sidebar-nav a').forEach(a=>{const url=new URL(a.href);if(url.pathname==='/admin'&&['monitor','exam','submissions'].includes(url.searchParams.get('section'))){if(selected)url.searchParams.set('course',selected);else url.searchParams.delete('course');a.href=url.pathname+url.search;}});
     const c=course(),readonly=c?.status==='completed';
     const top=c?courseHeader(c):'';
     if(!c){content.innerHTML=landing();return;}
     if(tab==='learning')tab='materials';
+    if(tab==='schedule'){tab='event';syncUrl(true);}
     if(tab==='weekly'){tab='calendar';syncUrl(true);}
-    const tabs=[['overview','Tổng quan','th-large'],['students','Sinh viên','users'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch & điểm danh','calendar'],['exams','Kỳ thi','shield'],['grades','Bảng điểm','bar-chart']];
+    const tabs=[['overview','Tổng quan','th-large'],['students','Sinh viên','users'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch & điểm danh','calendar'],['exams','Kỳ thi','shield'],['grades','Bảng điểm','bar-chart']].filter(([key])=>window.lmsRole!=='teacher'||key!=='grades');
     const parentTab=({material:'materials',assignment:'assignments',event:'calendar',attendance:'calendar'})[tab]||tab;
     if(!tabs.some(([key])=>key===parentTab))tab='overview';
     let body='';
-    if(tab==='materials'||tab==='assignments')body=window.courseDesign.teaching(data,c,tab);
+    if(tab==='materials'||tab==='assignments')body=window.courseDesign.teaching(data,c,tab)+(tab==='assignments'?window.programmingAssignmentsUI.adminList(data,c):'');
     if(tab==='calendar')body=window.courseDesign.calendar(data,c,weekOffset);
     if(tab==='exams')body=window.courseDesign.examView(data,c);
     if(tab==='students')body=window.courseDesign.students(data,c);
     if(tab==='grades')body=window.courseDesign.grades(data,c);
     if(tab==='overview')body=overviewPanel(c,readonly);
     if(tab==='material')body=`${!readonly?form('material','Tài liệu',titleField+description+'<label>File tài liệu (tối đa 20 MiB)<input name="file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.zip,.c,.cpp,.java,.py,.png,.jpg,.jpeg" required></label>'):''}<section class="panel"><h2>Tài liệu đã đăng</h2>${window.listUi.controls('course:legacy-materials:'+selected,'materials')}${window.listUi.view('course:legacy-materials:'+selected,scoped('materials'),'materials').map(r=>`<div class="student-row"><div class="student-row-body"><h3>${esc(r.title)}</h3><p class="muted">${esc(r.original_filename)} · ${date(r.created_at)}</p></div><a href="/api/learning/files/materials/${r.id}">Tải về</a></div>`).join('')||empty('Chưa có tài liệu.')}</section>`;
-    if(tab==='event')body=`${!readonly?form('event','Tạo hoạt động lịch',eventFields):''}<section class="panel"><h2>Hoạt động đã đăng</h2>${window.listUi.controls('course:legacy-events:'+selected,'events')}${window.listUi.view('course:legacy-events:'+selected,scoped('events'),'events').map(r=>`<div class="student-row"><div class="student-row-body"><h3>${esc(r.title)}</h3><p class="muted">${date(r.starts_at)}${r.ends_at?' – '+new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',timeStyle:'short'}).format(new Date(r.ends_at)):''} · ${esc(r.location)}</p><p class="student-description">${esc(r.description)}</p></div></div>`).join('')||empty('Chưa có hoạt động.')}</section>`;
+    if(tab==='event')body=!readonly?form('event','Tạo hoạt động lịch',eventFields):'';
     if(tab==='assignment')body=`${!readonly?form('assignment','Bài tập',titleField+description+'<label>File đề bài (tùy chọn, tối đa 20 MiB)<input name="file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.zip,.c,.cpp,.java,.py,.png,.jpg,.jpeg"></label><label>Hạn nộp (giờ Việt Nam)<input name="due_at" type="datetime-local" required></label><label>Số lần nộp tối đa<input name="max_attempts" type="number" min="1" max="20" value="3" required></label>'):''}${window.listUi.controls('course:legacy-assignments:'+selected,'assignments')}${window.listUi.view('course:legacy-assignments:'+selected,scoped('assignments'),'assignments').map(a=>`<section class="panel"><div class="panel-heading"><div><h2>${esc(a.title)}</h2><p class="muted">Hạn ${date(a.due_at)} · Tối đa ${a.max_attempts} lần nộp</p></div></div><p class="student-description">${esc(a.description)}</p><div class="student-admin-list">${data.submissions.filter(r=>r.assignment_id===a.id).map(r=>`<details><summary>${esc(r.student_id)} · Lần ${r.attempt} · ${date(r.created_at)} · ${r.score===null?'Chờ chấm':r.score+'/10'}</summary><div class="student-actions"><a class="btn btn-secondary" href="/api/learning/files/submissions/${r.id}">Tải bài: ${esc(r.original_filename)}</a></div>${!readonly?`<form class="stack-form" data-action="grade"><input name="submission_id" type="hidden" value="${r.id}"><label>Điểm (0–10)<input name="score" type="number" min="0" max="10" step="0.01" value="${r.score??''}" required></label><label>Nhận xét<textarea name="feedback" maxlength="4000">${esc(r.feedback)}</textarea></label><div><button class="btn btn-primary">Lưu điểm & nhận xét</button></div></form>`:`<p>Điểm: ${r.score??'Chưa chấm'} · ${esc(r.feedback)}</p>`}</details>`).join('')||empty('Chưa có bài nộp cho bài tập này.')}</div></section>`).join('')}`;
     if(tab==='attendance')body=window.classroomAttendance.view(data,c,attendanceId,attendancePage,attendanceQuery);
     if(['material','assignment','event','attendance'].includes(tab)&&!(tab==='attendance'&&attendanceId))body=`<div class="ref-actions"><button type="button" class="btn btn-ghost" data-tab="${parentTab}"><i class="fa fa-arrow-left"></i> Quay lại ${parentTab==='materials'?'Tài liệu':parentTab==='assignments'?'Bài tập':'Lịch & điểm danh'}</button></div>`+body;
@@ -87,6 +94,7 @@
   }
   async function load(){try{data=await window.cssRequest('/api/admin/workspace');window.submissionDeadlines.sync(data.server_time);$('learning-error').classList.add('hidden');render();drawAttendanceQr();const url=new URL(location.href),lesson=url.searchParams.get('lesson');if(lesson){url.searchParams.delete('lesson');history.replaceState(null,'',url.pathname+url.search);openLesson(lesson);}}catch(e){$('learning-error').textContent=e.message;$('learning-error').classList.remove('hidden');}}
   content.addEventListener('click',e=>{
+    if(e.target.closest('[data-courses-refresh]')){load();return;}
     const lesson=e.target.closest('[data-lesson-open]');if(lesson){openLesson(lesson.dataset.lessonOpen);return;}
     const reset=e.target.closest('[data-grade-reset]');if(reset){const input=reset.parentElement.querySelector('[data-grade-component]');input.value='';input.dataset.gradeReset='true';reset.textContent='Sẽ dùng điểm tự động';updateGradeTotal(input.closest('tr'));return;}
     const session=e.target.closest('[data-attendance-open]');if(session){openAttendance(session.dataset.attendanceOpen);return;}
@@ -117,8 +125,7 @@
     const week=e.target.closest('[data-week]');if(week){weekOffset=week.dataset.week==='0'?0:weekOffset+Number(week.dataset.week);render();return;}
     const chosen=e.target.closest('[data-course]');if(chosen){choose(chosen.dataset.course);return;}
     if(e.target.closest('[data-course-back]')){choose('');return;}
-    if(e.target.closest('[data-schedule-create], [data-tab="schedule"]')){if(course().status!=='completed')window.adminDesign.modal('Tạo lịch học đến hết kỳ',window.courseDesign.scheduleForm(course()));return;}
-    const button=e.target.closest('[data-tab]');if(button){tab=button.dataset.tab;attendanceId='';attendancePage=1;attendanceQuery='';syncUrl();render();drawAttendanceQr();window.scrollTo({top:0,behavior:'smooth'});}
+    const button=e.target.closest('[data-tab]');if(button){tab=button.dataset.tab;attendanceId='';attendancePage=1;attendanceQuery='';syncUrl();render();drawAttendanceQr();}
   });
   content.addEventListener('submit',async e=>{
     e.preventDefault();if(busy)return;const form=e.target,f=new FormData(form);
@@ -138,7 +145,7 @@
     for(const name of ['starts_at','due_at','expires_at'])if(f.get(name)){f.set(name,new Date(String(f.get(name))+'+07:00').toISOString());}
     const file=f.get('file');if(file instanceof File&&file.size>20*1048576){window.cssToast('File vượt 20 MiB.','error');return;}
     busy=true;const button=form.querySelector('button[type="submit"],button:not([type])');button.disabled=true;
-    try{const result=await window.cssRequest(`/api/learning/${action}`,{method:'POST',body:f});if((action==='schedule-generate'&&!Number.isInteger(result.updated_sessions))||(action==='session-content-save'&&f.has('end_time')&&!result.ends_at))throw new Error('Server đang chạy phiên bản cũ, chưa lưu giờ kết thúc. Hãy dừng server và khởi động lại, sau đó lưu lại lịch học.');window.adminDrafts?.saved(form);if(action==='course'||action==='import-course'){selected=result.id;tab='overview';attendanceId='';syncUrl();}if(action==='attendance'){attendanceId=result.id;tab='attendance';attendancePage=1;attendanceQuery='';syncUrl();}const message=action==='schedule-generate'?`Đã tạo ${result.created_sessions} buổi học, cập nhật giờ kết thúc ${result.updated_sessions} buổi.`:action==='event'&&Number.isInteger(result.count)?result.skipped_count?(result.count?`Đã tạo ${result.count} buổi học, bỏ qua ${result.skipped_count} buổi trùng lịch.`:`Đã bỏ qua ${result.skipped_count} buổi trùng lịch; không tạo thêm buổi mới.`):`Đã tạo ${result.count} buổi học.`:action==='attendance'?`Đã mở điểm danh, tự ghi nhận ${result.auto_present_count||0} sinh viên đang hoạt động.`:'Đã lưu dữ liệu khóa học.';window.cssToast(message,'success');await load();}catch(error){$('learning-error').textContent=error.message;$('learning-error').classList.remove('hidden');window.adminDesign.formError(form,error.message);window.cssToast(error.message,'error');}finally{busy=false;button.disabled=false;}
+    try{const result=await window.cssRequest(`/api/learning/${action}`,{method:'POST',body:f});if((action==='schedule-generate'&&!Number.isInteger(result.updated_sessions))||(action==='session-content-save'&&f.has('end_time')&&!result.ends_at))throw new Error('Server đang chạy phiên bản cũ, chưa lưu giờ kết thúc. Hãy dừng server và khởi động lại, sau đó lưu lại lịch học.');window.adminDrafts?.saved(form);if(action==='event'){tab='calendar';syncUrl();}if(action==='course'||action==='import-course'){selected=result.id;tab='overview';attendanceId='';syncUrl();}if(action==='attendance'){attendanceId=result.id;tab='attendance';attendancePage=1;attendanceQuery='';syncUrl();}const message=action==='schedule-generate'?`Đã tạo ${result.created_sessions} buổi học, cập nhật giờ kết thúc ${result.updated_sessions} buổi.`:action==='event'&&Number.isInteger(result.count)?result.skipped_count?(result.count?`Đã tạo ${result.count} buổi học, bỏ qua ${result.skipped_count} buổi trùng lịch.`:`Đã bỏ qua ${result.skipped_count} buổi trùng lịch; không tạo thêm buổi mới.`):`Đã tạo ${result.count} buổi học.`:action==='attendance'?`Đã mở điểm danh, tự ghi nhận ${result.auto_present_count||0} sinh viên đang hoạt động.`:'Đã lưu dữ liệu khóa học.';window.cssToast(message,'success');await load();}catch(error){$('learning-error').textContent=error.message;$('learning-error').classList.remove('hidden');window.adminDesign.formError(form,error.message);window.cssToast(error.message,'error');}finally{busy=false;button.disabled=false;}
   });
   function syncWeekRange(form){
     const start=form.querySelector('[name="start_week"]'),end=form.querySelector('[name="end_week"]');
@@ -183,5 +190,6 @@
       }
     }catch(_){}finally{attendancePolling=false;}
   },2500);
+  window.programmingAssignmentsUI.configure({refresh:load});
   load();
 })();

@@ -41,6 +41,8 @@ from . import learning
 from . import notifications as student_notifications
 from . import admin_workspace, exam_catalog, programming, submission_rate, code_runner
 from . import course_packages
+from . import programming_assignments
+from . import permissions, classification
 from . import submission_archive, deadlines, exam_preflight, exam_timing
 from .security import login_state
 
@@ -274,7 +276,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _auth(self, req, role=None, touch=True):
         try:
-            session = require_user(req, role, touch=touch)
+            session = require_user(req, None, touch=touch)
+            if role == "admin" and session["role"] == "teacher":
+                permissions.authorize_route(session, req, resource=touch)
+            elif role:
+                session = require_user(req, role, touch=touch)
             self._get_user_record(session)
             return session
         except SecurityError as e: raise ClientError(e.status,e.detail)
@@ -305,7 +311,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not sess:
                     destination=attendance_return(self.path)
                     return self._redirect("/login"+("?next="+urllib.parse.quote(destination,safe="") if destination else ""))
-                if sess["role"]=="admin": return self._redirect("/admin")
+                if permissions.staff(sess): return self._redirect("/admin")
                 student=self._get_user_record(sess); assignment=current_exam_for(sess["user_id"]); settings=read_json("settings.json")
                 return self._html(self._render("student.html",session=sess,student=student,assignment=assignment,settings=settings,remaining=remaining_seconds(assignment or {}) if assignment and assignment.get("started_at") else None))
             if path=="/admin/learning":
@@ -351,16 +357,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._auth(req,"admin")
                 return self._json(code_runner.status())
             if path=="/api/admin/exam-preflight":
-                self._auth(req,"admin")
-                return self._json(exam_preflight.review(req.query.get("exam",[""])[0]))
+                sess=self._auth(req,"admin")
+                return self._json(exam_preflight.review(req.query.get("exam",[""])[0],sess))
             if path=="/api/admin/programming/submissions":
-                self._auth(req,"admin")
+                sess=self._auth(req,"admin")
                 exam_id=req.query.get("exam", [""])[0]
-                return self._json({"submissions":[programming.public_submission(r, True) for r in programming.rows() if r["exam_id"]==exam_id]})
+                summary=programming.results(sess,exam_id)
+                return self._json({**summary,"submissions":[programming.public_submission(r, True) for r in programming.rows() if r["exam_id"]==exam_id]})
             if path.startswith("/api/programming/source/"):
                 sess=self._auth(req); submission_id=path.rsplit("/",1)[-1]
                 record=next((r for r in programming.rows() if r["id"]==submission_id),None)
-                if not record or sess["role"]!="admin" and record["student_id"]!=sess["user_id"]: raise ClientError(404,"Không tìm thấy bài nộp.")
+                if record and sess["role"]=="teacher": permissions.require_content(sess,permissions.submission_parent(record))
+                if not record or sess["role"] not in {"admin","teacher"} and record["student_id"]!=sess["user_id"]: raise ClientError(404,"Không tìm thấy bài nộp.")
                 return self._send(200,(programming.FILES / record["id"] / "source").read_bytes(),"application/octet-stream",{"Content-Disposition":inline_filename_header(record["original_filename"])})
             if path=="/api/student/notifications":
                 sess=self._auth(req,"student")
@@ -375,6 +383,8 @@ class Handler(BaseHTTPRequestHandler):
             admin_sections={
                 "/admin/courses":"courses",
                 "/admin/dashboard":"dashboard",
+                "/admin/calendar":"calendar",
+                "/admin/class-notifications":"class-notifications",
                 "/admin/monitor":"monitor",
                 "/admin/notifications":"notifications",
                 "/admin/exam":"exam",
@@ -384,16 +394,17 @@ class Handler(BaseHTTPRequestHandler):
                 "/admin/submissions":"submissions",
                 "/admin/server":"server",
                 "/admin/admins":"admins",
+                "/admin/classification":"classification",
             }
             if route_path=="/admin" or route_path in admin_sections:
                 sess=self._auth(req,"admin")
                 section=admin_sections.get(route_path, req.query.get("section", ["dashboard"])[0])
                 if section in {"settings", "distribution"}:
                     section="exam"
-                allowed={"dashboard","courses","monitor","notifications","exam","accounts","submissions","server","admins"}
+                allowed={"dashboard","courses","monitor","notifications","exam","accounts","submissions","server","admins","classification","calendar","class-notifications"}
                 if section not in allowed: section="dashboard"
                 selected_exam = next((r for r in exam_catalog.listing() if r["id"] == req.query.get("exam", [""])[0]), None) if section == "exam" else None
-                return self._html(self._render("admin.html",session=sess,section=section,exam_engine_detail=bool(selected_exam and selected_exam["type"] == "file" and selected_exam["active"]),exam_files=list_exam_files(),settings={**read_json("settings.json"), **({"exam_state":"scheduled"} if exam_timing.waiting(read_json("settings.json").get("exam_state"),read_json("settings.json").get("exam_started_at")) else {})},monitoring=monitoring_snapshot(),course_count=len(learning.load()["courses"])))
+                return self._html(self._render("admin.html",session=sess,section=section,exam_engine_detail=bool(selected_exam and selected_exam["type"] == "file" and selected_exam["active"]),exam_files=list_exam_files(),settings={**read_json("settings.json"), **({"exam_state":"scheduled"} if exam_timing.waiting(read_json("settings.json").get("exam_state"),read_json("settings.json").get("exam_started_at")) else {})},monitoring=monitoring_snapshot() if sess["role"]=="admin" else {},course_count=sum(permissions.course_allowed(sess,c["id"]) for c in learning.load()["courses"])))
             if path=="/admin/accounts-template.txt":
                 self._auth(req,"admin")
                 content="21010001|01/02/2003|Nguyen Van A\n21010002|15/08/2003|Tran Thi B\n"
@@ -401,14 +412,14 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/admin/monitor": self._auth(req,"admin"); return self._json(monitoring_snapshot(req.query.get("course",[""])[0],req.query.get("exam",[""])[0]))
             if path.startswith("/api/admin/archive/"):
                 sess=self._auth(req,"admin"); query={k:v[-1] for k,v in req.query.items()}; action=path.rsplit("/",1)[-1]
-                if action=="list": return self._json(submission_archive.listing(query))
-                if action=="detail": return self._json(submission_archive.detail(query.get("id")))
-                if action=="csv": return self._send(200,submission_archive.export_csv(query),"text/csv; charset=utf-8",{"Content-Disposition":"attachment; filename=submissions.csv"})
+                if action=="list": return self._json(submission_archive.listing(query,sess))
+                if action=="detail": return self._json(submission_archive.detail(query.get("id"),sess))
+                if action=="csv": return self._send(200,submission_archive.export_csv(query,sess),"text/csv; charset=utf-8",{"Content-Disposition":"attachment; filename=submissions.csv"})
                 if action=="zip":
-                    with submission_archive.export_zip(query) as stream:
+                    with submission_archive.export_zip(query,sess) as stream:
                         return self._send(200,stream,"application/zip",{"Content-Disposition":"attachment; filename=submissions.zip"})
                 if action in {"download","preview","view"}:
-                    target,name=submission_archive.file_for(query.get("id"))
+                    target,name=submission_archive.file_for(query.get("id"),sess)
                     if action=="preview": return self._json(learning.preview_path(target,name,"/api/admin/archive/view?id="+urllib.parse.quote(query.get("id"),safe="")))
                     if action=="view" and target.suffix.lower()!=".pdf": raise ClientError(400,"Chỉ mở PDF trực tiếp.")
                     with target.open("rb") as stream:
@@ -419,6 +430,8 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/admin/workspace":
                 sess=self._auth(req,"admin")
                 return self._json(admin_workspace.overview(sess,req.query.get("course",[""])[0]))
+            if path=="/api/admin/classification":
+                return self._json(classification.snapshot(self._auth(req,"admin")))
             if path=="/api/admin/exams": self._auth(req,"admin"); return self._json({"exams":list_exam_files()})
             if path=="/api/admin/accounts":
                 self._auth(req,"admin")
@@ -468,7 +481,8 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc(); return self._json({"detail":"Lỗi máy chủ nội bộ."},500)
 
     def _get_user_record(self, sess):
-        source="admins.json" if sess["role"]=="admin" else "students.json"; record=read_json(source).get(sess["user_id"])
+        source={"admin":"admins.json","teacher":"teachers.json","student":"students.json"}.get(sess["role"])
+        record=read_json(source,{}).get(sess["user_id"]) if source else None
         if not record or not record.get("active",True): raise ClientError(401,"Tài khoản không còn hoạt động.")
         return record
 
@@ -483,6 +497,9 @@ class Handler(BaseHTTPRequestHandler):
             if req.path == "/api/admin/exam-preflight/verify":
                 sess = self._auth(req, "admin")
                 return self._json(exam_preflight.verify_reference(sess, req.form, client_ip(req)))
+            if req.path == "/api/student/programming/run":
+                sess = self._auth(req, "student")
+                return self._json(programming_assignments.run_sample(sess, req.form, client_ip(req)))
             if req.path == "/api/admin/exam-preflight/open":
                 req.preflight_runner = code_runner.status() if req.form.get("type") == "programming" else None
             if req.path == "/api/admin/programming/control" and req.form.get("action") == "start":
@@ -528,15 +545,16 @@ class Handler(BaseHTTPRequestHandler):
                 if not allowed:
                     audit("auth.login_locked",username,ip,{"retry_after_seconds":seconds}); return self._html(self._render("login.html",next=attendance_return(f.get("next")),error=f"Tài khoản tạm khóa. Vui lòng thử lại sau {max(1,seconds//60+1)} phút."),429)
                 admins,students=read_json("admins.json"),read_json("students.json")
-                role="admin" if username in admins else "student" if username in students else None
-                record=admins.get(username) if role=="admin" else students.get(username) if role=="student" else None
+                teachers=read_json("teachers.json",{})
+                role="admin" if username in admins else "teacher" if username in teachers else "student" if username in students else None
+                record=admins.get(username) if role=="admin" else teachers.get(username) if role=="teacher" else students.get(username) if role=="student" else None
                 if not record or not record.get("active",True) or not verify_password(password,record.get("password_hash")):
                     seconds=record_login_failure(key); audit("auth.login_failed",username,ip,{"lockout_seconds":seconds}); msg="Thông tin đăng nhập không đúng."
                     if seconds: msg += " Đã khóa tạm trong 15 phút sau 3 lần sai."
                     return self._html(self._render("login.html",next=attendance_return(f.get("next")),error=msg),401)
                 verified_hash = record.get("password_hash")
                 with learning.LOCK, atomic_transaction():
-                    accounts = read_json("admins.json" if role == "admin" else "students.json")
+                    accounts = read_json({"admin":"admins.json","teacher":"teachers.json","student":"students.json"}[role],{})
                     current = accounts.get(username)
                     if not current or not current.get("active", True) or current.get("password_hash") != verified_hash:
                         raise ClientError(401, "Thông tin tài khoản vừa thay đổi. Vui lòng đăng nhập lại.")
@@ -550,7 +568,7 @@ class Handler(BaseHTTPRequestHandler):
                     audit("auth.login_success",username,ip,{"role":role})
                 if role=="student":
                     learning.record_student_presence(username)
-                return self._redirect("/admin" if role=="admin" else attendance_return(f.get("next")) or "/",cookie=token)
+                return self._redirect("/admin" if role in {"admin","teacher"} else attendance_return(f.get("next")) or "/",cookie=token)
             if path=="/logout":
                 sess=get_session(req)
                 if sess: logout_session(sess["token"]); audit("auth.logout",sess["user_id"],client_ip(req),{})
@@ -586,7 +604,7 @@ class Handler(BaseHTTPRequestHandler):
                 rows,errors=parse_accounts(text); students=read_json("students.json"); created=[]; duplicates=[]
                 for row in rows:
                     sid=row["student_id"]
-                    if sid in students: duplicates.append(sid); continue
+                    if sid in students or sid in read_json("teachers.json",{}) or sid in read_json("admins.json"): duplicates.append(sid); continue
                     students[sid]={"student_id":sid,"full_name":row["full_name"],"password_hash":hash_password(row["dob"]),"active":True,"created_at":utc_now(),"last_ip":None,"last_seen":None,"must_change_password":False}; created.append(sid)
                 write_json("students.json",students); audit("admin.accounts_imported",sess["user_id"],client_ip(req),{"created":len(created),"duplicates":duplicates,"parse_errors":errors})
                 return self._json({"created_count":len(created),"created":created,"duplicates":duplicates,"errors":errors,"valid_rows":len(rows)})
@@ -622,9 +640,26 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/admin/archive/grade":
                 sess=self._auth(req,"admin")
                 return self._json(submission_archive.grade(sess,f,client_ip(req)))
+            category_actions={
+                "/api/admin/topics/save":"topic-save", "/api/admin/topics/archive":"topic-archive",
+                "/api/admin/teachers/save":"teacher-save", "/api/admin/courses/teachers":"course-teachers",
+                "/api/admin/classification/assign":"assign", "/api/admin/questions/save":"question-save", "/api/admin/questions/clone":"question-clone",
+                "/api/admin/questions/publish":"question-publish", "/api/admin/questions/reuse":"question-reuse", "/api/admin/questions/archive":"question-archive"}
+            if path.startswith("/api/admin/papers/") or path == "/api/admin/questions/assign-files":
+                sess=self._auth(req,"admin")
+                from . import question_library
+                if path == "/api/admin/questions/assign-files":return self._json(question_library.assign_files(sess,f,client_ip(req)))
+                if path.endswith("/file-control"):return self._json(question_library.file_control(sess,f,client_ip(req)))
+                return self._json(question_library.manage_paper(sess,path.rsplit("/",1)[-1],f,client_ip(req)))
+            if path in category_actions:
+                sess=self._auth(req,"admin")
+                return self._json(classification.manage(sess,category_actions[path],f,client_ip(req)))
             if path=="/api/admin/exam-configurations/save":
                 sess=self._auth(req,"admin")
                 return self._json(exam_catalog.save(sess,f,client_ip(req)))
+            if path in {"/api/admin/programming-assignments/save", "/api/admin/programming-assignments/assign", "/api/admin/programming-assignments/delete"}:
+                sess=self._auth(req,"admin")
+                return self._json(programming_assignments.manage(sess,path.rsplit("/",1)[-1],f,client_ip(req)))
             if path=="/api/admin/exam-preflight/open":
                 sess=self._auth(req,"admin")
                 return self._json(exam_preflight.open_checked(sess,f,client_ip(req),getattr(req,"preflight_runner",None)))
@@ -805,7 +840,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not username or len(username)>80 or not all(c.isalnum() or c in "._-@" for c in username): raise ClientError(400,"Tên Admin không hợp lệ.")
                 if len(password)<6 or len(password)>200: raise ClientError(400,"Mật khẩu Admin phải dài ít nhất 6 ký tự.")
                 admins=read_json("admins.json")
-                if username in admins or username in read_json("students.json"): raise ClientError(409,"Tên tài khoản đã tồn tại.")
+                if username in admins or username in read_json("students.json") or username in read_json("teachers.json",{}): raise ClientError(409,"Tên tài khoản đã tồn tại.")
                 admins[username]={"username":username,"password_hash":hash_password(password),"active":True,"created_at":utc_now(),"created_by":sess["user_id"]}; write_json("admins.json",admins); audit("admin.admin_created",sess["user_id"],client_ip(req),{"new_admin":username})
                 return self._json({"ok":True,"username":username})
             return self._json({"detail":"Không tìm thấy endpoint."},404)

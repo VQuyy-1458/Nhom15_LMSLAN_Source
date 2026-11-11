@@ -81,7 +81,13 @@ def require_user(request, role: str | None = None, touch=True) -> dict:
     if not session:
         raise SecurityError(401, "Vui lòng đăng nhập.")
     if role and session["role"] != role:
-        raise SecurityError(403, "Bạn không có quyền thực hiện thao tác này.")
+        labels = {"admin": "Admin", "teacher":"Giáo viên", "student": "Học viên"}
+        current = labels.get(session["role"], session["role"])
+        required = labels.get(role, role)
+        raise SecurityError(403,
+            f"Phiên đăng nhập hiện tại là {session['user_id']} ({current}), thao tác này cần quyền {required}. "
+            "Nếu bạn vừa đăng nhập tài khoản khác ở tab khác, cookie đăng nhập đã thay đổi. "
+            "Hãy đăng nhập lại đúng tài khoản; dùng cửa sổ ẩn danh hoặc trình duyệt khác khi cần mở đồng thời Admin và Học viên.")
     return session
 
 def client_ip(request) -> str:

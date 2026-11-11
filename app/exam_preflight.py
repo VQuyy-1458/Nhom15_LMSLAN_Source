@@ -52,7 +52,15 @@ def _snapshot(exam_id, row=None, include_fingerprint=True):
     problems = row.get("programming", {}).get("problems", []) if code else []
     languages = row.get("programming", {}).get("languages", []) if code else []
     if code:
-        check("Bài toán và test case", bool(problems) and all(p.get("tests") and code_runner.budget_valid(p) for p in problems), "Mỗi bài cần có test và nằm trong ngân sách chấm.")
+        problem_issues = []
+        if not problems:
+            problem_issues.append("Kỳ thi chưa có câu hỏi. Hãy chọn câu hỏi từ ngân hàng hoặc thêm bài toán rồi lưu thiết lập.")
+        for index, problem in enumerate(problems, 1):
+            if not problem.get("tests"):
+                problem_issues.append(f"Câu {index} ({problem['title']}) chưa có test case.")
+            elif not code_runner.budget_valid(problem):
+                problem_issues.append(f"Câu {index} ({problem['title']}) vượt ngân sách chấm: {len(problem['tests'])} test, {problem['time_limit_ms']} ms/test. Hãy giảm số test hoặc thời gian mỗi test.")
+        check("Bài toán và test case", not problem_issues, " ".join(problem_issues) or "Các bài toán có test case và nằm trong ngân sách chấm.")
         check("Ngôn ngữ", bool(languages) and all(l in code_runner.LANGUAGES for l in languages), ", ".join(languages))
     from .exam_timing import window
     from datetime import datetime, timezone
@@ -70,9 +78,11 @@ def _snapshot(exam_id, row=None, include_fingerprint=True):
                  "total_points": sum(p["points"] for p in problems), "scheduled_at": row.get("scheduled_at"), "planned_end": ends.isoformat() if row.get("scheduled_at") else None, "files": files, "checks": checks, "fingerprint": fingerprint}
 
 
-def review(exam_id):
+def review(exam_id, session):
     with learning.LOCK:
         row, report = _snapshot(exam_id)
+        from .permissions import require_content
+        require_content(session,row)
         saved = read_json("exam_preflight.json", {}).get(exam_id, {})
     runner = code_runner.status() if row["type"] == "programming" else {"ready": True, "detail": "Thi nộp file không cần bộ chấm Docker."}
     report["runner"] = runner
@@ -97,6 +107,8 @@ def verify_reference(session, form, ip):
         raise learning.LearningError(409, runner["detail"])
     with learning.LOCK:
         row, report = _snapshot(exam_id)
+        from .permissions import require_content
+        require_content(session,row)
         if row["type"] != "programming" or not all(c["ok"] for c in report["checks"]):
             raise learning.LearningError(409, "Cần hoàn tất cấu hình và danh sách dự thi trước khi chấm thử.")
         if report["fingerprint"] != form.get("fingerprint"):
@@ -153,6 +165,8 @@ def open_checked(session, form, ip, runner=None):
     exam_id = form.get("exam_id", "")
     with learning.LOCK, atomic_transaction():
         row, report = _snapshot(exam_id)
+        from .permissions import require_content
+        require_content(session,row)
         if report["fingerprint"] != form.get("fingerprint"):
             raise learning.LearningError(409, "Cấu hình hoặc danh sách dự thi đã thay đổi. Hãy kiểm tra lại trước khi mở.")
         if not all(c["ok"] for c in report["checks"]):

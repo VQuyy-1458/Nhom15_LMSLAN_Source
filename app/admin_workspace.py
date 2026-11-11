@@ -137,7 +137,18 @@ def overview(session, course_id=""):
     data["exam"] = {"title": settings.get("exam_title") or "Kỳ thi nộp file của lớp", "course_id": settings.get("exam_course_id"), "state": settings.get("exam_state", "idle"), "duration_minutes": settings.get("exam_duration_minutes", 90), "participants": settings.get("exam_participants", []), "started_at": settings.get("exam_started_at"), "release_id": settings.get("exam_release_id")}
     data["server_time"] = utc_now()
     from .exam_catalog import listing
+    from .programming_assignments import listing as assignment_listing
+    data["programming_assignments"] = assignment_listing()
     data["exams"] = listing()
+    from . import permissions
+    data["session_role"]=session["role"]
+    if session["role"]=="teacher":
+        data["exams"]=[e for e in data["exams"] if permissions.manages(session,e)]
+        data["programming_assignments"]=[e for e in data["programming_assignments"] if permissions.manages(session,e)]
+        data["exam"]={}
+        data["stats"]["students"]=len(data["students"])
+        data["stats"]["running_exams"]=0
+
     data["stats"]["running_exams"] += sum(e["type"] == "programming" and e["state"] == "started" for e in data["exams"])
     return data
 

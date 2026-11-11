@@ -67,6 +67,8 @@ def prepare_programming_participants(raw, course_id):
     if len(ids) > 10000 or any(len(sid) > 80 or not sid.isalnum() for sid in ids):
         raise learning.LearningError(400, "Danh sách MSSV không hợp lệ (tối đa 10.000 MSSV, mỗi MSSV tối đa 80 chữ hoặc số).")
     ids = list(dict.fromkeys(ids))
+    if any(sid in read_json("teachers.json",{}) or sid in read_json("admins.json") for sid in ids):
+        raise learning.LearningError(400,"Danh sách học viên không được sử dụng tài khoản Admin hoặc Giáo viên.")
     from .admin_workspace import course_members
     course, _ = course_members(course_id)
     if course and course["status"] == "completed":
@@ -93,15 +95,56 @@ def save_programming_participants(session, form, ip):
         row = next((r for r in catalog if r["id"] == form.get("exam_id") and r["type"] == "programming"), None)
         if not row:
             raise learning.LearningError(404, "Không tìm thấy kỳ thi lập trình.")
+        from . import permissions
+        permissions.require_content(session,row)
+        permissions.validate_roster(session,form.get("student_ids",""))
         if row.get("state", "idle") != "idle":
             raise learning.LearningError(409, "Không thể thay đổi danh sách dự thi khi kỳ thi đã mở hoặc kết thúc.")
         if "course_id" in form and (form["course_id"] or None) != row.get("course_id"):
             raise learning.LearningError(409, "Khóa học của kỳ thi đã thay đổi. Hãy tải lại danh sách dự thi.")
         ids, created = prepare_programming_participants(form.get("student_ids", ""), row.get("course_id"))
+        if row.get("paper_distribution")=="random" and row.get("participants",[])!=ids:
+            row["published"]=False
+            row.pop("distributed_at",None)
         row.update(participants=ids, participants_configured=True, updated_at=utc_now())
         write_json("exam_catalog.json", catalog)
         audit("admin.programming_participants_updated", session["user_id"], ip, {"exam_id": row["id"], "count": len(ids), "created": len(created)})
         return {"ok": True, "exam_id": row["id"], "student_ids": ids, "created": created, "count": len(ids)}
+
+
+def validate_programming(form):
+    row = {}
+    languages = list(dict.fromkeys(form.get("languages", "").split(",")))
+    if not languages or any(x not in {"c", "cpp", "java", "python"} for x in languages):
+        raise learning.LearningError(400, "Chọn ít nhất một ngôn ngữ lập trình hợp lệ.")
+    try:
+        problems = json.loads(form.get("problems", "[]"))
+    except (TypeError, ValueError):
+        raise learning.LearningError(400, "Danh sách bài toán không hợp lệ.")
+    if not isinstance(problems, list) or len(problems) > 30:
+        raise learning.LearningError(400, "Mỗi kỳ thi có tối đa 30 bài toán.")
+    cleaned = []
+    for problem in problems:
+        if not isinstance(problem, dict):
+            raise learning.LearningError(400, "Bài toán không hợp lệ.")
+        if not isinstance(problem.get("title", ""), str) or not isinstance(problem.get("statement", ""), str):
+            raise learning.LearningError(400, "Tên và đề bài phải là văn bản.")
+        tests = problem.get("tests", [])
+        if not isinstance(tests, list) or len(tests) > 100:
+            raise learning.LearningError(400, "Mỗi bài toán có tối đa 100 test case.")
+        cases = []
+        for test in tests:
+            if not isinstance(test, dict) or not isinstance(test.get("input", ""), str) or not isinstance(test.get("output", ""), str) or len(test.get("input", "")) > 100000 or len(test.get("output", "")) > 100000:
+                raise learning.LearningError(400, "Dữ liệu test case không hợp lệ hoặc quá lớn.")
+            cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "sample": test.get("sample") is True})
+        checker = problem.get("checker", "tokens")
+        if checker not in {"exact", "tokens"}:
+            raise learning.LearningError(400, "Cách so khớp kết quả không hợp lệ.")
+        cleaned.append({"title": learning.text(problem, "title"), "statement": learning.text(problem, "statement", required=False, limit=20000), "points": integer(problem.get("points", 100), "Điểm bài toán", 1, 1000), "time_limit_ms": integer(problem.get("time_limit_ms", 1000), "Giới hạn thời gian (ms)", 100, 30000), "memory_limit_mb": integer(problem.get("memory_limit_mb", 256), "Bộ nhớ (MB)", 16, 2048), "checker": checker, "tests": cases})
+    row["programming"] = {"languages": languages, "problems": cleaned}
+    if any(not code_runner.budget_valid(problem) for problem in cleaned):
+        raise learning.LearningError(400, "Số test và thời gian mỗi test vượt ngân sách chấm. Hãy giảm số test hoặc giới hạn thời gian.")
+    return row["programming"]
 
 
 def save(session, form, ip):
@@ -109,10 +152,24 @@ def save(session, form, ip):
         rows = listing()
         exam_id = form.get("id", "")
         old = next((r for r in rows if r["id"] == exam_id), None)
+        from . import permissions, classification
+        permissions.require_course(session,form.get("course_id") or None)
+        if old: permissions.require_content(session,old)
+        permissions.validate_roster(session,form.get("participant_ids",""))
         if exam_id and not old:
             raise learning.LearningError(404, "Không tìm thấy kỳ thi.")
         if old and old["state"] in {"distributed", "scheduled", "started", "ended"}:
             raise learning.LearningError(409, "Kỳ thi đã phát đề. Không thể thay đổi cấu hình của lượt thi này.")
+        from . import question_library
+        blueprint = None
+        blueprint_id = form.get("blueprint_id") or (old or {}).get("blueprint_id")
+        if blueprint_id and (not old or blueprint_id != old.get("blueprint_id")):
+            blueprint = question_library.paper(session, blueprint_id)
+            if blueprint["response_type"] == "code":
+                config=blueprint["programming"]
+                form={**form,"type":"programming","problems":json.dumps(config["problems"]),"languages":",".join(config["languages"]),"question_ids":"[]"}
+            else:
+                form={**form,"type":"file"}
         kind = form.get("type", "file")
         if kind not in {"file", "programming"} or old and old["type"] != kind:
             raise learning.LearningError(400, "Loại kỳ thi không hợp lệ hoặc đã được cố định.")
@@ -130,6 +187,14 @@ def save(session, form, ip):
         metadata_only = bool(old and old["active"] and kind == "file" and form.get("metadata_only") == "true")
         row = {"id": exam_id or uuid.uuid4().hex, "type": kind, "course_id": course_id, "title": learning.text(form, "title"), "description": learning.text(form, "description", required=False, limit=10000), "duration_minutes": old["duration_minutes"] if metadata_only else integer(form.get("duration_minutes", "90"), "Thời lượng", 1, 1440), "scheduled_at": scheduled or None, "state": old.get("state", "idle") if old else "idle", "participants": sorted(s for s in members if students[s].get("active", True)), "created_at": old.get("created_at") if old else utc_now(), "updated_at": utc_now()}
         row["assessment_type"] = assessment_type
+        row["created_by"] = old.get("created_by") if old else session["user_id"]
+        if blueprint_id:row["blueprint_id"] = blueprint_id
+        if kind == "programming" and ((old or {}).get("distribution_mode") == "manual" or form.get("distribution_mode") == "manual"):
+            row["distribution_mode"] = "manual"
+            row["published"] = (old or {}).get("published", False)
+            if (old or {}).get("distributed_at"):
+                row["distributed_at"] = old["distributed_at"]
+        row.update(classification.metadata(form,old),content_type="exam")
         if old:
             for key in ("release_id", "started_at", "ended_at"):
                 if old.get(key): row[key] = old[key]
@@ -139,36 +204,49 @@ def save(session, form, ip):
             row["participants"] = old["participants"]
             row["participants_configured"] = True
         if kind == "programming":
-            languages = list(dict.fromkeys(form.get("languages", "").split(",")))
-            if not languages or any(x not in {"c", "cpp", "java", "python"} for x in languages):
-                raise learning.LearningError(400, "Chọn ít nhất một ngôn ngữ lập trình hợp lệ.")
-            try:
-                problems = json.loads(form.get("problems", "[]"))
-            except (TypeError, ValueError):
-                raise learning.LearningError(400, "Danh sách bài toán không hợp lệ.")
-            if not isinstance(problems, list) or len(problems) > 30:
-                raise learning.LearningError(400, "Mỗi kỳ thi có tối đa 30 bài toán.")
-            cleaned = []
-            for problem in problems:
-                if not isinstance(problem, dict):
-                    raise learning.LearningError(400, "Bài toán không hợp lệ.")
-                if not isinstance(problem.get("title", ""), str) or not isinstance(problem.get("statement", ""), str):
-                    raise learning.LearningError(400, "Tên và đề bài phải là văn bản.")
-                tests = problem.get("tests", [])
-                if not isinstance(tests, list) or len(tests) > 100:
-                    raise learning.LearningError(400, "Mỗi bài toán có tối đa 100 test case.")
-                cases = []
-                for test in tests:
-                    if not isinstance(test, dict) or not isinstance(test.get("input", ""), str) or not isinstance(test.get("output", ""), str) or len(test.get("input", "")) > 100000 or len(test.get("output", "")) > 100000:
-                        raise learning.LearningError(400, "Dữ liệu test case không hợp lệ hoặc quá lớn.")
-                    cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "sample": test.get("sample") is True})
-                checker = problem.get("checker", "tokens")
-                if checker not in {"exact", "tokens"}:
-                    raise learning.LearningError(400, "Cách so khớp kết quả không hợp lệ.")
-                cleaned.append({"title": learning.text(problem, "title"), "statement": learning.text(problem, "statement", required=False, limit=20000), "points": integer(problem.get("points", 100), "Điểm bài toán", 1, 1000), "time_limit_ms": integer(problem.get("time_limit_ms", 1000), "Giới hạn thời gian (ms)", 100, 30000), "memory_limit_mb": integer(problem.get("memory_limit_mb", 256), "Bộ nhớ (MB)", 16, 2048), "checker": checker, "tests": cases})
-            row["programming"] = {"languages": languages, "problems": cleaned}
-            if any(not code_runner.budget_valid(problem) for problem in cleaned):
-                raise learning.LearningError(400, "Số test và thời gian mỗi test vượt ngân sách chấm. Hãy giảm số test hoặc giới hạn thời gian.")
+            question_ids = classification.values(form, "question_ids", [])
+            source_ids = {p.get("source_question_id") for p in (old or {}).get("programming", {}).get("problems", [])} - {None}
+            if blueprint and blueprint.get("response_type")=="code":source_ids.update(blueprint["question_ids"])
+            if question_ids:
+                bank = {q["id"]: q for q in read_json("questions.json", [])}
+                try:
+                    problems = json.loads(form.get("problems", "[]"))
+                except (TypeError, ValueError):
+                    raise learning.LearningError(400, "Danh sách bài toán không hợp lệ.")
+                if not isinstance(problems, list):
+                    raise learning.LearningError(400, "Danh sách bài toán không hợp lệ.")
+                languages = set(form.get("languages", "").split(","))
+                for question_id in question_ids:
+                    question = bank.get(question_id)
+                    if question is None:
+                        raise learning.LearningError(404, "Không tìm thấy câu hỏi trong ngân hàng.")
+                    permissions.require_content(session, question)
+                    if question.get("archived"):
+                        raise learning.LearningError(409, "Câu hỏi đã lưu trữ. Hãy chọn lại câu hỏi.")
+                    if not languages.issubset(question["programming"]["languages"]):
+                        raise learning.LearningError(400, "Các câu hỏi được chọn không hỗ trợ cùng ngôn ngữ thi.")
+                    problems.extend({**p, "source_question_id": question_id} for p in question["programming"]["problems"])
+                    source_ids.add(question_id)
+                form = {**form, "problems": json.dumps(problems)}
+            row["programming"] = validate_programming(form)
+            submitted = json.loads(form.get("problems", "[]"))
+            for problem, raw in zip(row["programming"]["problems"], submitted):
+                if isinstance(raw.get("source_question_id"), str) and raw["source_question_id"] in source_ids:
+                    problem["source_question_id"] = raw["source_question_id"]
+            mode=form.get("paper_distribution",(old or {}).get("paper_distribution","common"))
+            if mode not in {"common","random"}:raise learning.LearningError(400,"Cách phân phối bộ câu hỏi không hợp lệ.")
+            row["paper_distribution"]=mode
+            if mode=="random":
+                row["questions_per_student"]=integer(form.get("questions_per_student",(old or {}).get("questions_per_student",1)),"Số câu mỗi sinh viên",1,len(row["programming"]["problems"]))
+                row["distribution_mode"]="manual"
+                row.setdefault("published",False)
+            if old and old.get("student_problem_sets"):
+                unchanged=(old.get("programming")==row["programming"] and old.get("paper_distribution","common")==mode
+                           and old.get("questions_per_student")==row.get("questions_per_student") and old.get("participants")==row.get("participants"))
+                if unchanged:row["student_problem_sets"]=copy.deepcopy(old["student_problem_sets"])
+                else:
+                    row["published"]=False
+                    row.pop("distributed_at",None)
             if "participant_ids" in form:
                 row["participants"], _ = prepare_programming_participants(form["participant_ids"], course_id)
                 row["participants_configured"] = True
@@ -188,6 +266,14 @@ def save(session, form, ip):
             settings.update({"exam_title": row["title"], "exam_course_id": course_id, "exam_participants": row["participants"], "exam_catalog_id": row["id"], "exam_assessment_type": assessment_type})
             settings["exam_scheduled_at"] = row.get("scheduled_at")
             write_json("settings.json", settings)
+        classification.validate_languages(row)
+        if kind == "file":
+            if blueprint:
+                from . import exams
+                content="\n\n".join(f"Câu {i+1}. {q['title']} ({q['points']} điểm)\n{q['statement']}" for i,q in enumerate(blueprint["file_questions"]))
+                generated=exams.add_exam_file({"filename":"paper_"+row["id"]+"_"+uuid.uuid4().hex[:8]+".txt","data":content.encode("utf-8")})
+                row["generated_exam_file"]=generated["name"]
+            elif old and old.get("generated_exam_file"):row["generated_exam_file"]=old["generated_exam_file"]
         # Active fields are overlaid from the running engine when read.
         saved = [r for r in rows if r["id"] != row["id"]]
         saved.append(row)
@@ -195,7 +281,7 @@ def save(session, form, ip):
             r.pop("active", None)
         write_json("exam_catalog.json", saved)
         audit("admin.exam_configuration_saved", session["user_id"], ip, {"id": row["id"], "type": kind})
-        return {"ok": True, "id": row["id"]}
+        return {"ok": True, "id": row["id"], "problem_count": len(row.get("programming", {}).get("problems", []))}
 
 
 def activate(session, form, ip):

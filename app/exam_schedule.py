@@ -13,6 +13,8 @@ def describe(row):
     ):
         return {"auto_start_ready": False, "auto_start_issues": []}
     from .exam_preflight import _snapshot
+    if row.get("published") is False:
+        return {"auto_start_ready": False, "auto_start_issues": ["Đề chưa được phân phối. Hãy lưu danh sách dự thi rồi bấm Phân phối đề."]}
     try:
         _, report = _snapshot(row["id"], row=row, include_fingerprint=False)
     except (learning.LearningError, ValueError, OSError) as error:

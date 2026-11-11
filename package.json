@@ -2,6 +2,8 @@
   "name": "classroom-submission-server-ui",
   "private": true,
   "scripts": {
+    "test:classification": "node tests/browser_student_qa.cjs --classification",
+    "test:programming-homework": "node tests/browser_student_qa.cjs --programming-homework",
     "test": "node tests/run_checks.cjs",
     "test:browser": "node tests/run_checks.cjs --browser",
     "build:css": "tailwindcss -i ./assets/tailwind.input.css -o ./static/css/tailwind.css --minify",
