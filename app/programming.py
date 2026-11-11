@@ -53,9 +53,11 @@ def public_submission(row, admin=False):
     if not admin:
         for grade in grades:
             if not grade: continue
+            grade.pop('private_compile_log', None)
             for test in grade["tests"]:
-                if not test["sample"]:
-                    for key in ("input", "expected", "actual", "stderr"): test.pop(key, None)
+                from .code_templates import visible
+                if not visible(test):
+                    for key in ("input", "expected", "actual", "stderr", "test_code"): test.pop(key, None)
     return result
 
 
@@ -90,7 +92,7 @@ def snapshot(sid):
             item["started_at"] = row.get("started_at") or row.get("scheduled_at")
         item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": not course_closed and row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
         if attempt:
-            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"]) if i in assigned_indices(row,sid)]
+            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "answer_kind": p.get("answer_kind", "program"), "language": p.get("language", ""), "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"]) if i in assigned_indices(row,sid)]
         result.append(item)
     return {"exams": result, "submissions": [public_submission(r) for r in rows() if r["student_id"] == sid]}
 
@@ -300,6 +302,8 @@ def submit(session, form, file, ip):
         pending = [r for r in records if r["state"] in {"queued", "running"}]
         if len(pending) >= 50 or sum(r["student_id"] == sid for r in pending) >= 2: raise learning.LearningError(429, "Bạn còn bài đang chấm hoặc hàng đợi đang đầy. Chờ kết quả trước khi nộp tiếp.")
         problem = row["programming"]["problems"][index]
+        if problem.get('language') and language != problem['language']:
+            raise learning.LearningError(400, 'Ngôn ngữ không khớp mã kiểm thử của bài toán.')
         guards.enter_context(submission_rate.guard(sid))
         record = {"id": uuid.uuid4().hex, "exam_id": row["id"], "exam_title": row["title"], "course_id": row["course_id"], "student_id": sid, "problem_index": index, "problem_title": problem["title"], "max_score": problem["points"], "language": language, "original_filename": Path(file["filename"]).name[:150], "submitted_at": utc_now(), "state": "queued", "result": None, "size_bytes": len(content), "sha256": hashlib.sha256(content).hexdigest(), "ip": ip, "grading_history": []}
         record["full_name"] = read_json("students.json").get(sid,{}).get("full_name",sid)

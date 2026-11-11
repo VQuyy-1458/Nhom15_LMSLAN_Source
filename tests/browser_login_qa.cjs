@@ -69,7 +69,8 @@ async function login(username='QA001'){await waitFor(()=>evaluate("!!document.qu
   await waitFor(()=>evaluate("!!document.querySelector('#username')"));
   assert.equal(await evaluate("document.querySelector('[name=next]').value.includes('/student/attendance?session=')"),true);
   await login();
-  await waitFor(()=>evaluate("document.querySelector('#qr-read-status')?.textContent.includes('Điểm danh thành công')"));
+  await waitFor(()=>evaluate("!!document.querySelector('[data-learning-row=attendance]')"));
   assert.equal(await evaluate("new URLSearchParams(location.search).has('code')"),false);
-  console.log('PASS: mobile LAN-style QR link survives login and automatically checks in');
+  assert.equal(await evaluate(`fetch('/api/student/workspace').then(r=>r.json()).then(d=>d.attendance.find(a=>a.id===${JSON.stringify(fixture.attendance)}).record.status)`),'present');
+  console.log('PASS: legacy attendance link survives mobile login, clears QR token and shows synchronized LAN attendance');
 })().catch(async e=>{console.error(e);try{console.error(await evaluate("JSON.stringify({url:location.href,text:document.body.innerText.slice(0,800)})"));}catch(_){}process.exitCode=1;}).finally(async()=>{socket?.close();browser?.kill();app?.kill();await delay(400);if(path.dirname(path.resolve(profile))===path.resolve(os.tmpdir())&&path.basename(profile).startsWith('classroom-login-'))fs.rmSync(profile,{recursive:true,force:true});});

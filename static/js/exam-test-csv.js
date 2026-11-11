@@ -41,7 +41,7 @@
     endRow();
     if(!rows.length)throw new Error('File CSV trống.');
     const headers=rows.shift().values.map(h=>h.trim().toLowerCase());
-    if(!headers.includes('input')||!headers.includes('output')||headers.some(h=>!['input','output','sample'].includes(h))||new Set(headers).size!==headers.length)throw new Error('Dòng tiêu đề cần có cột input,output và tùy chọn sample; không được trùng cột.');
+    if(!headers.includes('input')||!headers.includes('output')||headers.some(h=>!['input','output','sample','test_code','feedback_visibility'].includes(h))||new Set(headers).size!==headers.length)throw new Error('Dòng tiêu đề CSV: input,output và tùy chọn sample,test_code,feedback_visibility; không được trùng cột.');
     if(!rows.length)throw new Error('File CSV chưa có test case.');
     if(rows.length>100)throw new Error('Mỗi bài toán có tối đa 100 test case.');
     return rows.map(({values,line:rowLine})=>{
@@ -50,7 +50,10 @@
       const sample=(test.sample||'').trim().toLowerCase();
       if(!['','true','false','1','0'].includes(sample))throw new Error(`CSV dòng ${rowLine}: sample phải là true/false hoặc 1/0.`);
       if(test.input.length>100000||test.output.length>100000)throw new Error(`CSV dòng ${rowLine}: input/output vượt 100.000 ký tự.`);
-      return {input:test.input,output:test.output,sample:sample==='true'||sample==='1'};
+      const result={input:test.input,output:test.output,sample:sample==='true'||sample==='1'};
+      if(headers.includes('test_code')){if(test.test_code.length>100000)throw new Error('Test code vượt 100.000 ký tự.');result.test_code=test.test_code;}
+      if(headers.includes('feedback_visibility')){if(!['sample','show','hide','hide_if_fail','hide_if_succeed'].includes(test.feedback_visibility))throw new Error('Chính sách phản hồi không hợp lệ.');result.feedback_visibility=test.feedback_visibility;}
+      return result;
     });
   }
   window.classroomTestCsv={parse};

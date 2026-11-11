@@ -640,6 +640,29 @@ async function homeworkFlow(base,fixture){
   assert.deepEqual(errors,[],'Homework JavaScript errors');
   console.log('PASS: homework UI create, give, edit code, sample run without submission, submit, grade and saved homework score; desktop/mobile.');
 }
+async function codeCustomise(base,fixture){
+  const template="{{ STUDENT_ANSWER | replace({'public class ': 'class '}) }}\npublic class __tester__ { public static void main(String[] args) { {{ TEST.testcode }} } }";
+  const problem={title:'Product class',answer_kind:'class',language:'java',template,points:10,tests:[{input:'',output:'7',test_code:'System.out.println(new Product().price());',sample:true,feedback_visibility:'sample'}]};
+  const response=await fetch(base+'/api/admin/exam-configurations/save',{method:'POST',headers:{Cookie:'css_session='+fixture.admin,Origin:base,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({type:'programming',course_id:fixture.course,title:'Customise QA',languages:'java',problems:JSON.stringify([problem])})});
+  const saved=await response.json();assert.equal(response.status,200,JSON.stringify(saved));
+  await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+  await navigate(base+'/admin?section=exam&exam='+saved.id);
+  await evaluate("document.querySelector('[data-problem-select]').click()");
+  assert.equal(await evaluate("document.querySelector('[data-customise]').checked"),true);
+  assert.equal(await evaluate("document.querySelector('[data-problem-template]').value"),template);
+  await evaluate("document.querySelector('[data-problem-preview]').click()");
+  await waitFor(()=>evaluate("!!document.querySelector('[data-trial-form]')"));
+  assert.equal(await evaluate("document.querySelector('dialog table th').textContent"),'Test');
+  await evaluate("document.querySelector('[data-trial-form] textarea').value='public class Product { public int price(){return 7;} }';document.querySelector('[data-trial-form]').requestSubmit()");
+  await waitFor(()=>evaluate("document.querySelector('[data-trial-status]').textContent.includes('AC')"),45000);
+  assert.equal(await evaluate("(()=>{const d=document.querySelector('dialog'),r=d.getBoundingClientRect(),last=d.querySelector('table th:last-child').getBoundingClientRect();return last.right<=r.right&&last.left>=r.left;})()"),true,'Both preview columns visible');
+  await panelScreenshot('dialog','customise-preview-ac.png');
+  await evaluate("document.querySelector('[data-trial-form] textarea').value='public class Product { public int price(){return 0;} }';document.querySelector('[data-trial-form]').requestSubmit()");
+  await waitFor(()=>evaluate("document.querySelector('[data-trial-status]').textContent.includes('WA')"),45000);
+  assert.deepEqual(errors,[],'Browser errors');
+  console.log('PASS Customise template, Test/Result preview, real Docker AC and WA');
+}
+
 (async()=>{
   fs.mkdirSync(out,{recursive:true});
   app=spawn(python,['-u',path.join(__dirname,'serve_student_qa.py')],{cwd:root,windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,CSS_ROSTER_QA:['--code-roster','--code-entry','--timing','--auto-exams','--programming-homework','--classification'].some(flag=>process.argv.includes(flag))?'1':'',CSS_ENROLLMENT_QA:process.argv.includes('--enrollment')?'1':'',CSS_TIMING_QA:['--timing','--auto-exams'].some(flag=>process.argv.includes(flag))?'1':''}});
@@ -654,6 +677,7 @@ async function homeworkFlow(base,fixture){
   await send('Page.enable');await send('Runtime.enable');await send('Log.enable');await send('Network.enable');
   await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
+  if(process.argv.includes('--code-customise')){await codeCustomise(base,fixture);return;}
   if(process.argv.includes('--sidebar')){await sidebarFit(base,fixture);assert.deepEqual(errors,[],'Sidebar browser JavaScript errors');return;}
   if(process.argv.includes('--classification')){await classificationFlow(base,fixture);return;}
   if(process.argv.includes('--programming-homework')){await homeworkFlow(base,fixture);return;}
@@ -770,19 +794,21 @@ async function homeworkFlow(base,fixture){
   await screenshot('student-attendance-history.png');
   console.log('PASS: student attendance history no longer requires QR scanning');
   await navigate(base+`/student/courses?course=${fixture.course}`);
-  assert.equal(await evaluate("new URLSearchParams(location.search).get('tab')"),'materials');
+  assert.equal(await evaluate("new URLSearchParams(location.search).get('tab')"),'weekly');
   const otherCourse=await evaluate(`[...document.querySelector('[data-student-course-switch]').options].find(o=>o.value!==${JSON.stringify(fixture.course)}).value`);
   await chooseCourse('[data-student-course-switch]',otherCourse);
   await waitFor(()=>evaluate(`new URLSearchParams(location.search).get('course')===${JSON.stringify(otherCourse)}`));
   await chooseCourse('[data-student-course-switch]',fixture.course);
   await waitFor(()=>evaluate(`new URLSearchParams(location.search).get('course')===${JSON.stringify(fixture.course)}`));
+  await navigate(base+`/student/courses?course=${fixture.course}&tab=materials`);
   assert.equal(await evaluate("document.querySelector('.student-course-tabs').textContent.includes('Tổng quan')"),false);
   assert.equal(await evaluate("document.querySelector('.student-course-tabs').textContent.includes('Điểm danh')"),false);
   assert.equal(await evaluate("document.querySelector('#filter-form button[type=submit]')===null"),true);
   await evaluate("(()=>{const input=document.querySelector('#filter-form [name=q]');input.value='không có nội dung này';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
-  await waitFor(()=>evaluate("document.querySelectorAll('[data-learning-row=material]').length===0"));
+  await waitFor(()=>evaluate("document.querySelectorAll('.resource-line').length===0"));
   await evaluate("(()=>{const input=document.querySelector('#filter-form [name=q]');input.value='Hướng dẫn';input.dispatchEvent(new Event('input',{bubbles:true}));})()");
-  await waitFor(()=>evaluate("document.querySelectorAll('[data-learning-row=material]').length===1"));
+  await waitFor(()=>evaluate("document.querySelectorAll('.resource-line').length===1"));
+  await evaluate("document.querySelector('.resource-line summary').click()");
   await screenshot('student-course-materials-compact.png');
   await evaluate("document.querySelector('[data-learning-detail=material]').click()");
   assert.equal(await evaluate("document.querySelector('.student-detail-dialog').textContent.includes('Các bước chuẩn bị bài tập.')"),true);
@@ -1152,7 +1178,11 @@ async function homeworkFlow(base,fixture){
   }
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
   await navigate(base+'/admin/courses');
-  assert.equal(await evaluate("document.querySelectorAll('.sidebar-nav a').length"),9);
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.sidebar-nav a')].map(a=>a.getAttribute('href'))"),[
+    '/admin?section=dashboard','/admin/courses','/admin?section=calendar','/admin?section=class-notifications',
+    '/admin?section=exam','/admin?section=submissions','/admin?section=classification','/admin?section=monitor',
+    '/admin?section=notifications','/admin?section=accounts','/admin?section=server','/admin?section=admins'
+  ]);
   assert.equal(await evaluate("document.querySelector('.sidebar-nav').textContent.includes('Quản lý học tập')"),false);
   await screenshot('admin-courses-desktop.png');
   await evaluate("document.querySelector('[data-course-create]').click()");
@@ -1263,7 +1293,7 @@ async function homeworkFlow(base,fixture){
   await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
   await navigate(base+'/student/attendance');
   assert.equal(await evaluate("document.querySelector('[data-scan-start]')===null"),true);
-  assert.match(await evaluate("document.querySelector('#workspace-content').textContent"),/Không cần quét QR/);
+  assert.match(await evaluate("document.querySelector('#workspace-content').textContent"),/Lịch sử điểm danh/);
   assert.equal(await evaluate("fetch('/api/student/workspace').then(r=>r.json()).then(d=>d.attendance.find(a=>a.event_id==='"+scheduled.body.id+"').record.status)"),'early_departure');
   await navigate(base+'/student/grades');assert.match(await evaluate("document.querySelector('#workspace-content').textContent"),/8.5/);
   assert.match(await evaluate("document.querySelector('#workspace-content').textContent"),/9.05/);

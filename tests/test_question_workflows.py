@@ -10,6 +10,20 @@ from app import storage, programming, code_runner, learning, exams, main, questi
 
 
 class QuestionWorkflowTests(unittest.TestCase):
+    def test_customise_survives_library_and_teacher_can_preview(self):
+        course,other,fields=self.teacher_context()
+        template="{{ STUDENT_ANSWER | replace({'public class ': 'class '}) }}\npublic class __tester__ { public static void main(String[] args){ {{ TEST.testcode }} } }"
+        spec={'title':'Product','answer_kind':'class','template':template,'language':'java','tests':[{'input':'','output':'7','sample':True,'test_code':'System.out.println(new Product().price());','feedback_visibility':'hide'}]}
+        fields={**fields,'languages':'java','problems':json.dumps([spec])}
+        qid=self.question(fields,'practice')
+        self.assertEqual(self.request('/api/admin/questions/publish','t1',{'id':qid})[0],200)
+        q=question_library.practice_rows('s1')[0]
+        self.assertEqual(q['programming']['problems'][0]['template'],template)
+        self.assertEqual(q['programming']['problems'][0]['tests'][0]['test_code'],spec['tests'][0]['test_code'])
+        with patch.object(code_runner,'judge',return_value={'verdict':'AC','tests':[]}):
+            status,result=self.request('/api/admin/programming/preview','t1',{'language':'java','source':'public class Product {}','problem':json.dumps(spec)})
+        self.assertEqual(status,200,result)
+
     setUp = support.LearningTests.setUp
     cleanup = support.LearningTests.cleanup
     request = support.LearningTests.request

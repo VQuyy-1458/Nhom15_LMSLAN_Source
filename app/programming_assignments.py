@@ -96,10 +96,14 @@ def run_sample(session, form, ip):
         language, source = form.get("language"), form.get("source", "")
         if language not in row["programming"]["languages"]:
             raise learning.LearningError(400, "Ngôn ngữ không được phép.")
+        if problem.get('language') and language!=problem['language']:
+            raise learning.LearningError(400,'Ngôn ngữ không khớp mã kiểm thử của bài.')
         if not source.strip() or len(source.encode("utf-8")) > 100000:
             raise learning.LearningError(400, "Mã nguồn phải từ 1 đến 100.000 byte.")
         problem = copy.deepcopy(problem)
         custom = form.get("run_mode", "samples") == "custom"
+        if custom and (problem.get('answer_kind','program')!='program' or problem.get('template')):
+            raise learning.LearningError(400,'Bài dùng mã kiểm thử cần chạy Test mẫu công khai, không dùng stdin tự nhập.')
         if custom:
             value = form.get("stdin", "")
             if len(value.encode("utf-8")) > 100000:
@@ -121,6 +125,7 @@ def run_sample(session, form, ip):
                 raise learning.LearningError(503, "Môi trường chạy thử gặp lỗi. Hãy thử lại khi bộ chấm sẵn sàng.") from error
         # The temporary result is returned only to its caller; it never enters score/history stores.
         result.pop("score", None)
+        result.pop('private_compile_log',None)
         if custom:
             for test in result.get("tests", []):
                 test.pop("expected", None)

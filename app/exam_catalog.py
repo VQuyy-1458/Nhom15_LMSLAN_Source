@@ -136,11 +136,19 @@ def validate_programming(form):
         for test in tests:
             if not isinstance(test, dict) or not isinstance(test.get("input", ""), str) or not isinstance(test.get("output", ""), str) or len(test.get("input", "")) > 100000 or len(test.get("output", "")) > 100000:
                 raise learning.LearningError(400, "Dữ liệu test case không hợp lệ hoặc quá lớn.")
-            cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "sample": test.get("sample") is True})
+            cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "sample": test.get("sample") is True, 'test_code':test.get('test_code',''),'feedback_visibility':test.get('feedback_visibility','sample')})
         checker = problem.get("checker", "tokens")
         if checker not in {"exact", "tokens"}:
             raise learning.LearningError(400, "Cách so khớp kết quả không hợp lệ.")
         cleaned.append({"title": learning.text(problem, "title"), "statement": learning.text(problem, "statement", required=False, limit=20000), "points": integer(problem.get("points", 100), "Điểm bài toán", 1, 1000), "time_limit_ms": integer(problem.get("time_limit_ms", 1000), "Giới hạn thời gian (ms)", 100, 30000), "memory_limit_mb": integer(problem.get("memory_limit_mb", 256), "Bộ nhớ (MB)", 16, 2048), "checker": checker, "tests": cases})
+        cleaned[-1].update(answer_kind=problem.get('answer_kind','program'),template=problem.get('template',''),language=problem.get('language',''))
+        from .code_templates import validate
+        try:validate(cleaned[-1])
+        except (ValueError,TypeError) as exc:raise learning.LearningError(400,str(exc)) from exc
+        lang=cleaned[-1]['language']
+        if not isinstance(lang,str) or lang and lang not in languages:raise learning.LearningError(400,'Ngôn ngữ bài toán không hợp lệ.')
+        if (cleaned[-1]['answer_kind']!='program' or cleaned[-1]['template']) and lang not in languages:raise learning.LearningError(400,'Chọn ngôn ngữ cố định cho bài có mã kiểm thử.')
+        if cleaned[-1]['answer_kind']=='class' and lang=='c':raise learning.LearningError(400,'C không hỗ trợ class.')
     row["programming"] = {"languages": languages, "problems": cleaned}
     if any(not code_runner.budget_valid(problem) for problem in cleaned):
         raise learning.LearningError(400, "Số test và thời gian mỗi test vượt ngân sách chấm. Hãy giảm số test hoặc giới hạn thời gian.")

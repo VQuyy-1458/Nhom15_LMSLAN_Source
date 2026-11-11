@@ -399,12 +399,13 @@ class LearningTests(unittest.TestCase):
         self.assertFalse(any(e["id"] == item for e in self.request("/api/student/workspace", "s2")[1]["programming"]["exams"]))
         self.assertEqual(self.request("/api/student/programming/start", "s1", {"exam_id": item})[0], 200)
         form = {"exam_id": item, "problem_index": "0", "language": "python", "source": "print(3)"}
-        result = {"verdict": "AC", "score": 100, "passed": 1, "total": 1, "compile_log": "", "tests": [
+        result = {"verdict": "AC", "score": 100, "passed": 1, "total": 1, "compile_log": "", "private_compile_log": "private harness", "tests": [
             {"index": 1, "sample": True, "verdict": "AC", "input": "1 2", "expected": "3", "actual": "3", "stderr": ""}]}
         with patch.object(code_runner, "ready", return_value=True), patch.object(code_runner, "judge", return_value=result) as judge:
             code, run = self.request("/api/student/programming/run", "s1", form)
             self.assertEqual(code, 200, run)
             self.assertNotIn("score", run["result"])
+            self.assertNotIn("private_compile_log", run["result"])
             self.assertEqual(len(judge.call_args.args[2]["tests"]), 1)
             self.assertNotIn("secret-input", json.dumps(judge.call_args.args[2]))
         self.assertEqual(programming.rows(), [])

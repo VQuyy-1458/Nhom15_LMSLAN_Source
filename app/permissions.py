@@ -96,12 +96,14 @@ def authorize_route(session, req, resource=True):
             validate_roster(session, form.get("participant_ids", ""))
         return
     allowed = {"/api/admin/programming-assignments/save", "/api/admin/programming-assignments/assign", "/api/admin/programming-assignments/delete",
-               "/api/admin/programming/status", "/api/admin/programming/submissions", "/api/admin/programming/participants", "/api/admin/programming/control", "/api/admin/programming/rejudge",
+               "/api/admin/programming/status", "/api/admin/programming/submissions", "/api/admin/programming/participants", "/api/admin/programming/control", "/api/admin/programming/rejudge", "/api/admin/programming/preview",
                "/api/admin/exam-preflight", "/api/admin/exam-preflight/verify", "/api/admin/exam-preflight/open", "/api/admin/exam-timing"}
     if path not in allowed:
         deny("Chức năng quản trị hệ thống chỉ dành cho Admin.")
     if not resource:
         return
+    if path=='/api/admin/programming/preview':
+        return  # Pure trial of supplied code/configuration, no stored content access.
     item_id = form.get("exam_id") or form.get("id") or query("exam")
     if form.get("submission_id"):
         from .programming import rows
