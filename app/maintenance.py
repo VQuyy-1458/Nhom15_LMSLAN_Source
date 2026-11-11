@@ -63,7 +63,7 @@ def snapshot(destination=None, prefix="manual"):
     try:
         with learning.LOCK, storage.transaction():
             locations=roots()
-            metadata={p.name:storage.read_json(p.name) for p in storage.DATA_DIR.glob("*.json") if not p.name.startswith(".")}
+            metadata={name:storage.read_json(name) for name in storage.document_names()}
             payloads=[]
             for category,root in locations.items():
                 if category=="data" or not root.exists():continue
@@ -131,9 +131,7 @@ def restore_copy(folder,target):
 def doctor(execute=False):
     issues=[]
     with storage.transaction():
-        metadata={}
-        for path in storage.DATA_DIR.glob("*.json"):
-            if not path.name.startswith("."):metadata[path.name]=storage.read_json(path.name)
+        metadata={name:storage.read_json(name) for name in storage.document_names()}
         issues.extend(reference_issues(roots(),metadata))
     if shutil.disk_usage(storage.DATA_DIR).free < 512*1024*1024:issues.append("Dung lượng đĩa trống dưới 512 MiB.")
     if not (STATIC_DIR/"css"/"tailwind.css").is_file():issues.append("Thiếu CSS đã build.")

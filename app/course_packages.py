@@ -26,7 +26,7 @@ def export_course(course_id, session):
             if total > LIMIT:
                 raise learning.LearningError(413, "Tổng học liệu vượt 15 MiB cho một gói chuyển khóa.")
             package["materials"].append({**{k: row.get(k, "") for k in ("title", "topic", "description")}, "filename": filename, "data_base64": base64.b64encode(path.read_bytes()).decode("ascii")})
-        for key, fields in (("assignments", ("title", "description", "topic", "due_at", "max_attempts")), ("events", ("title", "description", "kind", "starts_at", "location"))):
+        for key, fields in (("assignments", ("title", "description", "topic", "due_at", "max_attempts", "submission_type", "category", "short_code")), ("events", ("title", "description", "kind", "starts_at", "location"))):
             package[key] = [{k: row.get(k, "") for k in fields} for row in data[key] if row["course_id"] == course_id]
         for source, exported in zip([r for r in data["assignments"] if r["course_id"] == course_id], package["assignments"]):
             if source.get("stored_name"):
@@ -87,7 +87,11 @@ def import_course(file, session, ip):
         attempts = row.get("max_attempts", 3)
         if not isinstance(attempts, int) or isinstance(attempts, bool) or not 1 <= attempts <= 20:
             raise learning.LearningError(400, "Số lần nộp trong gói không hợp lệ.")
-        staged["assignments"].append({"id": secrets.token_hex(10), "created_at": now, "course_id": cid, "title": field(row, "title"), "description": field(row, "description", 10000, False), "topic": field(row, "topic", 200, False), "due_at": learning.date_value(row.get("due_at")).isoformat(), "max_attempts": attempts})
+        submission_type = "file"
+        category = row.get("category", "GENERAL")
+        if category not in learning.ASSIGNMENT_CATEGORIES:
+            raise learning.LearningError(400, "Phân loại bài tập trong gói không hợp lệ.")
+        staged["assignments"].append({"id": secrets.token_hex(10), "created_at": now, "course_id": cid, "title": field(row, "title"), "description": field(row, "description", 10000, False), "topic": field(row, "topic", 200, False), "due_at": learning.date_value(row.get("due_at")).isoformat(), "max_attempts": attempts, "submission_type": submission_type, "category": category, "short_code": field(row, "short_code", 40, False) or f"{category}_TASK"})
         if "data_base64" in row:
             if not isinstance(row["data_base64"], str):
                 raise learning.LearningError(400, "Dữ liệu đề bài trong gói không hợp lệ.")

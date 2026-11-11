@@ -19,7 +19,9 @@ from . import submission_rate, enrollments
 
 FILES = RUNTIME_DIR / "learning-files"
 LOCK = threading.RLock()
-EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip", ".c", ".cpp", ".java", ".py", ".png", ".jpg", ".jpeg"}
+EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip", ".c", ".cpp", ".h", ".hpp", ".java", ".py", ".js", ".ts", ".cs", ".go", ".rs", ".kt", ".png", ".jpg", ".jpeg"}
+FILE_SUBMISSION_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip", ".png", ".jpg", ".jpeg"}
+ASSIGNMENT_CATEGORIES = {"GENERAL", "TCP", "UDP", "RMI", "WS", "DATABASE", "WEB", "MIXED"}
 EMPTY = {"courses": [], "materials": [], "events": [], "assignments": [], "submissions": [], "attendance": [], "grades": []}
 WEIGHTS = {"attendance": 10, "homework": 10, "midterm": 10, "final": 70}
 
@@ -75,12 +77,17 @@ def gradebook(data, course, student_ids):
             score = latest.get("score") if latest else (0 if task_due[task["id"]] else None)
             if task_due[task["id"]] or score is not None:
                 homework.append(score)
+        practice = [r["score"] for r in exam_results[sid] if r["assessment_type"] == "practice"]
+        homework.extend(practice)
         if homework and all(score is not None for score in homework):
             values["homework"] = round(sum(homework) / len(homework), 2)
         for component in ("midterm", "final"):
             marks = [r["score"] for r in exam_results[sid] if r["assessment_type"] == component]
-            if marks and all(v is not None for v in marks):
-                values[component] = round(sum(marks) / len(marks), 2)
+            if marks:
+                # New configurations permit one midterm and one final. For a
+                # legacy catalog containing duplicates, the last saved exam is
+                # the counted one instead of silently averaging old entries.
+                values[component] = round(marks[-1], 2) if marks[-1] is not None else None
         automatic = dict(values)
         overrides = {}
         for row in overrides_by_student.get(sid,[]):
@@ -189,12 +196,12 @@ def snapshot(session):
         return result
 
 
-def save_file(file):
+def save_file(file, allowed_extensions=None):
     if not file or not file.get("filename") or not file.get("data"):
         raise LearningError(400, "Hãy chọn file có nội dung.")
     name = Path(file["filename"].replace("\\", "/")).name[:180]
     extension = Path(name).suffix.lower()
-    if extension not in EXTENSIONS:
+    if extension not in (allowed_extensions or EXTENSIONS):
         raise LearningError(400, "Loại file không được hỗ trợ.")
     if len(file["data"]) > 20 * 1024 * 1024:
         raise LearningError(413, "File vượt giới hạn 20 MiB.")
@@ -313,7 +320,13 @@ def mutate(session, action, form, files, ip):
                 due = date_value(form.get("due_at"))
                 if due <= datetime.now(timezone.utc):
                     raise LearningError(400, "Hạn nộp bài phải ở tương lai.")
-                row.update({"due_at": due.isoformat(), "max_attempts": integer(form, "max_attempts", 3, 1, 20)})
+                category = form.get("category", "GENERAL").strip().upper()
+                if category not in ASSIGNMENT_CATEGORIES:
+                    raise LearningError(400, "Nhóm bài tập không hợp lệ.")
+                short_code = text(form, "short_code", 40, False).upper().replace(" ", "_")
+                if short_code and not all(ch.isalnum() or ch in {"_", "-"} for ch in short_code):
+                    raise LearningError(400, "Mã ngắn chỉ gồm chữ, số, dấu gạch dưới hoặc gạch ngang.")
+                row.update({"due_at": due.isoformat(), "max_attempts": integer(form, "max_attempts", 3, 1, 20), "submission_type": "file", "category": category, "short_code": short_code or f"{category}_TASK"})
                 if files.get("file") and files["file"].get("filename"):
                     row.update(save_file(files["file"]))
                 data["assignments"].append(row)
@@ -341,7 +354,7 @@ def mutate(session, action, form, files, ip):
             if len(prior) >= assignment["max_attempts"]:
                 raise LearningError(409, "Bạn đã dùng hết số lần nộp bài.")
             guards.enter_context(submission_rate.guard(sid))
-            row.update(save_file(files.get("file")))
+            row.update(save_file(files.get("file"), FILE_SUBMISSION_EXTENSIONS))
             row.update({"course_id": assignment["course_id"], "assignment_id": assignment["id"], "assignment_title": assignment["title"], "student_id": sid, "ip": ip, "request_id": key, "score": None, "feedback": "", "attempt": len(prior) + 1, "grading_history": []})
             row["assignment_snapshot"] = {k: assignment.get(k) for k in ("title","description","due_at","max_attempts")}
             row["full_name"] = read_json("students.json").get(sid,{}).get("full_name",sid)

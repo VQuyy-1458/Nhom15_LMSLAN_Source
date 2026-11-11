@@ -861,6 +861,7 @@ def main():
 
 def _serve():
     initialize()
+    exam_catalog.migrate_assessment_policy()
     learning.initialize_enrollments()
     for directory in (EXAM_DIR,UPLOAD_DIR):
         directory.mkdir(parents=True,exist_ok=True)

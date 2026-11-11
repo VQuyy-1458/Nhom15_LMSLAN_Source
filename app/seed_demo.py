@@ -6,7 +6,6 @@ import hashlib
 import io
 import json
 import secrets
-import shutil
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,11 +27,161 @@ def zipped(files):
     return buffer.getvalue()
 
 
+ASSIGNMENT_PLANS = {
+    "network": [
+        "Khảo sát mô hình TCP/IP và công cụ mạng",
+        "Xây dựng TCP Echo Client–Server",
+        "Giao tiếp UDP và xử lý mất gói",
+        "Truyền file an toàn trong mạng LAN",
+        "TCP Chat đa luồng",
+        "Quản lý nhiều kết nối bằng select",
+        "Thiết kế giao thức ứng dụng",
+        "WebSocket và trao đổi dữ liệu thời gian thực",
+        "Bảo mật kết nối và xác thực người dùng",
+        "Đồ án mini Client–Server hoàn chỉnh",
+    ],
+    "database": [
+        "Phân tích yêu cầu và mô hình ERD",
+        "Chuẩn hóa dữ liệu đến dạng 3NF",
+        "Thiết kế lược đồ và ràng buộc toàn vẹn",
+        "Truy vấn JOIN trên nhiều bảng",
+        "GROUP BY, HAVING và truy vấn thống kê",
+        "Subquery, CTE và truy vấn nâng cao",
+        "View, trigger và stored procedure",
+        "Giao dịch và xử lý tranh chấp dữ liệu",
+        "Tối ưu truy vấn bằng chỉ mục",
+        "Đồ án cơ sở dữ liệu ứng dụng",
+    ],
+    "web": [
+        "Xây dựng giao diện responsive",
+        "Biểu mẫu và kiểm tra dữ liệu đầu vào",
+        "Thiết kế REST API cơ bản",
+        "Xác thực và phân quyền người dùng",
+        "Kết nối frontend với API",
+        "Quản lý trạng thái và xử lý lỗi",
+        "Tải file và quản lý tài nguyên",
+        "Tìm kiếm, lọc và phân trang",
+        "Kiểm thử và tối ưu hiệu năng Web",
+        "Đồ án Web full-stack hoàn chỉnh",
+    ],
+    "programming": [
+        "Biến, kiểu dữ liệu và nhập xuất",
+        "Cấu trúc rẽ nhánh và vòng lặp",
+        "Mảng, chuỗi và xử lý dữ liệu",
+        "Hàm và tổ chức chương trình",
+        "Con trỏ và quản lý bộ nhớ",
+        "Lập trình hướng đối tượng",
+        "Đọc ghi file và xử lý ngoại lệ",
+        "Cấu trúc dữ liệu cơ bản",
+        "Thuật toán tìm kiếm và sắp xếp",
+        "Bài tập tổng hợp cuối học phần",
+    ],
+}
+
+
+def _assignment_subject(course):
+    text = f"{course.get('code', '')} {course.get('name', '')}".casefold()
+    if any(token in text for token in ("ltm", "mạng", "network", "socket")):
+        return "network"
+    if any(token in text for token in ("csdl", "database", "dữ liệu", "sql")):
+        return "database"
+    if any(token in text for token in ("web", "frontend", "backend")):
+        return "web"
+    return "programming"
+
+
+def assignment_metadata(course, index):
+    """Return stable list labels for code/file assignments."""
+    subject = _assignment_subject(course)
+    if subject == "network":
+        categories = ["TCP", "TCP", "UDP", "TCP", "TCP", "RMI", "MIXED", "WS", "RMI", "MIXED"]
+        codes = ["TCP_TOOLS", "TCP_ECHO", "UDP_RELIABLE", "TCP_FILE", "TCP_CHAT", "IO_SELECT", "APP_PROTOCOL", "WS_REALTIME", "SECURE_LINK", "CLIENT_SERVER"]
+    elif subject == "database":
+        categories, codes = ["DATABASE"] * 10, ["ERD", "NORMAL_3NF", "SCHEMA", "SQL_JOIN", "SQL_GROUP", "SQL_CTE", "DB_OBJECTS", "TRANSACTION", "SQL_INDEX", "DB_PROJECT"]
+    elif subject == "web":
+        categories, codes = ["WEB"] * 9 + ["MIXED"], ["RESPONSIVE", "WEB_FORM", "REST_API", "WEB_AUTH", "API_CLIENT", "WEB_STATE", "FILE_UPLOAD", "WEB_FILTER", "WEB_TEST", "FULLSTACK"]
+    else:
+        categories, codes = ["GENERAL"] * 9 + ["MIXED"], ["BASIC_IO", "CONTROL_FLOW", "ARRAY_STRING", "FUNCTION", "POINTER", "OOP", "FILE_IO", "DATA_STRUCTURE", "ALGORITHM", "FINAL_PRACTICE"]
+    pos = index % 10
+    return {"submission_type": "file", "category": categories[pos], "short_code": codes[pos]}
+
+
+def top_up_assignments(per_course=10):
+    """Add repeat-safe sample assignments until every course reaches the target."""
+    if not isinstance(per_course, int) or not 1 <= per_course <= 50:
+        raise ValueError("Số bài mỗi môn phải từ 1 đến 50.")
+    data = learning.load()
+    now = datetime.now(VN).replace(microsecond=0)
+    due_offsets = [2, 4, 7, 10, 14, 18, 23, 28, 34, 42]
+    added = []
+    updated = 0
+    summary = []
+    for course in data["courses"]:
+        existing = [row for row in data["assignments"] if row.get("course_id") == course["id"]]
+        before = len(existing)
+        for index, row in enumerate(existing):
+            metadata = assignment_metadata(course, index)
+            changed = False
+            for key, value in metadata.items():
+                if (key == "submission_type" and row.get(key) != "file") or not row.get(key) or (row.get("created_by") == "sample-assignment-topup" and row.get(key) != value):
+                    row[key] = value
+                    changed = True
+            if row.get("created_by") == "sample-assignment-topup" and "Nộp mã nguồn hoặc file ZIP" in row.get("description", ""):
+                row["description"] = row["description"].replace(
+                    "Nộp mã nguồn hoặc file ZIP kèm README hướng dẫn chạy, dữ liệu kiểm thử và ảnh kết quả.",
+                    "Nộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Phần lập trình có test tự động được làm trong Bộ chấm code online.",
+                )
+                changed = True
+            updated += int(changed)
+        titles = {row.get("title", "").strip().casefold() for row in existing}
+        plan = ASSIGNMENT_PLANS[_assignment_subject(course)]
+        for index, topic in enumerate(plan):
+            if len(existing) >= per_course:
+                break
+            title = f"Bài tập {len(existing)+1:02} · {topic}"
+            if title.casefold() in titles:
+                continue
+            identity = hashlib.sha256(f"{course['id']}:{topic}".encode("utf-8")).hexdigest()[:20]
+            assignment_id = "sample-task-" + identity
+            if any(row.get("id") == assignment_id for row in data["assignments"]):
+                continue
+            completed = course.get("status") == "completed"
+            offset = -(42 - index * 3) if completed else due_offsets[index]
+            due = (now + timedelta(days=offset)).replace(hour=23, minute=59, second=0).astimezone(timezone.utc).isoformat()
+            row = {
+                "id": assignment_id,
+                "course_id": course["id"],
+                "title": title,
+                "topic": "Thực hành",
+                "description": (
+                    f"Hoàn thành bài thực hành “{topic}” của môn {course['name']}.\n"
+                    "Nộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Phần lập trình có test tự động được làm trong Bộ chấm code online.\n"
+                    "Tiêu chí: đúng yêu cầu 6 điểm, kiểm thử 2 điểm, trình bày và giải thích 2 điểm."
+                ),
+                "due_at": due,
+                "max_attempts": 5,
+                "created_at": now.astimezone(timezone.utc).isoformat(),
+                "created_by": "sample-assignment-topup",
+                **assignment_metadata(course, index),
+            }
+            if completed:
+                row["closed_at"] = due
+            data["assignments"].append(row)
+            existing.append(row)
+            titles.add(title.casefold())
+            added.append(row)
+        summary.append({"course_id": course["id"], "code": course.get("code"), "before": before, "after": len(existing)})
+    if added or updated:
+        with storage.atomic_transaction():
+            storage.write_json("learning.json", data)
+            storage.audit("setup.sample_assignments_added", "local-user", "127.0.0.1", {"target": per_course, "added": len(added), "updated": updated, "courses": summary})
+    return {"target": per_course, "added": len(added), "updated": updated, "courses": summary, "assignment_ids": [row["id"] for row in added]}
+
+
 def seed_demo(project_root=None):
     root = Path(project_root or config.BASE_DIR)
-    marker_path = storage.DATA_DIR / "demo_seed.json"
-    if marker_path.exists():
-        return {"status": "already-seeded", **json.loads(marker_path.read_text(encoding="utf-8"))}
+    if storage.document_exists("demo_seed.json"):
+        return {"status": "already-seeded", **storage.read_json("demo_seed.json")}
     now = datetime.now(VN)
     stamp = now.strftime("%Y%m%d-%H%M%S")
     students = storage.read_json("students.json")
@@ -82,18 +231,17 @@ def seed_demo(project_root=None):
             data["events"].append({**identity(f"{key}-notice-{i}", -3+i), "course_id": cid, "title": ["Chào mừng đến với khóa học", "Tài liệu và bài tập đã được cập nhật", "Lưu ý quy định nộp bài"][i], "description": ["Theo dõi lịch học, tài liệu và các hoạt động trong không gian khóa học.", "Xem mục Tài liệu và Bài tập để chuẩn bị cho buổi thực hành tiếp theo.", "Kiểm tra tên file, nội dung và biên nhận sau khi nộp. Liên hệ giảng viên nếu cần hỗ trợ."][i], "kind": "announcement", "starts_at": iso(-3+i), "location": ""})
         material_contents = [
             ("Đề cương học phần", "de-cuong.txt", f"{name}\n\nMục tiêu: {description}\n\nĐánh giá: chuyên cần 10%, bài tập 20%, giữa kỳ 30%, cuối kỳ 40%.\nNộp bài theo hạn quy định và giữ lại biên nhận.\n"),
-            ("Hướng dẫn thực hành", "huong-dan.txt", "1. Đọc yêu cầu bài tập.\n2. Viết và chạy thử chương trình trên máy.\n3. Đóng gói mã nguồn thành ZIP hoặc chọn file được cho phép.\n4. Nộp bài và kiểm tra lại lịch sử.\n"),
+            ("Hướng dẫn thực hành", "huong-dan.txt", "1. Đọc yêu cầu bài tập.\n2. Hoàn thành báo cáo hoặc tài liệu minh chứng.\n3. Bài lập trình có test tự động được làm trong Bộ chấm code online.\n4. Nộp file và kiểm tra lại lịch sử.\n"),
             ("Mã nguồn tham khảo", "vi-du.cpp", "#include <iostream>\nint main() { int n; std::cin >> n; std::cout << n * (n + 1) / 2; }\n"),
         ]
         for i, (title, filename, payload) in enumerate(material_contents):
             data["materials"].append({**identity(f"{key}-material-{i}", -15+i), "course_id": cid, "title": title, "description": "Học liệu dùng cho bộ dữ liệu kiểm thử của lớp.", **file_metadata(f"{key}-material-{i}", filename, payload)})
-        network_titles = ["Bài tập 01 – Tổng quan giao thức mạng", "Bài tập 02 – Xây dựng TCP Client–Server", "Bài tập 03 – Truyền file trong mạng LAN", "Bài tập 04 – Xử lý nhiều kết nối", "Bài tập 05 – Ứng dụng chat đơn giản"]
-        db_titles = ["Bài tập 01 – Thiết kế sơ đồ quan hệ", "Bài tập 02 – Truy vấn và kết nối bảng", "Bài tập 03 – Thực hành GROUP BY", "Bài tập 04 – Giao dịch và ràng buộc", "Bài tập 05 – Thiết kế cơ sở dữ liệu thư viện"]
-        titles = network_titles if key == "network" else db_titles if key == "database" else ["Bài tập 01 – Biến và kiểu dữ liệu", "Bài tập 02 – Vòng lặp", "Bài tập 03 – Mảng và hàm"]
+        subject = "network" if key == "network" else "database" if key == "database" else "programming"
+        titles = [f"Bài tập {i+1:02} – {topic}" for i, topic in enumerate(ASSIGNMENT_PLANS[subject])]
         task_ids = []
         for i, title in enumerate(titles):
-            due_day = -35+i*7 if completed else [-10, -3, 3, 7, 14][i]
-            task = {**identity(f"{key}-task-{i+1}", -25+i), "course_id": cid, "title": title, "description": f"Hoàn thành nội dung thực hành của {name}.\nNộp file ZIP chứa mã nguồn, README mô tả cách chạy và ví dụ đầu vào/đầu ra.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).", "due_at": iso(due_day, 23, 59), "max_attempts": 3}
+            due_day = -50+i*4 if completed else [-10, -3, 3, 7, 12, 18, 24, 31, 39, 48][i]
+            task = {**identity(f"{key}-task-{i+1}", -25+i), "course_id": cid, "title": title, "description": f"Hoàn thành nội dung thực hành của {name}.\nNộp báo cáo PDF/DOCX hoặc ZIP tài liệu minh chứng. Bài lập trình có test tự động được làm trong Bộ chấm code online.\nTiêu chí: đúng yêu cầu (6 điểm), kiểm thử (2 điểm), trình bày và hướng dẫn (2 điểm).", "due_at": iso(due_day, 23, 59), "max_attempts": 3, **assignment_metadata(course, i)}
             data["assignments"].append(task)
             task_ids.append(task["id"])
             for j, sid in enumerate(members):
@@ -142,31 +290,26 @@ def seed_demo(project_root=None):
     if backup.exists():
         raise RuntimeError("Thư mục sao lưu đã tồn tại. Hãy chạy lại sau một giây.")
     backup.mkdir(parents=True)
-    shutil.copytree(storage.DATA_DIR, backup / "data")
-    original = {name: (storage.DATA_DIR/name).read_bytes() if (storage.DATA_DIR/name).exists() else None for name in ["students.json", "learning.json", "notifications.json", "settings.json", "assignments.json"]}
+    (backup / "data").mkdir()
+    for name in storage.document_names():
+        storage.atomic_write(backup / "data" / name, storage.read_json(name))
     written = []
-    marker = {"version": VERSION, "created_at": iso(), "backup": str(backup), "students": ids, "courses": course_ids, "primary_assignment": task_by_course[course_ids[0]][2], "exam_ready": exam_ready, "materials_added": 9, "assignments_added": 13, "submissions_added": sum(s["id"].startswith("demo-v1-") for s in data["submissions"])}
+    marker = {"version": VERSION, "created_at": iso(), "backup": str(backup), "students": ids, "courses": course_ids, "primary_assignment": task_by_course[course_ids[0]][2], "exam_ready": exam_ready, "materials_added": 9, "assignments_added": sum(len(rows) for rows in task_by_course.values()), "submissions_added": sum(s["id"].startswith("demo-v1-") for s in data["submissions"])}
     try:
         for path, payload in pending_files.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("xb") as output:
                 output.write(payload)
             written.append(path)
-        for name, value in [("students.json", students), ("learning.json", data), ("notifications.json", notices)]:
-            storage.write_json(name, value)
-        if exam_ready:
-            storage.write_json("settings.json", settings)
-            storage.write_json("assignments.json", assignments)
-        storage.write_json("demo_seed.json", marker)
-        storage.audit("setup.demo_seeded", "local-user", "127.0.0.1", {"version": VERSION, "backup": str(backup), "exam_ready": exam_ready})
+        with storage.atomic_transaction():
+            for name, value in [("students.json", students), ("learning.json", data), ("notifications.json", notices)]:
+                storage.write_json(name, value)
+            if exam_ready:
+                storage.write_json("settings.json", settings)
+                storage.write_json("assignments.json", assignments)
+            storage.write_json("demo_seed.json", marker)
+            storage.audit("setup.demo_seeded", "local-user", "127.0.0.1", {"version": VERSION, "backup": str(backup), "exam_ready": exam_ready})
     except Exception:
-        for name, payload in original.items():
-            path = storage.DATA_DIR/name
-            if payload is None:
-                path.unlink(missing_ok=True)
-            else:
-                path.write_bytes(payload)
-        marker_path.unlink(missing_ok=True)
         for path in written:
             if path.resolve().is_relative_to(root.resolve()):
                 path.unlink(missing_ok=True)
@@ -177,7 +320,15 @@ def seed_demo(project_root=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="Add sample data, with a backup first. Stop the server before running.")
+    parser.add_argument("--assignments-per-course", type=int, metavar="N", help="Repeat-safely top up every existing course to N sample assignments.")
     args = parser.parse_args()
+    if args.assignments_per_course is not None:
+        if not args.apply:
+            print(f"Will top up every existing course to {args.assignments_per_course} assignments. Run again with --apply after stopping the server.")
+            return
+        storage.initialize()
+        print(json.dumps(top_up_assignments(args.assignments_per_course), ensure_ascii=False, indent=2))
+        return
     if not args.apply:
         print("Will add 20 DEMO accounts, 3 courses, materials, assignments, submissions, attendance and notifications. Existing accounts/files are preserved. Run with --apply after stopping the server.")
         return

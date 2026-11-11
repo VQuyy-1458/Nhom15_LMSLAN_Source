@@ -86,7 +86,7 @@ Theo chương 1 và 3 của báo cáo, LAN LMS tập trung các hoạt động n
 - Một server cho lớp học/phòng máy trong LAN; client là trình duyệt máy tính hoặc di động.
 - Hai vai trò admin/giảng viên và sinh viên; quản lý nhiều khóa học.
 - LMS, điểm danh QR, thi file, thi code, giám sát, thông báo, lịch sử và xuất dữ liệu.
-- Lưu trữ JSON/JSONL và payload file, sao lưu/kiểm chứng/phục hồi.
+- Lưu trữ metadata trong SQLite và payload file, có sao lưu/kiểm chứng/phục hồi.
 
 ### Out of scope
 
@@ -141,7 +141,7 @@ flowchart TD
     B[Trình duyệt sinh viên] -->|HTTP/HTTPS trên TCP| S
     S[Python HTTP server] --> T[Jinja2 và HTML/CSS/JavaScript]
     S --> L[Khóa học, tài khoản, thi, điểm danh, bài nộp]
-    L --> D[JSON, journal giao dịch, audit]
+    L --> D[SQLite - metadata, giao dịch, audit]
     L --> F[Kho học liệu, đề thi, bài nộp]
     L --> Q[Hàng đợi chấm - 2 worker]
     Q --> C[Docker Linux - biên dịch và chạy test]
@@ -159,18 +159,18 @@ Sơ đồ được nhúng bằng Mermaid để không phụ thuộc ảnh ngoài
 | Client trình duyệt | Hiển thị HTML/CSS, gửi fetch/form, quét QR và cập nhật trạng thái |
 | HTTP server | Nhận kết nối, phân tích request, xác thực và trả HTML/JSON/file |
 | Dịch vụ nghiệp vụ | Tài khoản, LMS, thi, điểm danh, thông báo, bảng điểm |
-| Kho JSON và file | Metadata, payload, phiên bản, journal và audit; không có database server riêng |
+| SQLite và kho file | Metadata/audit trong SQLite; payload học liệu, đề và bài nộp ở file riêng; không cần database server riêng |
 | Worker hạn/lịch | Tự mở thi đủ cấu hình theo lịch và đóng nhận bài khi hết hạn |
 | Worker chấm | Hai worker nền gửi mã nguồn vào Docker, lưu kết quả/lịch sử |
 | Worker bảo trì | Sao lưu định kỳ, manifest và kiểm tra dữ liệu |
 
 ## 4.3. Data Flow
 
-Client gửi yêu cầu → server kiểm tra phiên/quyền/đầu vào → nghiệp vụ đọc hoặc cập nhật JSON và payload → server trả kết quả. Với code, biên nhận được lưu trước rồi worker chấm snapshot; client polling để nhận verdict. Các luồng ghi được đồng bộ trong một tiến trình, payload được lưu trước metadata tham chiếu tới nó.
+Client gửi yêu cầu → server kiểm tra phiên/quyền/đầu vào → nghiệp vụ đọc hoặc cập nhật SQLite và payload → server trả kết quả. Với code, biên nhận được lưu trước rồi worker chấm snapshot; client polling để nhận verdict. Các luồng ghi được đồng bộ trong một tiến trình, payload được lưu trước metadata tham chiếu tới nó.
 
 - HTTP dùng thread theo kết nối, tối đa **128 worker**, backlog **128**; quá tải trả 503 và Retry-After.
 - RLock bảo vệ trạng thái dùng chung. Các luồng tương ứng tách nhận body/gửi response khỏi khóa nghiệp vụ để hạn chế client chậm giữ khóa.
-- JSON ghi qua file tạm, fsync và os.replace. Giao dịch nhiều cập nhật JSON/audit có journal để phục hồi thao tác gián đoạn; payload lưu trước metadata.
+- SQLite dùng WAL, `synchronous=FULL` và giao dịch `BEGIN IMMEDIATE` cho cập nhật nhiều tài liệu/audit; payload được flush trước khi metadata tham chiếu tới nó được commit.
 - OS lease ngăn server và CLI đã tích hợp cùng sửa một bộ dữ liệu. Mỗi bộ dữ liệu chỉ chạy **một tiến trình server**.
 - Worker kiểm tra hạn khoảng mỗi giây, quét lại bài chờ chấm khoảng mỗi 10 giây. Hết hạn không phụ thuộc sinh viên giữ trang mở.
 
@@ -298,7 +298,7 @@ Bổ sung các endpoint hiện hành: `GET /api/admin/exam-preflight` xem cấu 
 | Template | Jinja2 >=3.1,<4, dependency trực tiếp duy nhất trong requirements.txt |
 | Frontend | HTML, CSS, JavaScript thuần; Tailwind CSS 3.4.17 để build CSS |
 | QR/icon | ZXing Browser 0.2.1 và Font Awesome trong static/vendor/ |
-| Lưu trữ | JSON, payload file riêng, audit JSON Lines |
+| Lưu trữ | SQLite, payload file riêng, audit SQLite và bản tương thích JSON Lines |
 | Chấm code | Docker CLI; Debian Bookworm, GCC/G++, OpenJDK 17, Python 3 |
 | Kiểm thử | Python unittest, Node.js, Chrome/Chromium/Edge qua CDP |
 
@@ -374,7 +374,7 @@ Nhom15_LMSLAN_Source/
 ├── judge/Dockerfile             # Image bộ chấm
 ├── tests/                       # Unit, HTTP, browser, benchmark
 ├── docs/                        # Hướng dẫn và audit kỹ thuật
-├── data/                        # Metadata JSON
+├── data/                        # SQLite (`lms.sqlite3`); JSON cũ chỉ là nguồn nhập lần đầu
 ├── de-thi/                      # Đề thi
 ├── learning-files/              # Học liệu, đề và bài nộp bài tập
 ├── submissions/                 # Bài thi file
@@ -389,7 +389,7 @@ Nhom15_LMSLAN_Source/
 | --- | --- |
 | main, http, config, runtime | Routing, form, response, cấu hình, worker, lease |
 | security, accounts, setup_admin, configure_admin | Xác thực, nhập tài khoản, bootstrap admin |
-| storage | JSON, cache, khóa, giao dịch, journal, audit |
+| storage | SQLite, tự nhập JSON cũ, cache, khóa, giao dịch và audit |
 | learning, course_grades, course_packages | LMS, điểm danh, bảng điểm, chuyển khóa |
 | exams, exam_catalog, admin_workspace | Phát đề, cấu hình thi, quản trị |
 | submissions, submission_rate, submission_archive | Nhận bài, quota, kho bài |
@@ -398,7 +398,7 @@ Nhom15_LMSLAN_Source/
 | notifications | Feed và trạng thái đọc cá nhân |
 | seed_demo, programming_trial, reset_demo | Dữ liệu/kỳ thi trình diễn |
 
-| File dữ liệu trong data/ | Nội dung |
+| Tài liệu logic trong `data/lms.sqlite3` | Nội dung |
 | --- | --- |
 | students.json, admins.json | Hồ sơ, hash mật khẩu, trạng thái |
 | sessions.json, login_attempts.json, auth_throttle.json | Phiên/kiểm soát đăng nhập |
@@ -410,7 +410,7 @@ Nhom15_LMSLAN_Source/
 | submission_rate.json | Tần suất nộp |
 | notifications.json, notification_reads.json | Thông báo và trạng thái đọc |
 
-Audit ghi ở logs/audit.jsonl. Liên kết qua course_id, assignment_id, exam_id, student_id, release_id. Không sửa JSON trực tiếp khi server chạy. Gói xuất khóa tái sử dụng nội dung, không thay backup tài khoản, điểm và bài nộp.
+Audit được lưu chính thức trong bảng `audit_events`; `logs/audit.jsonl` tiếp tục được ghi để tương thích công cụ cũ. Liên kết qua course_id, assignment_id, exam_id, student_id, release_id. Không sửa trực tiếp SQLite khi server chạy. Gói xuất khóa tái sử dụng nội dung, không thay backup tài khoản, điểm và bài nộp.
 
 Cấu trúc trên mô tả source/runtime thực tế, không bắt buộc tách `source/client` và `source/server`: client nằm trong `templates/` và `static/`, server trong `app/`. Khi đóng gói học phần, bổ sung `report/report.pdf` và `statics/results/` cho báo cáo/bằng chứng được phép công bố; các mục này không được xem là đã có chỉ vì xuất hiện trong khung mẫu.
 
@@ -519,7 +519,7 @@ Docker cần chạy để nhận và chấm bài code. Scheduler tự mở theo 
 
 ## 10.3. Database Setup
 
-Không dùng MySQL/PostgreSQL hoặc SQL schema. Server/CLI khởi tạo các JSON runtime khi cần; không có bước SQL migration. Để tạo dữ liệu minh họa mới, ưu tiên `TAO_DATA_DEMO.bat` như mục 10.2. Các bộ seed cũ ở mục 21.2 là những lựa chọn khác, có tài khoản/mật khẩu khác; không trộn chúng trên cùng dữ liệu nếu chưa đối chiếu.
+Không cần cài MySQL/PostgreSQL. Server/CLI tự tạo `data/lms.sqlite3` bằng module `sqlite3` có sẵn trong Python. Ở lần chạy đầu sau khi nâng cấp, mọi `data/*.json` hiện có được nhập vào SQLite trong một giao dịch; các file JSON cũ được giữ nguyên để đối chiếu nhưng không còn là nguồn dữ liệu chính. Những lần khởi động sau không ghi đè dữ liệu SQLite bằng bản JSON cũ. Các view `learning_records`, `exam_problem_records`, `programming_submission_records` và `file_submission_records` hỗ trợ truy vấn trực tiếp lịch, điểm danh, câu hỏi và bài làm. Để tạo dữ liệu minh họa mới, ưu tiên `TAO_DATA_DEMO.bat` như mục 10.2.
 
 ## 10.4. Configuration
 
@@ -552,7 +552,7 @@ $env:CSS_TLS_KEY = 'D:\certs\server.key'
 .\.venv\Scripts\python.exe run_server.py
 ```
 
-Thời lượng, thí sinh, định dạng/số lượt nộp, mật khẩu đề và trọng số cấu hình qua admin. JSON nền được tạo khi cần; không cần SQL migration. Source không kèm dữ liệu lớp thật; server giữ dữ liệu runtime hiện có khi khởi tạo.
+Thời lượng, thí sinh, định dạng/số lượt nộp, mật khẩu đề và trọng số cấu hình qua admin. Schema SQLite và việc nhập JSON cũ được thực hiện tự động khi khởi động. Source không kèm dữ liệu lớp thật; server giữ dữ liệu runtime hiện có khi khởi tạo.
 
 ### Sao lưu và phục hồi
 
@@ -706,7 +706,7 @@ HTTPS/localhost hỗ trợ camera video. HTTP trên IP LAN có thể bị hạn 
 ### Thi nộp file
 
 1. Đặt đề trong de-thi/ dưới gốc runtime: PDF, TXT, PNG, JPG/JPEG, GIF, WEBP.
-2. Vào **Cấu hình kỳ thi**, chọn khóa, loại đánh giá (kiểm tra/giữa kỳ/cuối kỳ), thời lượng, thí sinh và chính sách nộp.
+2. Vào **Cấu hình kỳ thi**, chọn khóa, loại đánh giá (Test/Thực hành/Giữa kỳ/Cuối kỳ), thời lượng, thí sinh và chính sách nộp.
 3. Phát đề xong, lưu giờ bắt đầu để kỳ thi tự mở theo lịch; không đặt lịch thì mở thủ công. Lưu được nhiều cấu hình, nhưng engine thi file chỉ chạy **một lượt phát đề tại một thời điểm**.
 4. Sinh viên bắt đầu, nhập mật khẩu đề nếu bật, nhận đề và nộp đúng định dạng; mặc định ZIP.
 5. Admin theo dõi, gia hạn cá nhân, ép thu bài hoặc kết thúc để chặn nộp mới.
@@ -744,8 +744,8 @@ Xem [programming-judge.md](https://github.com/VQuyy-1458/LMS_LAN/blob/main/docs/
 Mặc định **chuyên cần 10% + bài tập 10% + giữa kỳ 10% + cuối kỳ 70%**. Đổi được trọng số, tổng phải 100%.
 
 - Chuyên cần từ 10, trừ một mỗi phiên đóng/hết hạn mà sinh viên không Có mặt/Muộn, tối thiểu 0.
-- Bài tập lấy điểm lần nộp mới nhất mỗi bài; quá hạn chưa nộp tính 0. Chưa chấm thì chưa có điểm.
-- Kỳ thi midterm/final tự tham gia thành phần; loại test không tham gia. Thi file lấy điểm lần nộp mới nhất; code lấy điểm tốt nhất từng bài rồi quy về thang 10. Nhiều kỳ thi cùng thành phần lấy trung bình khi đủ điểm.
+- Thành phần Bài tập lấy trung bình điểm lần nộp mới nhất của từng bài tập và các kỳ thi **Thực hành**; quá hạn chưa nộp tính 0. Chưa chấm thì chưa có điểm.
+- Mỗi khóa có tối đa một kỳ thi **Giữa kỳ** và một kỳ thi **Cuối kỳ**, tính thống nhất giữa thi file và thi code. Loại **Test** không tham gia bảng điểm. Thi file lấy điểm lần nộp mới nhất; code lấy điểm tốt nhất từng bài rồi quy về thang 10.
 - Điểm nhập tay ghi đè tự tính; xóa giá trị ghi đè để dùng lại tự tính.
 - Chỉ có tổng khi đủ thành phần có trọng số lớn hơn 0. Thi còn phát/mở hoặc thiếu điểm thì không tổng kết được.
 - Khóa tổng kết vẫn xem được, chặn sửa/nộp thuộc khóa.
@@ -785,7 +785,7 @@ Theo chương 8–9 của báo cáo và artifact benchmark: chạy trên máy c�
 | C – Điểm danh | QR đúng/sai, thời hạn, quyền và ngăn ghi trùng |
 | D – Thi file | Phân phối, giờ thi, ZIP, retry và biên nhận |
 | E – Thi code | Ngôn ngữ, verdict, test ẩn và lịch sử chấm lại |
-| F – Phục hồi | Lỗi giữa giao dịch, journal, JSON/audit và chống nộp trùng |
+| F – Phục hồi | Lỗi giữa giao dịch SQLite/audit và chống nộp trùng |
 | Tải workspace | 30 request lấy workspace đồng thời |
 | Tải nhận bài | 30 request nộp bài tập đồng thời, kiểm tra số biên nhận mới |
 
@@ -842,7 +842,7 @@ Không có cơ sở để công bố tỷ lệ tăng hiệu năng so với basel
 
 Kết quả trong chương 9 cho thấy các nhóm nghiệp vụ đã có kiểm thử và phép đo tiếp nhận đủ 30 bài trong kịch bản đã mô tả. Độ trễ P95 pha nộp cao hơn workspace là phù hợp với việc pha nộp phải xử lý payload, biên nhận và ghi dữ liệu; phép đo hiện có chưa tách thời gian từng công đoạn để định lượng nguyên nhân.
 
-Khi tăng tải, giới hạn 128 HTTP worker và queue chấm bảo vệ tài nguyên nhưng không bảo đảm mọi request đều được phục vụ ngay. JSON, khóa nghiệp vụ, I/O lưu trữ và hai worker Docker có thể thành nút thắt tùy tải. Đo hiện tại dùng file nhỏ, loopback và Docker nhàn nên chưa đại diện upload lớn, mạng yếu hoặc lúc bộ chấm đầy tải.
+Khi tăng tải, giới hạn 128 HTTP worker và queue chấm bảo vệ tài nguyên nhưng không bảo đảm mọi request đều được phục vụ ngay. SQLite, khóa nghiệp vụ, I/O lưu trữ và hai worker Docker có thể thành nút thắt tùy tải. Đo hiện tại dùng file nhỏ, loopback và Docker nhàn nên chưa đại diện upload lớn, mạng yếu hoặc lúc bộ chấm đầy tải.
 
 Ưu điểm của giải pháp là triển khai tập trung, client không cần cài riêng, tập trung quyền/thời gian tại server và giữ lịch sử/phục hồi. Hạn chế là một tiến trình ghi dữ liệu, phụ thuộc máy chủ và Docker. Cần benchmark nhiều máy trong LAN, theo dõi CPU/RAM/queue và đo baseline cùng điều kiện trước khi kết luận khả năng mở rộng hay mức cải thiện.
 
@@ -850,7 +850,7 @@ Khi tăng tải, giới hạn 128 HTTP worker và queue chấm bảo vệ tài n
 
 # 16. Limitations
 
-- JSON/khóa trong tiến trình phù hợp một server; chưa hỗ trợ nhiều server cùng ghi. Chương trình ngoài bỏ qua lease có thể phá nhất quán.
+- SQLite cùng khóa/lease trong tiến trình phù hợp một server; chưa hỗ trợ nhiều server ứng dụng cùng ghi. Chương trình ngoài bỏ qua lease có thể phá quy ước nghiệp vụ.
 - Giới hạn worker/queue là rào chắn tài nguyên, không cam kết sức chứa 128 sinh viên dưới mọi tải.
 - HTTP mặc định không mã hóa; public deployment cần TLS, proxy và giám sát theo môi trường.
 - Telemetry có thể bị can thiệp, QR có thể chia sẻ; không bảo đảm chống gian lận hoặc xác minh hiện diện vật lý.
@@ -862,7 +862,7 @@ Khi tăng tải, giới hạn 128 HTTP worker và queue chấm bảo vệ tài n
 
 # 17. Future Work
 
-1. Thay JSON bằng cơ sở dữ liệu có giao dịch khi cần truy vấn và mở rộng lớn hơn.
+1. Chuẩn hóa dần các tài liệu JSON logic trong SQLite thành bảng quan hệ chuyên biệt khi cần truy vấn báo cáo và mở rộng lớn hơn.
 2. Tách bộ chấm thành dịch vụ riêng, điều chỉnh worker theo tài nguyên thực tế.
 3. Hoàn thiện triển khai HTTPS, proxy, theo dõi dịch vụ và tự khởi động lại.
 4. Bổ sung phân quyền giảng viên theo khóa, SSO và thống nhất chính sách mật khẩu.
@@ -1015,7 +1015,7 @@ Xuất báo cáo Word đã cung cấp sang `report/report.pdf`; lưu phiếu Com
 - Thông tin nhóm, tỷ lệ đóng góp và tài liệu tham khảo.
 - Không cần SQL schema vì không dùng database server.
 
-Loại venv, cache, image/container và dữ liệu lớp thật khỏi gói source công khai. Không công bố session, hash mật khẩu, khóa TLS, audit hoặc bài nộp thật. Các JSON runtime được tạo khi chạy; dữ liệu giả lập có thể tái tạo bằng script.
+Loại venv, cache, image/container và dữ liệu lớp thật khỏi gói source công khai. Không công bố `data/lms.sqlite3`, session, hash mật khẩu, khóa TLS, audit hoặc bài nộp thật. Cơ sở dữ liệu runtime được tạo khi chạy; dữ liệu giả lập có thể tái tạo bằng script.
 
 ---
 

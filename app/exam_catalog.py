@@ -11,6 +11,44 @@ CURRENT = "current"
 FILE_KEYS = ("exam_duration_minutes", "submission_policy", "max_submissions", "overwrite_previous", "accepted_submission_extensions")
 
 
+def migrate_assessment_policy():
+    """Convert legacy extra midterms to practice while preserving one per course."""
+    with learning.LOCK, atomic_transaction():
+        rows = read_json("exam_catalog.json", [])
+        settings = read_json("settings.json")
+        active_id = settings.get("exam_catalog_id")
+        groups = {}
+        for row in rows:
+            if row.get("course_id") and row.get("assessment_type") == "midterm":
+                groups.setdefault(row["course_id"], []).append(row)
+        converted = []
+        for course_id, exams in groups.items():
+            if len(exams) < 2:
+                continue
+            keeper = next((row for row in exams if row["id"] == active_id), None)
+            if keeper is None:
+                keeper = next(
+                    (row for row in reversed(exams) if row.get("state") in {"distributed", "scheduled", "started"}),
+                    exams[-1],
+                )
+            for row in exams:
+                if row is keeper:
+                    continue
+                row["assessment_type"] = "practice"
+                row["assessment_policy_migrated_from"] = "midterm"
+                row["updated_at"] = utc_now()
+                converted.append(row["id"])
+        if converted:
+            write_json("exam_catalog.json", rows)
+            audit(
+                "assessment.policy_migrated",
+                "system",
+                "127.0.0.1",
+                {"converted_to_practice": converted, "policy": "single_midterm_single_final"},
+            )
+        return converted
+
+
 def listing():
     rows = copy.deepcopy(read_json("exam_catalog.json", []))
     settings = read_json("settings.json")
@@ -41,12 +79,27 @@ def listing():
 
 
 def validate_assessment(assessment_type, course_id, exam_id, rows):
-    if assessment_type not in {"test", "midterm", "final"}:
-        raise learning.LearningError(400, "Chọn loại kỳ thi: Test, Giữa kỳ hoặc Cuối kỳ.")
+    if assessment_type not in {"test", "practice", "midterm", "final"}:
+        raise learning.LearningError(400, "Chọn loại kỳ thi: Test, Thực hành, Giữa kỳ hoặc Cuối kỳ.")
     if assessment_type != "test" and not course_id:
         raise learning.LearningError(400, "Kỳ thi tính điểm phải thuộc một khóa học.")
-    if assessment_type == "final" and any(r["id"] != exam_id and r.get("course_id") == course_id and r.get("assessment_type") == "final" for r in rows):
-        raise learning.LearningError(409, "Mỗi khóa học chỉ có một kỳ thi cuối kỳ, kể cả thi nộp file và thi lập trình.")
+    labels = {"midterm": "giữa kỳ", "final": "cuối kỳ"}
+    current = next((r for r in rows if r["id"] == exam_id), None)
+    already_same_slot = bool(
+        current
+        and current.get("course_id") == course_id
+        and current.get("assessment_type") == assessment_type
+    )
+    if assessment_type in labels and not already_same_slot and any(
+        r["id"] != exam_id
+        and r.get("course_id") == course_id
+        and r.get("assessment_type") == assessment_type
+        for r in rows
+    ):
+        raise learning.LearningError(
+            409,
+            f"Mỗi khóa học chỉ có một kỳ thi {labels[assessment_type]}, kể cả thi nộp file và thi lập trình.",
+        )
 
 
 def integer(value, label, low, high):

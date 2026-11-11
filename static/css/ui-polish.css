@@ -1,0 +1,579 @@
+/* Shared visual polish for LAN-LMS.
+   Keeps the established blue/slate palette while making surfaces, forms and
+   data-heavy screens feel like one product. Loaded after every page stylesheet. */
+:root{
+  --ui-blue:#245edb;
+  --ui-blue-dark:#194bb9;
+  --ui-blue-soft:#edf4ff;
+  --ui-ink:#1f3150;
+  --ui-text:#40516b;
+  --ui-muted:#77869c;
+  --ui-line:#e1e8f2;
+  --ui-line-strong:#d5dfed;
+  --ui-surface:#fff;
+  --ui-surface-soft:#f8faff;
+  --ui-radius-sm:10px;
+  --ui-radius:15px;
+  --ui-radius-lg:20px;
+  --ui-shadow-sm:0 2px 8px rgba(25,49,86,.045);
+  --ui-shadow:0 10px 30px rgba(25,49,86,.07);
+  --ui-shadow-hover:0 15px 36px rgba(25,49,86,.105);
+}
+
+html{scroll-behavior:smooth}
+body.app-body{
+  color:var(--ui-ink);
+  background:
+    radial-gradient(circle at 78% -15%,rgba(36,94,219,.075),transparent 31rem),
+    linear-gradient(180deg,#f7f9fc 0,#f3f6fa 100%);
+}
+::selection{background:#cfe0ff;color:#163d89}
+
+/* Clear, consistent keyboard navigation. */
+.app-body :where(a,button,input,select,textarea,summary):focus-visible{
+  outline:3px solid rgba(54,116,239,.3);
+  outline-offset:2px;
+}
+
+/* Page introduction is now a purposeful surface instead of loose text. */
+.app-body .page-intro-card{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  padding:23px 25px;
+  border:1px solid var(--ui-line);
+  border-radius:var(--ui-radius-lg);
+  background:linear-gradient(118deg,rgba(255,255,255,.98),rgba(247,250,255,.98));
+  box-shadow:var(--ui-shadow-sm);
+}
+.app-body .page-intro-card::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  width:190px;
+  height:190px;
+  right:-72px;
+  top:-106px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(36,94,219,.13),rgba(36,94,219,0) 70%);
+}
+.app-body .page-intro-card h1{color:var(--ui-ink)}
+.app-body .page-intro-card .muted{max-width:760px;margin-bottom:0}
+.app-body .page-intro-card .server-chip{
+  background:rgba(248,255,250,.9);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.75);
+}
+
+/* Core cards and content boxes. */
+.app-body .panel,
+.app-body .course-admin-shell .course-context,
+.app-body .student-course,
+.app-body .course-admin-shell .course-module,
+.app-body .ref-topic,
+.app-body .notification-dropdown,
+.app-body .student-dialog,
+.app-body .ref-modal{
+  border-color:var(--ui-line);
+  border-radius:var(--ui-radius);
+  box-shadow:var(--ui-shadow-sm);
+}
+.app-body .panel{
+  padding:24px;
+  background:linear-gradient(180deg,#fff 0,#fff 86%,#fdfdfe 100%);
+}
+.app-body .panel-heading{
+  align-items:center;
+  padding-bottom:17px;
+  border-bottom:1px solid #edf1f6;
+}
+.app-body .panel-heading h2{font-weight:760;color:var(--ui-ink)}
+.app-body .panel-heading h2 i{
+  display:inline-grid;
+  place-items:center;
+  width:29px;
+  height:29px;
+  margin-right:8px;
+  border-radius:9px;
+  background:var(--ui-blue-soft);
+  color:var(--ui-blue);
+  font-size:13px;
+}
+.app-body .student-course,
+.app-body .course-admin-shell .course-module{
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.app-body .student-course:hover,
+.app-body .course-admin-shell .course-module:hover{
+  transform:translateY(-2px);
+  border-color:#b9cdef;
+  box-shadow:var(--ui-shadow-hover);
+}
+
+/* Metric cards retain their colors, with improved depth and hierarchy. */
+.app-body .stat-card{
+  position:relative;
+  overflow:hidden;
+  min-height:82px;
+  border-color:var(--ui-line);
+  border-radius:var(--ui-radius);
+  box-shadow:var(--ui-shadow-sm);
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.app-body .stat-card::after{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 0;
+  width:3px;
+  background:linear-gradient(180deg,#7ca4f3,#356fe5);
+  opacity:.72;
+}
+.app-body .stat-card:hover{
+  transform:translateY(-2px);
+  border-color:#c5d5ee;
+  box-shadow:var(--ui-shadow);
+}
+.app-body .stat-icon{
+  border-radius:13px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);
+}
+.app-body .stat-card strong{color:var(--ui-ink);font-variant-numeric:tabular-nums}
+
+/* Forms: each control has the same tactile border, spacing and focus state. */
+.app-body :where(input:not([type=checkbox]):not([type=radio]),select,textarea){
+  border-color:var(--ui-line-strong);
+  border-radius:var(--ui-radius-sm);
+  background-color:#fff;
+  transition:border-color .16s ease,box-shadow .16s ease,background-color .16s ease;
+}
+.app-body :where(input:not([type=checkbox]):not([type=radio]),select,textarea):hover:not(:disabled){
+  border-color:#bccbe0;
+}
+.app-body :where(input:not([type=checkbox]):not([type=radio]),select,textarea):focus{
+  border-color:#6896f1;
+  box-shadow:0 0 0 4px rgba(36,94,219,.11);
+  outline:0;
+}
+.app-body :where(input,select,textarea):disabled{background:#f2f5f9;color:#8996a8}
+.app-body label{color:#354761;letter-spacing:.005em}
+.app-body .panel>.stack-form,
+.app-body .ref-modal>.stack-form,
+.app-body .student-dialog .stack-form,
+.app-body .notification-form,
+.app-body .course-create-panel .stack-form{
+  padding:19px;
+  border:1px solid #e8edf4;
+  border-radius:13px;
+  background:#fafcff;
+}
+.app-body .panel>.stack-form:first-child{margin-top:0}
+.app-body .checkbox-row,
+.app-body .radio-row{
+  border:1px solid #e6ebf3;
+  border-radius:10px;
+  padding:10px 12px;
+  background:#fff;
+}
+
+/* Buttons are quieter at rest and clearer on interaction. */
+.app-body .btn{
+  min-height:38px;
+  border-radius:10px;
+  box-shadow:0 1px 2px rgba(23,43,77,.035);
+  transition:transform .14s ease,background-color .14s ease,border-color .14s ease,box-shadow .14s ease;
+}
+.app-body .btn:hover:not(:disabled){transform:translateY(-1px)}
+.app-body .btn:active:not(:disabled){transform:translateY(0)}
+.app-body .btn-primary{background:linear-gradient(180deg,#2b67e6,#245edb);box-shadow:0 5px 14px rgba(36,94,219,.17)}
+.app-body .btn-primary:hover:not(:disabled){background:linear-gradient(180deg,#245edb,#194bb9);box-shadow:0 7px 18px rgba(36,94,219,.23)}
+.app-body .btn-secondary{border-color:#d7e1ee;background:linear-gradient(180deg,#fff,#fbfcfe)}
+.app-body .btn-danger{box-shadow:0 4px 12px rgba(179,50,50,.1)}
+
+/* Tabs and filter controls read as one navigation family. */
+.app-body :where(.tabs,.student-tabs,.ref-tabs){
+  gap:7px;
+  padding:5px;
+  border:1px solid var(--ui-line);
+  border-radius:13px;
+  background:#f5f8fc;
+}
+.app-body .tabs{border-bottom:1px solid var(--ui-line);overflow-x:auto}
+.app-body :where(.tabs a,.student-tabs a,.student-filter,.ref-tab){border-radius:9px}
+.app-body :where(.student-tabs a.active,.student-filter.active){box-shadow:0 2px 7px rgba(36,94,219,.1)}
+
+/* Dense tables remain readable and visually contained. */
+.app-body .table-scroll,
+.app-body .table-wrap{
+  border:1px solid var(--ui-line);
+  border-radius:12px;
+  background:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+}
+.app-body table{font-variant-numeric:tabular-nums}
+.app-body th{
+  background:linear-gradient(180deg,#fafbfd,#f5f8fc);
+  color:#66768e;
+  border-bottom-color:#dfe7f1;
+}
+.app-body td{border-bottom-color:#edf1f6}
+.app-body tbody tr{transition:background-color .12s ease}
+.app-body tbody tr:hover{background:#f8fbff}
+.app-body .empty-cell{background:#fbfcfe}
+
+/* Feedback, empty states and small utility boxes. */
+.app-body :where(.alert,.notice){
+  border-radius:12px;
+  box-shadow:inset 3px 0 0 currentColor;
+}
+.app-body :where(.empty-state,.student-empty){
+  margin:4px 0;
+  border:1px dashed #d7e1ed;
+  border-radius:14px;
+  background:linear-gradient(180deg,#fbfcfe,#f8faff);
+}
+.app-body .status-pill,
+.app-body .student-status,
+.app-body .bridge-pill{box-shadow:inset 0 0 0 1px rgba(255,255,255,.52)}
+.app-body .toast{border:1px solid rgba(255,255,255,.14);border-radius:12px;box-shadow:0 14px 40px rgba(20,41,74,.25)}
+
+/* Attendance had the largest visual mismatch: rows are now real, scannable cards. */
+.app-body .attendance-session-list{gap:10px}
+.app-body .attendance-session-row{
+  position:relative;
+  padding:15px 16px;
+  border:1px solid var(--ui-line);
+  border-radius:13px;
+  background:linear-gradient(135deg,#fff,#fbfcff);
+  box-shadow:var(--ui-shadow-sm);
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background-color .16s ease;
+}
+.app-body .attendance-session-row:last-child{border-bottom:1px solid var(--ui-line)}
+.app-body .attendance-session-row:hover{
+  transform:translateX(2px);
+  border-color:#b9cdef;
+  background:#f8fbff;
+  box-shadow:0 8px 22px rgba(25,49,86,.075);
+}
+.app-body .attendance-session-row>.fa-angle-right{
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border-radius:9px;
+  background:#f0f5fd;
+  color:#557ec3;
+}
+.app-body .attendance-choice{border-radius:8px;padding:6px 9px;transition:background-color .14s,border-color .14s,transform .14s}
+.app-body .attendance-choice:hover:not(:disabled){transform:translateY(-1px)}
+.app-body .attendance-pagination{
+  padding:11px 13px;
+  border:1px solid #e7ecf3;
+  border-radius:11px;
+  background:#fafcff;
+}
+.app-body .attendance-qr-panel .student-qr{padding:10px;box-shadow:var(--ui-shadow)}
+
+/* Login gets a restrained brand detail without changing the familiar palette. */
+.app-body .auth-card{position:relative;overflow:hidden;border-color:var(--ui-line);box-shadow:0 24px 70px rgba(24,52,90,.13)}
+.app-body .auth-card::before{
+  content:"";
+  position:absolute;
+  inset:0 0 auto;
+  height:4px;
+  background:linear-gradient(90deg,#245edb,#69a0ff,#37a879);
+}
+.app-body .auth-card .stack-form{padding:0;border:0;background:transparent}
+
+/* Dialogs and floating surfaces. */
+.app-body :where(.student-dialog,.ref-modal){box-shadow:0 25px 70px rgba(20,41,74,.2)}
+.app-body :where(.student-dialog,.ref-modal)::backdrop{background:rgba(17,33,58,.55);backdrop-filter:blur(3px)}
+
+/* Signature layer: richer hierarchy and memorable details without changing
+   the product's established blue/slate identity. */
+.app-body .admin-sidebar-unified .main-sidebar{
+  background:
+    radial-gradient(circle at 15% 4%,rgba(72,126,236,.24),transparent 12rem),
+    linear-gradient(180deg,#1b345b 0,#162a49 58%,#142641 100%);
+  border-right:1px solid rgba(255,255,255,.06);
+  box-shadow:10px 0 34px rgba(18,38,68,.08);
+}
+.app-body .admin-sidebar-unified .sidebar-brand .brand-mark{
+  background:linear-gradient(145deg,#4b83f1,#255fd8 72%);
+  border:1px solid rgba(255,255,255,.17);
+  box-shadow:0 9px 24px rgba(24,76,185,.34),inset 0 1px 0 rgba(255,255,255,.2);
+}
+.app-body .admin-sidebar-unified .sidebar-nav a{position:relative;overflow:hidden;transition:background-color .16s,color .16s,transform .16s}
+.app-body .admin-sidebar-unified .sidebar-nav a:hover{transform:translateX(2px);background:rgba(255,255,255,.065)}
+.app-body .admin-sidebar-unified .sidebar-nav a.active{
+  background:linear-gradient(105deg,#346fe8,#2a61d9);
+  box-shadow:0 8px 20px rgba(7,27,66,.25),inset 0 1px 0 rgba(255,255,255,.1);
+}
+.app-body .admin-sidebar-unified .sidebar-nav a.active::before{
+  content:"";position:absolute;inset:8px auto 8px 0;width:3px;border-radius:0 4px 4px 0;background:#fff;box-shadow:0 0 12px #fff;
+}
+.app-body .admin-sidebar-unified .sidebar-user{background:rgba(7,27,57,.12)}
+.app-body .admin-sidebar-unified .sidebar-avatar{border:1px solid rgba(255,255,255,.1);box-shadow:0 4px 14px rgba(4,19,42,.15)}
+
+.app-body .topbar{
+  background:rgba(255,255,255,.88);
+  backdrop-filter:blur(16px) saturate(130%);
+  box-shadow:0 5px 22px rgba(30,56,91,.035);
+}
+.app-body .topbar .admin-tag{border:1px solid #d9e6fc;background:linear-gradient(180deg,#f0f6ff,#e8f1ff)}
+
+.app-body .page-intro-card{
+  min-height:132px;
+  padding:27px 29px;
+  border-color:#dce6f4;
+  background:
+    linear-gradient(100deg,rgba(255,255,255,.99) 0,rgba(249,252,255,.97) 63%,rgba(235,243,255,.96) 100%),
+    #fff;
+  box-shadow:0 12px 34px rgba(31,62,104,.065),inset 0 1px 0 #fff;
+}
+.app-body .page-intro-card::before{
+  content:"";position:absolute;inset:22px auto 22px 0;width:4px;border-radius:0 6px 6px 0;background:linear-gradient(180deg,#3270ed,#76a4ff);box-shadow:0 0 18px rgba(50,112,237,.28);
+}
+.app-body .page-intro-card::after{
+  width:310px;height:230px;right:-88px;top:-105px;
+  background:
+    radial-gradient(circle at center,rgba(58,111,222,.16) 0 2px,transparent 3px) 0 0/19px 19px,
+    radial-gradient(circle,rgba(36,94,219,.12),rgba(36,94,219,0) 68%);
+  transform:rotate(-8deg);
+}
+.app-body .page-intro-card .eyebrow{
+  display:inline-flex;align-items:center;gap:7px;width:max-content;margin-bottom:10px;padding:5px 8px;border-radius:7px;background:#edf4ff;color:#496fae;letter-spacing:.12em;
+}
+.app-body .page-intro-card h1{font-size:31px;letter-spacing:-.045em}
+
+/* Colored metric cards have individual character and remain easy to scan. */
+.app-body .stat-card{padding:20px;border-color:#e2e9f3;background:linear-gradient(145deg,#fff,#fbfcff)}
+.app-body .stat-card::before{
+  content:"";position:absolute;width:92px;height:92px;right:-37px;top:-41px;border-radius:50%;background:rgba(75,126,224,.07);pointer-events:none;
+}
+.app-body .stat-card:has(.stat-icon.blue)::after{background:linear-gradient(180deg,#4b83ee,#2e64d5)}
+.app-body .stat-card:has(.stat-icon.green)::after{background:linear-gradient(180deg,#4fbd92,#278568)}
+.app-body .stat-card:has(.stat-icon.amber)::after{background:linear-gradient(180deg,#e7ad4d,#b97916)}
+.app-body .stat-card:has(.stat-icon.violet)::after{background:linear-gradient(180deg,#a17ae1,#7549b8)}
+.app-body .stat-card:has(.stat-icon.green)::before{background:rgba(55,164,120,.08)}
+.app-body .stat-card:has(.stat-icon.amber)::before{background:rgba(219,155,45,.09)}
+.app-body .stat-card:has(.stat-icon.violet)::before{background:rgba(132,85,198,.08)}
+.app-body .stat-card .stat-icon{box-shadow:0 7px 17px rgba(31,66,112,.09),inset 0 0 0 1px rgba(255,255,255,.72)}
+.app-body .stat-card p{text-transform:none;letter-spacing:.01em}
+.app-body .stat-card strong{position:relative;font-weight:780}
+
+/* Student dashboard hero: layered artwork and useful at-a-glance context. */
+.app-body .student-hero{
+  position:relative;isolation:isolate;min-height:265px;padding:36px 40px;border:1px solid rgba(255,255,255,.14);border-radius:22px;
+  background:
+    radial-gradient(circle at 82% 18%,rgba(108,158,255,.46),transparent 18rem),
+    linear-gradient(122deg,#172f57 0,#2153b5 48%,#2f6de4 100%);
+  box-shadow:0 20px 48px rgba(29,73,155,.2),inset 0 1px 0 rgba(255,255,255,.13);
+}
+.app-body .student-hero::before{
+  content:"";position:absolute;z-index:-1;inset:0;border-radius:inherit;opacity:.28;
+  background-image:linear-gradient(rgba(255,255,255,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.11) 1px,transparent 1px);
+  background-size:34px 34px;mask-image:linear-gradient(90deg,transparent 42%,#000 100%);
+}
+.app-body .student-hero::after{content:"";position:absolute;z-index:-1;width:260px;height:260px;right:-80px;bottom:-145px;border:45px solid rgba(255,255,255,.07);border-radius:50%}
+.app-body .student-hero-copy{position:relative;z-index:2;max-width:720px}
+.app-body .student-hero h2{font-size:31px;letter-spacing:-.04em;text-shadow:0 2px 16px rgba(6,30,75,.18)}
+.app-body .student-hero p{font-size:14px;max-width:620px}
+.app-body .student-hero-insights{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 4px}
+.app-body .student-hero-insights span{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid rgba(255,255,255,.16);border-radius:999px;background:rgba(255,255,255,.09);color:#edf4ff;font-size:11px;backdrop-filter:blur(8px)}
+.app-body .student-hero-insights i{color:#bcd3ff}
+.app-body .student-hero .btn{border:0;padding:11px 15px;box-shadow:0 8px 22px rgba(5,30,78,.2)}
+.app-body .student-hero-art{position:relative;display:grid;place-items:center;width:220px;height:190px;flex:0 0 220px}
+.app-body .student-hero-symbol{position:relative;z-index:2;padding:0;font-size:78px;color:#fff;text-shadow:0 12px 28px rgba(8,33,80,.28)}
+.app-body .student-hero-art small{position:absolute;z-index:3;right:22px;bottom:19px;color:rgba(255,255,255,.72);font-size:10px;font-weight:800;letter-spacing:.18em;line-height:1.4}
+.app-body .hero-orbit{position:absolute;border:1px solid rgba(255,255,255,.2);border-radius:50%;transform:rotate(-20deg)}
+.app-body .orbit-one{inset:24px 5px}.app-body .orbit-two{inset:48px 24px;transform:rotate(35deg)}
+.app-body .orbit-one::after,.app-body .orbit-two::after{content:"";position:absolute;width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 15px #fff}
+.app-body .orbit-one::after{top:18px;right:32px}.app-body .orbit-two::after{bottom:10px;left:31px;background:#9fc3ff}
+
+/* Dashboard content rows become compact cards instead of plain separators. */
+.app-body .student-shell .panel>.student-row{
+  margin:9px 0;padding:13px 14px;border:1px solid #e7edf5;border-radius:12px;background:#fbfcfe;
+  transition:transform .16s,border-color .16s,background-color .16s,box-shadow .16s;
+}
+.app-body .student-shell .panel>.student-row:last-child{border-bottom:1px solid #e7edf5}
+.app-body .student-shell .panel>.student-row:hover{transform:translateX(3px);border-color:#c9d9f0;background:#f8fbff;box-shadow:0 7px 18px rgba(30,61,102,.055)}
+.app-body .student-shell .panel>.student-row .stat-icon{width:39px;height:39px}
+.app-body .student-course-showcase{padding:24px;border:1px solid #e0e8f3;border-radius:19px;background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(247,250,255,.92));box-shadow:var(--ui-shadow-sm)}
+.app-body .student-course-showcase>.panel-heading{margin-bottom:20px}
+.app-body .student-course-showcase .eyebrow{margin:0 0 6px}
+
+/* Course cards get stronger branded covers and clearer depth. */
+.app-body .student-shell .panel.student-course,
+.app-body .ref-course-card,
+.app-body .bridge-course-card{border-color:#dde6f2;box-shadow:0 9px 26px rgba(31,62,104,.065)}
+.app-body .student-shell .student-course-cover,
+.app-body .ref-cover,
+.app-body .bridge-course-cover{background:linear-gradient(135deg,#e8f0ff,#f3f7ff)!important}
+.app-body .student-shell .student-course-mint .student-course-cover,
+.app-body .ref-cover.green,
+.app-body .bridge-course-card:nth-child(3n+2) .bridge-course-cover{background:linear-gradient(135deg,#e3f4ef,#f1faf7)!important}
+.app-body .student-shell .student-course-lilac .student-course-cover,
+.app-body .ref-cover.violet,
+.app-body .bridge-course-card:nth-child(3n+3) .bridge-course-cover{background:linear-gradient(135deg,#eee9fa,#f8f5fd)!important}
+.app-body .ref-course-card,.app-body .bridge-course-card{transition:transform .18s,border-color .18s,box-shadow .18s}
+.app-body .ref-course-card:hover,.app-body .bridge-course-card:hover{transform:translateY(-4px);border-color:#b9cdef;box-shadow:0 18px 38px rgba(31,62,104,.12)}
+
+/* Admin quick actions are a compact tool dock, not another row of buttons. */
+.app-body .dashboard-action-dock{margin-top:22px;padding:23px;border:1px solid #dfe7f2;border-radius:17px;background:linear-gradient(135deg,#fff,#f7faff);box-shadow:var(--ui-shadow-sm)}
+.app-body .dashboard-action-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;margin-bottom:17px}
+.app-body .dashboard-action-heading .eyebrow{margin:0 0 6px}.app-body .dashboard-action-heading h2{margin:0;font-size:17px}.app-body .dashboard-action-heading>span{font-size:11px;color:#8998ac}
+.app-body .bridge-dashboard-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0}
+.app-body .bridge-dashboard-actions>a{display:flex;align-items:center;gap:12px;min-width:0;padding:15px;border:1px solid #e1e8f2;border-radius:13px;background:#fff;color:#314966;text-decoration:none;transition:transform .16s,border-color .16s,box-shadow .16s}
+.app-body .bridge-dashboard-actions>a:hover{transform:translateY(-2px);border-color:#b9cdef;box-shadow:0 10px 25px rgba(31,62,104,.09)}
+.app-body .bridge-dashboard-actions>a>span:nth-child(2){flex:1;min-width:0}.app-body .bridge-dashboard-actions strong,.app-body .bridge-dashboard-actions small{display:block}.app-body .bridge-dashboard-actions strong{font-size:12px}.app-body .bridge-dashboard-actions small{margin-top:4px;color:#8a99ad;font-size:10px;line-height:1.5}.app-body .bridge-dashboard-actions>a>.fa-arrow-right{color:#9aabc1}
+.app-body .dashboard-action-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:11px;font-size:16px}.app-body .dashboard-action-icon.blue{background:#eaf2ff;color:#2864e8}.app-body .dashboard-action-icon.green{background:#e8f7f0;color:#278568}.app-body .dashboard-action-icon.violet{background:#f1ebfb;color:#7952ba}
+
+/* Calendar and login receive the same level of finish. */
+.app-body .teacher-dashboard-calendar .panel,.app-body .student-calendar{position:relative;overflow:hidden}
+.app-body .teacher-dashboard-calendar .panel::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#3d75e3,#6da1ff,#61b394)}
+.app-body .teacher-calendar-grid>button.selected,.app-body .student-calendar-day.selected{box-shadow:0 6px 14px rgba(40,100,232,.22)}
+.app-body .login-shell{background:radial-gradient(circle at 18% 12%,rgba(83,134,237,.2),transparent 25rem),radial-gradient(circle at 85% 80%,rgba(63,174,132,.11),transparent 24rem),#f3f6fb}
+.app-body .auth-card{border-radius:24px;box-shadow:0 32px 90px rgba(24,52,90,.16)}
+.app-body .auth-card .brand-mark{background:linear-gradient(145deg,#eaf2ff,#dce9ff);box-shadow:0 9px 24px rgba(36,94,219,.13)}
+
+@media(max-width:900px){
+  .app-body .page-intro-card{padding:20px}
+  .app-body .panel{padding:20px}
+  .app-body .panel>.stack-form,
+  .app-body .ref-modal>.stack-form,
+  .app-body .student-dialog .stack-form,
+  .app-body .notification-form,
+  .app-body .course-create-panel .stack-form{padding:16px}
+  .app-body .student-hero{padding:30px}
+  .app-body .student-hero-art{display:none}
+  .app-body .bridge-dashboard-actions{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .app-body .page-intro-card{padding:18px;border-radius:16px}
+  .app-body .panel{padding:17px;border-radius:14px}
+  .app-body .panel-heading{align-items:flex-start}
+  .app-body .stat-card{min-height:72px}
+  .app-body .attendance-session-row{padding:14px}
+  .app-body :where(.tabs,.student-tabs,.ref-tabs){border-radius:11px}
+  .app-body .page-intro-card{min-height:0}
+  .app-body .page-intro-card h1{font-size:25px}
+  .app-body .student-hero{min-height:0;padding:25px 22px;border-radius:18px}
+  .app-body .student-hero h2{font-size:24px}
+  .app-body .student-hero-insights span:last-child{display:none}
+  .app-body .student-course-showcase,.app-body .dashboard-action-dock{padding:17px}
+  .app-body .dashboard-action-heading{align-items:flex-start;flex-direction:column}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .app-body *,
+  .app-body *::before,
+  .app-body *::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
+}
+
+/* Smart records: one compact filter surface and task-oriented rows.
+   This replaces the former stacked, duplicated filter boxes in student lists. */
+.app-body .student-shell .smart-list-panel{padding:26px;border-radius:18px}
+.app-body .student-shell .smart-list-panel>.student-section-head{align-items:center;margin-bottom:20px}
+.app-body .student-shell .smart-list-panel>.student-section-head>div:first-child{min-width:0}
+.app-body .student-shell .smart-list-panel>.student-section-head .eyebrow{margin:0 0 7px;color:#6f88ad}
+.app-body .student-shell .smart-list-panel>.student-section-head h2{margin:0 0 6px;font-size:21px}
+.app-body .smart-count{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid #dce7f5;border-radius:12px;background:#f4f8ff;color:#607796}
+.app-body .smart-count strong{font-size:22px;color:#2864e8}.app-body .smart-count small{font-size:10px;line-height:1.3;max-width:48px}
+
+.app-body .student-shell .smart-filter-bar{
+  display:block!important;padding:0!important;margin:0 0 20px!important;border:1px solid #dfe7f2!important;border-radius:14px!important;background:#f8faff!important;overflow:hidden;box-shadow:inset 0 1px 0 #fff;
+}
+.app-body .smart-filter-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-bottom:1px solid #e5ebf3;background:rgba(255,255,255,.7)}
+.app-body .smart-filter-head>div{display:flex;align-items:center;gap:10px;min-width:0}.app-body .smart-filter-head>div>span:last-child{display:grid;gap:2px}
+.app-body .smart-filter-head strong{font-size:12px;color:#344c6d}.app-body .smart-filter-head small{font-size:10px;color:#8a99ae}
+.app-body .smart-filter-icon{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:#e9f1ff;color:#356dd9;flex-shrink:0}
+.app-body .smart-filter-reset{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:8px;padding:7px 9px;background:transparent;color:#607795;font:600 11px Inter,"Segoe UI",sans-serif;cursor:pointer}
+.app-body .smart-filter-reset:hover:not(:disabled){background:#edf3fc;color:#245edb}.app-body .smart-filter-reset:disabled{opacity:.42;cursor:default}
+.app-body .smart-filter-reset span{display:grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#2864e8;color:#fff;font-size:9px}
+.app-body .smart-filter-grid{display:grid;grid-template-columns:minmax(260px,2fr) repeat(3,minmax(170px,1fr));gap:11px;padding:13px 14px 14px}
+.app-body .smart-filter-grid>label{display:grid!important;gap:6px!important;min-width:0!important;max-width:none!important;color:#6f8199!important;font-size:10px!important;font-weight:700!important;text-transform:uppercase;letter-spacing:.045em}
+.app-body .smart-filter-grid>label:only-child{grid-column:1/-1}
+.app-body .smart-filter-grid>.student-search{grid-column:auto;flex:none!important}
+.app-body .smart-filter-grid :is(input,select){min-height:42px!important;border-color:#d8e2ef!important;border-radius:10px!important;background:#fff!important;font-size:12px!important;text-transform:none;letter-spacing:0}
+.app-body .smart-filter-control{position:relative;display:block}.app-body .smart-filter-control>.fa{position:absolute;z-index:1;left:13px;top:50%;transform:translateY(-50%);color:#8599b5;font-size:12px}
+.app-body .smart-filter-control>input{padding-left:37px!important}
+
+.app-body .smart-records{overflow:auto;border:1px solid #dfe7f1;border-radius:13px;background:#fff;box-shadow:none}
+.app-body .smart-records .student-compact-table{min-width:880px}
+.app-body .smart-records thead th{padding:12px 16px;background:#f7f9fc;color:#8190a6;font-size:9px;letter-spacing:.09em}
+.app-body .smart-records tbody .activity-table-row{position:relative;background:#fff!important;box-shadow:inset 3px 0 0 transparent;cursor:pointer;transition:background-color .15s,box-shadow .15s}
+.app-body .smart-records tbody .activity-table-row:hover{background:#f8fbff!important;box-shadow:inset 3px 0 0 #5f8ee8}
+.app-body .smart-records tbody .activity-table-row.status-not_submitted{box-shadow:inset 3px 0 0 #5f8ee8}
+.app-body .smart-records tbody .activity-table-row.status-submitted{box-shadow:inset 3px 0 0 #45a681}
+.app-body .smart-records tbody .activity-table-row.status-overdue{box-shadow:inset 3px 0 0 #d69028}
+.app-body .smart-records tbody td{padding:15px 16px;border-bottom:1px solid #edf1f6;color:#52657e;vertical-align:middle}
+.app-body .smart-records tbody tr:last-child td{border-bottom:0}
+.app-body .smart-title{display:flex!important;align-items:center;gap:12px!important;width:100%;min-width:230px;color:#294566!important;text-align:left}
+.app-body .smart-title>span:last-child{display:grid;gap:4px;min-width:0}.app-body .smart-title strong{overflow-wrap:anywhere;font-size:12px;line-height:1.45}.app-body .smart-title small{overflow:hidden;text-overflow:ellipsis;color:#8b9bb0;font-size:10px;font-weight:400;white-space:nowrap;max-width:270px}
+.app-body .smart-row-icon{display:grid;place-items:center;width:39px;height:39px;border:1px solid rgba(255,255,255,.8);border-radius:11px;flex:0 0 39px;box-shadow:0 5px 13px rgba(31,62,104,.08)}
+.app-body .smart-row-icon.assignment{background:#fff3dc;color:#b77918}.app-body .smart-row-icon.material{background:#eaf2ff;color:#366ed8}.app-body .smart-row-icon.attendance{background:#e8f7f0;color:#298367}.app-body .smart-row-icon.exam{background:#f0ebfb;color:#7652b3}
+.app-body .smart-course-chip{display:inline-flex;align-items:center;gap:7px;max-width:250px;padding:7px 9px;border:1px solid #e3e9f1;border-radius:8px;background:#fafbfd;color:#5d718d;font-size:11px;line-height:1.4}
+.app-body .smart-course-chip i{color:#829cc1}.app-body .smart-date{display:inline-flex;align-items:center;gap:8px;color:#60748e;font-size:11px;white-space:nowrap}.app-body .smart-date i{color:#829cc1}
+.app-body .smart-deadline{display:flex;align-items:center;gap:9px;white-space:nowrap}.app-body .smart-deadline>i{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#eef4ff;color:#4778d3}.app-body .smart-deadline>span{display:grid;gap:3px}.app-body .smart-deadline strong{color:#4e627c;font-size:11px}.app-body .smart-deadline small{color:#8494a9;font-size:10px}.app-body .smart-deadline.urgent>i,.app-body .smart-deadline.soon>i{background:#fff2dd;color:#b97916}.app-body .smart-deadline.urgent small,.app-body .smart-deadline.soon small{color:#a56b12;font-weight:650}.app-body .smart-deadline.overdue>i{background:#fff0ef;color:#b7453a}.app-body .smart-deadline.overdue small{color:#b7453a}
+.app-body .smart-status-stack{display:grid;justify-items:start;gap:5px;min-width:128px}.app-body .smart-status-stack>small{color:#8a99ac;font-size:9px;line-height:1.4}
+.app-body .smart-open-button{display:grid;place-items:center;width:32px;height:32px;border:1px solid #dce5f1;border-radius:9px;background:#fff;color:#5f7da8;cursor:pointer;transition:transform .14s,border-color .14s,background-color .14s}
+.app-body .smart-open-button:hover{transform:translateX(2px);border-color:#a9c1e8;background:#edf4ff;color:#2864e8}
+.app-body .student-list-empty{padding:45px 20px!important;text-align:center!important}.app-body .student-list-empty>*{display:block;margin-inline:auto}.app-body .student-list-empty strong{margin-top:10px;color:#52657e}.app-body .student-list-empty small{margin-top:6px;color:#8b9bb0}.app-body .smart-empty-icon{display:grid!important;place-items:center;width:42px;height:42px;border-radius:12px;background:#edf3ff;color:#5d82c6;font-size:17px}
+.app-body .student-list-footer{padding:13px 2px 0}.app-body .student-list-footer>span{display:inline-flex;align-items:baseline;gap:4px}.app-body .student-list-footer>span strong{color:#365f9e;font-size:14px}
+
+/* Keep standalone list controls elsewhere concise and tool-like. */
+.app-body .list-controls{padding:11px 12px;border-radius:11px;background:#f9fbfd}
+.app-body .list-controls>label{gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:.035em}
+.app-body .list-controls :is(input,select),.app-body .list-controls .btn{min-height:40px}
+
+@media(max-width:1100px){
+  .app-body .smart-filter-grid{grid-template-columns:minmax(240px,2fr) repeat(2,minmax(160px,1fr))}
+}
+@media(max-width:760px){
+  .app-body .student-shell .smart-list-panel{padding:18px}
+  .app-body .smart-filter-grid{grid-template-columns:1fr 1fr}
+  .app-body .smart-filter-grid>.student-search{grid-column:1/-1}
+  .app-body .smart-filter-head small{display:none}
+  .app-body .smart-records .smart-assignment-row{display:grid;grid-template-columns:1fr auto;padding:13px 14px;gap:10px 14px}
+  .app-body .smart-records .smart-assignment-row>td{display:block;padding:0;border:0}
+  .app-body .smart-records .smart-assignment-row>td:first-child{grid-column:1/-1}
+  .app-body .smart-records .smart-assignment-row>td:nth-child(2),.app-body .smart-records .smart-assignment-row>td:nth-child(3){grid-column:1/-1}
+  .app-body .smart-records .smart-assignment-row>td:nth-child(4){grid-column:1}.app-body .smart-records .smart-assignment-row>td:last-child{grid-column:2;grid-row:4;align-self:center}
+  .app-body .smart-records .student-compact-table:has(.smart-assignment-row){min-width:0;display:block}.app-body .smart-records .student-compact-table:has(.smart-assignment-row) thead{display:none}.app-body .smart-records .student-compact-table:has(.smart-assignment-row) tbody{display:block}
+}
+@media(max-width:520px){
+  .app-body .smart-filter-head{align-items:flex-start}.app-body .smart-filter-grid{grid-template-columns:1fr}
+  .app-body .smart-filter-grid>.student-search{grid-column:auto}
+  .app-body .student-shell .smart-list-panel>.student-section-head{align-items:flex-start}.app-body .smart-count{display:none}
+}
+
+.assignment-badge-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.assignment-badge-line b{display:inline-flex;align-items:center;min-height:24px;padding:3px 8px;border-radius:7px;font-size:11px;line-height:1;font-weight:800;letter-spacing:.035em}
+.assignment-code{background:#eef2ff;color:#5b647c;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.assignment-category{background:#e8efff;color:#2455a6}
+.assignment-config-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.assignment-detail-card .panel-heading{align-items:flex-start}
+.assignment-detail-card .student-assignment-meta{flex-wrap:wrap}
+@media(max-width:800px){.assignment-config-grid{grid-template-columns:1fr}.assignment-badge-line b{font-size:10px}}
+
+/* Course-first assignment workspace. */
+.app-body .assignment-picker-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:28px 30px;background:linear-gradient(120deg,#fff 0,#f8fbff 62%,#edf4ff 100%)}
+.app-body .assignment-picker-intro h2{font-size:23px}.app-body .assignment-picker-intro p{max-width:720px;margin-bottom:0}
+.app-body .assignment-picker-icon{display:grid;place-items:center;flex:0 0 74px;height:74px;border:1px solid #d9e6fb;border-radius:22px;background:#fff;color:#2f6fe5;font-size:30px;box-shadow:0 12px 28px rgba(35,83,166,.1)}
+.app-body .assignment-course-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.app-body .assignment-course-card{display:flex;flex-direction:column;min-height:335px;padding:22px;border-color:#dfe7f3;transition:transform .16s,border-color .16s,box-shadow .16s}
+.app-body .assignment-course-card:hover{transform:translateY(-3px);border-color:#bdd0ee;box-shadow:0 15px 34px rgba(31,67,120,.1)}
+.app-body .assignment-course-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:17px}
+.app-body .assignment-course-symbol{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#eaf2ff;color:#2f69dc;font-size:20px}
+.app-body .assignment-course-card>small{color:#7890b4;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.app-body .assignment-course-card h3{margin:7px 0 2px;font-size:18px;line-height:1.4;color:#263b5b}.app-body .assignment-course-card>.muted{margin:0}
+.app-body .assignment-course-progress{display:grid;gap:7px;margin:20px 0 15px}.app-body .assignment-course-progress>div{display:flex;align-items:center;justify-content:space-between;color:#71829b;font-size:11px}.app-body .assignment-course-progress strong{color:#264c8f;font-size:12px}.app-body .assignment-course-progress progress{width:100%;height:8px;accent-color:#3473ea}.app-body .assignment-course-progress>small{color:#8a98ab;font-size:10px}
+.app-body .assignment-course-categories{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}.app-body .assignment-course-categories span{padding:5px 8px;border-radius:7px;background:#eef3fb;color:#54709a;font-size:9px;font-weight:800}
+.app-body .assignment-course-card>.btn{width:100%;margin-top:auto}
+.app-body .assignment-course-breadcrumb{display:flex;align-items:center;gap:10px;color:#91a0b4;font-size:11px}.app-body .assignment-course-breadcrumb a{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-weight:700}
+.app-body .assignment-course-hero{display:flex;align-items:end;justify-content:space-between;gap:24px;padding:27px 29px;border:1px solid #dce7f6;border-radius:18px;background:linear-gradient(118deg,#1c3761,#2868dc);color:#fff;box-shadow:0 15px 35px rgba(21,59,119,.16)}
+.app-body .assignment-course-hero .eyebrow{margin:0 0 8px;color:#bfd5ff}.app-body .assignment-course-hero h1{margin:0 0 8px;font-size:28px;letter-spacing:-.035em}.app-body .assignment-course-hero p{margin:0;color:#d7e4fb;font-size:12px}.app-body .assignment-course-hero label{display:grid;gap:7px;min-width:min(330px,36vw);color:#dbe7fa;font-size:10px}.app-body .assignment-course-hero select{width:100%;min-height:43px;padding:9px 12px;border:1px solid rgba(255,255,255,.25);border-radius:10px;background:#fff;color:#27405f;font-weight:650}
+.app-body .assignment-course-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px;border:1px solid #dfe7f2;border-radius:16px;background:#fff;box-shadow:var(--ui-shadow-sm)}
+.app-body .assignment-course-summary>div{display:flex;align-items:center;gap:11px;padding:7px 10px;min-width:0}.app-body .assignment-course-summary>div>span:last-child{display:grid;gap:3px;color:#8290a4;font-size:10px}.app-body .assignment-course-summary strong{color:#263b5b;font-size:18px}.app-body .summary-icon{display:grid!important;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:11px;font-size:16px}.app-body .summary-icon.done{background:#e8f8f0;color:#278562}.app-body .summary-icon.progress{background:#eaf2ff;color:#3269d2}.app-body .summary-icon.pending{background:#fff5df;color:#ad781f}.app-body .summary-icon.overdue{background:#fff0ec;color:#c15a43}.app-body .assignment-course-summary>progress{grid-column:1/-1;width:100%;height:8px;accent-color:#3473ea}
+@media(max-width:1100px){.app-body .assignment-course-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.app-body .assignment-picker-intro{padding:22px}.app-body .assignment-picker-icon{display:none}.app-body .assignment-course-grid{grid-template-columns:1fr}.app-body .assignment-course-hero{align-items:stretch;flex-direction:column}.app-body .assignment-course-hero label{min-width:0;width:100%}.app-body .assignment-course-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:430px){.app-body .assignment-course-summary{grid-template-columns:1fr 1fr;padding:12px}.app-body .assignment-course-summary>div{padding:5px}.app-body .summary-icon{display:none!important}}

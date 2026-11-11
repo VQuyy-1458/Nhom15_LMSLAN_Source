@@ -53,7 +53,7 @@
     exams:{filterLabel:'Trạng thái kỳ thi',placeholder:'Tìm tên kỳ thi…'},
     attendance:{filterLabel:'Trạng thái phiên',placeholder:'Tìm buổi học hoặc phiên điểm danh…',statuses:[['open','Đang mở'],['closed','Đã kết thúc']]},
     attendancePeople:{filterLabel:'Điểm danh',placeholder:'Tìm MSSV hoặc họ tên…',directionLabel:'Thứ tự MSSV'},
-    events:{filterLabel:'Loại hoạt động',placeholder:'Tìm buổi học hoặc hoạt động…',status:r=>{const value=r.kind||r.activity;return ['test','midterm','final'].includes(value)?'exam':value||(['file','programming'].includes(r.type)?'exam':'');},statuses:[['lesson','Buổi học'],['assignment','Bài tập'],['exam','Kỳ thi'],['announcement','Thông báo']]},
+    events:{filterLabel:'Loại hoạt động',placeholder:'Tìm buổi học hoặc hoạt động…',status:r=>{const value=r.kind||r.activity;return ['test','practice','midterm','final'].includes(value)?'exam':value||(['file','programming'].includes(r.type)?'exam':'');},statuses:[['lesson','Buổi học'],['assignment','Bài tập'],['exam','Kỳ thi'],['announcement','Thông báo']]},
     submissions:{filterLabel:'Chấm điểm',placeholder:'Tìm tên bài, tên file hoặc MSSV…',directionLabel:'Thứ tự thời gian nộp',status:r=>(r.score??r.result?.score)===null||(r.score??r.result?.score)===undefined?'pending':'graded',statuses:[['pending','Chưa chấm'],['graded','Đã chấm']]},
     notifications:{filterLabel:'Trạng thái đọc',placeholder:'Tìm nội dung hoặc người gửi…',directionLabel:'Thứ tự thời gian gửi'},
     problems:{filterLabel:'Kết quả làm bài',placeholder:'Tìm tên bài toán…',directionLabel:'Thứ tự bài'},
