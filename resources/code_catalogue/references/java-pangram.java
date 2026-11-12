@@ -1,0 +1,1 @@
+class PangramChecker {boolean isPangram(String s){return s.toLowerCase(Locale.ROOT).chars().filter(c->c>='a'&&c<='z').distinct().count()==26;}}

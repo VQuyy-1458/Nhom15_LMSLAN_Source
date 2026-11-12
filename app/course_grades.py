@@ -34,7 +34,10 @@ def exam_marks(course_id, student_ids):
             else:
                 problems = exam.get("programming", {}).get("problems", [])
                 marks = []
-                for index, problem in enumerate(problems):
+                from .programming import assigned_indices
+                assigned=assigned_indices(exam,sid)
+                for index in assigned:
+                    problem=problems[index]
                     attempts = indexed_code.get((exam["id"],sid,index),[])
                     points = []
                     for attempt in attempts:
@@ -43,7 +46,7 @@ def exam_marks(course_id, student_ids):
                         if value is not None:
                             points.append(max(0, min(problem["points"], value)))
                     marks.append(max(points) if points else 0 if not attempts and exam["state"] == "ended" else None)
-                maximum = sum(p["points"] for p in problems)
+                maximum = sum(problems[i]["points"] for i in assigned)
                 if marks and maximum and all(v is not None for v in marks):
                     score = 10 * sum(marks) / maximum
             result[sid].append({"exam_id": exam["id"], "title": exam["title"], "assessment_type": exam["assessment_type"], "score": round(max(0, min(10, score)), 2) if valid_score(score) else None})

@@ -35,8 +35,8 @@ def scope_monitor(rows, course_id):
 
 def exam_monitor(rows, exam_id, course_id=""):
     """Project presence onto one exam; never mix another exam's attempts or files."""
-    from .exam_catalog import listing
-    exam = next((e for e in listing() if e["id"] == exam_id), None)
+    from .programming import all_exams
+    exam = next((e for e in all_exams() if e["id"] == exam_id), None)
     if not exam:
         raise learning.LearningError(404, "Không tìm thấy kỳ thi cần giám sát.")
     if course_id and exam.get("course_id") != course_id:
@@ -64,18 +64,20 @@ def exam_monitor(rows, exam_id, course_id=""):
             attempt = attempts.get(exam_id + ":" + sid, {})
             records = sorted(code_by_student.get(sid, []), key=lambda r: r.get("submitted_at", ""))
             latest = records[-1] if records else None
+            from .programming import assigned_indices
+            assigned=assigned_indices(exam,sid)
             solved = set()
             for record in records:
                 grades = [h.get("result") for h in record.get("grading_history", [])] + [record.get("result")]
                 grade = next((g for g in reversed(grades) if g and g.get("score") is not None), None)
                 index = record.get("problem_index")
-                if grade and grade.get("verdict") == "AC" and isinstance(index, int) and 0 <= index < problem_count:
+                if grade and grade.get("verdict") == "AC" and isinstance(index, int) and index in assigned:
                     solved.add(index)
             finalized = attempt.get("status") == "submitted"
             row.update(exam_file=exam["title"], exam_status="submitted" if finalized else "in_progress" if attempt else "assigned",
                        started_at=attempt.get("started_at"), ends_at=attempt.get("ends_at") or exam.get("ends_at"),
                        latest_verdict=(latest.get("result") or {}).get("verdict") or latest.get("state") if latest else None,
-                       accepted_problems=len(solved), total_problems=problem_count, can_force=False, can_adjust=False)
+                       accepted_problems=len(solved), total_problems=len(assigned), can_force=False, can_adjust=False)
         else:
             attempt = assignments.get(sid, {})
             if not exam.get("release_id") or attempt.get("release_id") != exam["release_id"]:
@@ -111,8 +113,8 @@ def validate_file_monitor_target(exam_id, student_id):
     """A stale/code monitor link must never mutate the current file assignment."""
     if not exam_id:
         return
-    from .exam_catalog import listing
-    exam = next((e for e in listing() if e["id"] == exam_id), None)
+    from .programming import all_exams
+    exam = next((e for e in all_exams() if e["id"] == exam_id), None)
     assignment = read_json("assignments.json").get(student_id, {})
     if not exam or exam["type"] != "file" or not exam.get("active") or not exam.get("release_id") or assignment.get("release_id") != exam["release_id"] or student_id not in exam.get("participants", []):
         raise learning.LearningError(409, "Thao tác không áp dụng cho kỳ thi đang giám sát.")

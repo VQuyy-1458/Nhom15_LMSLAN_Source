@@ -4,16 +4,17 @@
 {% if section == 'courses' %}<link rel="stylesheet" href="/static/css/student.css"><link rel="stylesheet" href="/static/css/courses-admin.css?v=20261030-8"><link rel="stylesheet" href="/static/css/admin-attendance.css?v=20261031-1">{% endif %}
 {% if section in ['dashboard','monitor','exam','submissions'] %}<link rel="stylesheet" href="/static/css/admin-lms.css">{% endif %}
 {% if section == 'monitor' %}<link rel="stylesheet" href="/static/css/exam-monitor.css?v=20261030-9">{% endif %}
-{% if section not in ['monitor','notifications'] %}<link rel="stylesheet" href="/static/css/admin-design.css?v=20261111-1">{% endif %}
+<link rel="stylesheet" href="/static/css/admin-design.css?v=20261111-1">
 <link rel="stylesheet" href="/static/css/admin-sidebar.css?v=20261030-3">
-{% if section in ['exam','courses'] %}<link rel="stylesheet" href="/static/css/admin-exams.css?v=20261031-4">{% endif %}
-{% if section == 'exam' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261030-8">{% endif %}
+{% if section in ['exam','courses','bank'] %}<link rel="stylesheet" href="/static/css/admin-exams.css?v=20261031-4">{% endif %}
+{% if section in ['exam','bank'] %}<link rel="stylesheet" href="/static/css/programming.css?v=20261030-8">{% endif %}
 <link rel="stylesheet" href="/static/css/activity-colors.css">
 {% if section == 'courses' %}<link rel="stylesheet" href="/static/css/course-schedule.css?v=20261031-2">{% endif %}
 <link rel="stylesheet" href="/static/css/admin-drafts.css?v=20261030-8">
 {% endblock %}
 {% block body %}
-<div class="admin-shell admin-sidebar-unified {{ 'course-admin-shell' if section == 'courses' else '' }} {{ 'admin-redesign' if section not in ['monitor','notifications'] else '' }}" data-admin-section="{{ section|default('dashboard') }}" data-draft-owner="{{ session.user_id }}">
+<link rel="stylesheet" href="/static/css/course-learning.css?v=20261111-shared-2">
+<div class="admin-shell admin-sidebar-unified {{ 'course-admin-shell' if section == 'courses' else '' }} admin-redesign" data-admin-section="{{ section|default('dashboard') }}" data-draft-owner="{{ session.user_id }}">
     <aside class="main-sidebar" aria-label="Điều hướng quản trị">
         <a class="sidebar-brand" href="/admin?section=dashboard"><span class="brand-mark"><i
                 class="fa fa-shield"></i></span><span>LAN-LMS<br><small>Hệ thống học tập</small></span></a>
@@ -30,6 +31,7 @@
                     class="fa fa-desktop"></i><span>Giám sát</span></a>
             <a class="{{ 'active' if section == 'notifications' else '' }}" href="/admin?section=notifications"><i
                     class="fa fa-bullhorn"></i><span>Thông báo</span><span class="sidebar-badge">Mới</span></a>
+            <a class="{{ 'active' if section == 'bank' else '' }}" href="/admin/question-bank"><i class="fa fa-database"></i><span>Kho bài tập & Đề</span></a>
             <p class="sidebar-label">KỲ THI</p>
             <a class="{{ 'active' if section == 'exam' else '' }}" href="/admin?section=exam"><i
                     class="fa fa-sliders"></i><span>Cấu hình kỳ thi</span></a>
@@ -52,7 +54,7 @@
             <div class="brand"><i class="fa fa-shield"></i> LAN-LMS <span
                     class="admin-tag">ADMIN</span></div>
             <div class="topbar-actions"><span class="muted">Đăng nhập: {{ session.user_id }}</span>
-                {% if section not in ['monitor','notifications'] %}<span class="design-avatar" aria-hidden="true">{{ session.user_id[:2]|upper }}</span>{% endif %}
+                <span class="design-avatar" aria-hidden="true">{{ session.user_id[:2]|upper }}</span>
                 <form action="/logout" method="post">
                     <button class="btn btn-ghost ui-action" type="submit"><i class="fa fa-sign-out"></i> Đăng xuất
                     </button>
@@ -63,15 +65,16 @@
             <section class="page-title page-intro-card">
                 <div><p class="eyebrow">{{ 'KHÓA HỌC & LỚP HỌC' if section == 'courses' else 'QUẢN TRỊ KỲ THI LAN' }}</p>
                     <h1>{% if section == 'courses' %}Khóa học{% elif section == 'dashboard' %}Dashboard{% elif section == 'monitor' %}Giám sát sinh viên{% elif
-                        section == 'notifications' %}Trung tâm thông báo{% elif section == 'exam' %}Cấu hình kỳ thi{%
+                        section == 'notifications' %}Trung tâm thông báo{% elif section == 'bank' %}Kho bài tập & Đề{% elif section == 'exam' %}Cấu hình kỳ thi{%
                         elif section == 'accounts' %}Tài khoản sinh viên{% elif section == 'submissions' %}Quản lý bài
                         nộp{% elif section == 'server' %}Địa chỉ LAN{% else %}Tài khoản Admin{% endif %}</h1>
-                    <p class="muted">{% if section == 'courses' %}Tổ chức lớp học, tài liệu, hoạt động và kết quả theo từng khóa học.{% elif section == 'dashboard' %}Tổng quan hoạt động giảng dạy và thi trong hệ thống.{% elif section in ['monitor','exam','submissions'] %}Chọn khóa học để xem nội dung tương ứng và mở nhanh không gian của lớp.{% else %}Quản lý tài khoản, phân phối đề, thời gian thi và bài nộp.{% endif %}</p></div>
+                    <p class="muted">{% if section == 'courses' %}Tổ chức lớp học, tài liệu, hoạt động và kết quả theo từng khóa học.{% elif section == 'bank' %}Kho bài tập chung, luyện tập và đề thực hành / thi.{% elif section == 'dashboard' %}Tổng quan hoạt động giảng dạy và thi trong hệ thống.{% elif section in ['monitor','exam','submissions'] %}Chọn khóa học để xem nội dung tương ứng và mở nhanh không gian của lớp.{% else %}Quản lý tài khoản, phân phối đề, thời gian thi và bài nộp.{% endif %}</p></div>
                 <div class="server-chip"><span class="live-dot"></span> Server hoạt động {% if section != 'courses' %}<span id="live-status">Đang kết nối...</span>{% endif %}
                 </div>
             </section>
             {% if section in ['monitor','exam','submissions'] %}<div id="admin-course-context" class="admin-course-context"><span class="muted">Đang tải khóa học…</span></div>{% endif %}
             <div class="alert alert-error hidden" id="admin-workspace-error" role="alert"></div>
+            {% if section == 'bank' %}<div id="question-bank-root" aria-live="polite">Đang tải kho chung…</div>{% endif %}
             {% if section == 'courses' %}{% include "learning_admin.html" %}{% endif %}
             {% if section == 'dashboard' %}
             <div id="admin-dashboard-overview"><section class="panel"><p class="muted">Đang tải tổng quan giảng dạy…</p></section></div>
@@ -450,19 +453,23 @@
 <script defer src="/static/js/admin-icons.js"></script>
 <script defer src="/static/js/admin-sidebar.js"></script>
 <script defer src="/static/js/admin.js?v=20261031-3"></script>
-{% if section not in ['monitor','notifications'] %}<script defer src="/static/js/admin-design.js"></script>{% endif %}
+<script defer src="/static/js/admin-design.js"></script>
 {% if section == 'exam' %}<link rel="stylesheet" href="/static/css/exam-preflight.css?v=20261030-8"><script defer src="/static/js/exam-preflight.js?v=20261030-10"></script><script defer src="/static/js/exam-timing.js?v=20261030-9"></script><script defer src="/static/js/exam-test-csv.js"></script><script defer src="/static/js/programming.js?v=20261111-nv09-2h"></script>{% endif %}
-{% if section in ['exam','courses'] %}<script defer src="/static/js/admin-exams.js?v=20261111-nv09-2h"></script>{% endif %}
+{% if section in ['exam','courses','bank'] %}<script defer src="/static/js/admin-exams.js?v=20261111-shared-2"></script>{% endif %}
 {% if section == 'submissions' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261030-8"><link rel="stylesheet" href="/static/css/submission-archive.css"><script defer src="/static/js/programming.js?v=20261111-nv09-2h"></script><script defer src="/static/js/submission-archive.js?v=20261031-1"></script>{% endif %}
 {% if section == 'dashboard' %}<script defer src="/static/js/admin-teacher-calendar.js"></script>{% endif %}
 {% if section in ['dashboard','monitor','exam','submissions'] %}<script defer src="/static/js/admin-lms.js?v=20261111-2"></script>{% endif %}
+<script defer src="/static/js/course-learning.js?v=20261111-course-bank-1"></script>
+{% if section in ['bank','exam','courses'] %}<script defer src="/static/js/question-bank.js?v=20261111-course-bank-1"></script>{% endif %}
+{% if section == 'bank' %}<script defer src="/static/js/exam-test-csv.js"></script>{% endif %}
 {% if section == 'courses' %}
 <script defer src="/static/vendor/zxing/zxing-browser.min.js"></script>
 <script defer src="/static/js/attendance-qr.js"></script>
 <script defer src="/static/js/file-preview.js"></script>
+<link rel="stylesheet" href="/static/css/programming.css"><script defer src="/static/js/exam-test-csv.js"></script>
 <script defer src="/static/js/admin-courses-design.js?v=20261031-2"></script>
 <script defer src="/static/js/admin-attendance.js?v=20261031-2"></script>
-<script defer src="/static/js/learning-admin.js?v=20261111-3"></script>
+<script defer src="/static/js/learning-admin.js?v=20261111-shared-2"></script>
 {% endif %}
 <script defer src="/static/js/admin-drafts.js?v=20261111-nv09-2h"></script>
 {% endblock %}

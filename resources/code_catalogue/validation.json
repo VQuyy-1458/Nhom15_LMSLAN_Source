@@ -1,0 +1,9 @@
+{
+  "verified_questions": 60,
+  "tests": 541,
+  "verdict": "60/60 AC",
+  "catalogue_sha256": "cfb10cf5d60c148c195f02f3627b5a070f4317b78fb14b6de9f21842d0cc8c85",
+  "method": "actual restricted Docker judge; two corrected fixtures individually rechecked",
+  "functional_tests": "184 tests: two template failures fixed and all affected 15 tests rechecked successfully; 15 environment-dependent tests skipped; JSON checker 2/2 pass",
+  "browser": "shared bank editor, paper dialog, bulk schedule, 390px layout pass"
+}

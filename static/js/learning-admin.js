@@ -9,9 +9,9 @@
   const empty=message=>`<div class="student-empty"><i class="fa fa-folder-open-o"></i><p>${esc(message)}</p></div>`;
   const titleField='<label>Tiêu đề<input name="title" required maxlength="200"></label>';
   const description='<label>Mô tả / Yêu cầu<textarea name="description" rows="4" maxlength="10000"></textarea></label>';
-  const assignmentMeta='<div class="assignment-config-grid"><label>Nhóm bài tập<select name="category"><option value="GENERAL">Chung</option><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="RMI">RMI</option><option value="WS">WebSocket</option><option value="DATABASE">Database</option><option value="WEB">Web</option><option value="MIXED">Mixed</option></select></label><label>Mã ngắn<input name="short_code" maxlength="40" placeholder="Ví dụ: TCP_CHARACTER"></label></div><p class="muted">Khu vực này chỉ dành cho bài nộp file. Bài lập trình có chấm test tự động được tạo trong Bộ chấm code online.</p>';
+  const assignmentMeta='<div class="assignment-config-grid"><label>Nhóm bài tập<select name="category"><option value="GENERAL">Chung</option><option value="TCP">TCP</option><option value="UDP">UDP</option><option value="RMI">RMI</option><option value="WS">WebSocket</option><option value="DATABASE">Database</option><option value="WEB">Web</option><option value="MIXED">Mixed</option></select></label><label>Mã ngắn<input name="short_code" maxlength="40" placeholder="Ví dụ: TCP_CHARACTER"></label></div><p class="muted">Khu vực này chỉ dành cho bài nộp file. Bài code tự luyện và phiên thực hành được quản lý trong mục Bài tập của khóa học.</p>';
   const enrollmentPolicy='<label>Tính điểm cho sinh viên mới<select name="include_previous"><option value="false">Từ lúc tham gia (khuyến nghị)</option><option value="true">Tính cả nội dung trước khi tham gia</option></select></label><p class="muted">Mặc định không tính bài tập đã hết hạn và buổi học trước lúc tham gia. Bài tập còn hạn vẫn cần làm. Lựa chọn chỉ áp dụng cho người mới; thêm lại người từng ở lớp giữ quy tắc cũ.</p>';
-  const form=(action,title,fields)=>`<section class="panel"><h2>${title}</h2><form class="stack-form" data-action="${action}"><input type="hidden" name="course_id" value="${esc(selected)}">${['material','assignment'].includes(action)?'<label>Chủ đề<input name="topic" maxlength="200" placeholder="Ví dụ: Chủ đề 02 · Thực hành"></label>':''}${action==='assignment'?assignmentMeta:''}${fields}<div><button class="btn btn-primary">Lưu ${title.toLowerCase()}</button></div></form></section>`;
+  const form=(action,title,fields)=>`<section class="panel"><h2>${title}</h2><form class="stack-form" data-action="${action}"><input type="hidden" name="course_id" value="${esc(selected)}">${['material','assignment'].includes(action)?window.courseLearning.weekField()+'<label>Chủ đề<input name="topic" maxlength="200" placeholder="Ví dụ: Chủ đề 02 · Thực hành"></label>':''}${action==='assignment'?assignmentMeta:''}${fields}<div><button class="btn btn-primary">Lưu ${title.toLowerCase()}</button></div></form></section>`;
   const scoped=key=>data[key].filter(r=>r.course_id===selected);
   const course=()=>data.courses.find(c=>c.id===selected);
   const members=c=>data.students.filter(s=>c.student_ids===null||c.student_ids.includes(s.student_id));
@@ -21,7 +21,7 @@
   function openLesson(id){
     const lesson=data.events.find(r=>r.id===id&&r.course_id===selected&&r.kind==='lesson');if(!lesson)return;
     const session=data.attendance.find(r=>r.event_id===id),closed=course().status==='completed';
-    const dialog=window.adminDesign.modal('Buổi học & điểm danh',`<h3>${esc(lesson.title)}</h3><p class="muted">${date(lesson.starts_at)} · ${esc(lesson.location||'Chưa đặt địa điểm')}</p><p>${esc(lesson.description||'')}</p>${session?`<p>${session.open?'Điểm danh đang mở':'Phiên điểm danh đã kết thúc'}.</p><button type="button" class="btn btn-primary" data-lesson-attendance="${session.id}">Xem chi tiết điểm danh</button>`:closed?'<p class="muted">Khóa học đã tổng kết.</p>':`<form class="stack-form" data-action="attendance"><input type="hidden" name="course_id" value="${selected}"><input type="hidden" name="event_id" value="${id}"><label>Thời gian mở mã QR<select name="duration_minutes"><option value="5">5 phút</option><option value="10">10 phút</option><option value="15" selected>15 phút</option><option value="30">30 phút</option><option value="60">60 phút</option></select></label><p class="muted">Điểm danh gắn với buổi học này. Sinh viên quét QR để ghi nhận có mặt.</p><button class="btn btn-primary">Mở điểm danh buổi học</button></form>`}`);
+    const dialog=window.adminDesign.modal('Buổi học & điểm danh',`<h3>${esc(lesson.title)}</h3><p class="muted">${date(lesson.starts_at)} · ${esc(lesson.location||'Chưa đặt địa điểm')}</p><p>${esc(lesson.description||'')}</p>${session?`<p>${session.open?'Điểm danh đang mở':'Phiên điểm danh đã kết thúc'}.</p><button type="button" class="btn btn-primary" data-lesson-attendance="${session.id}">Xem chi tiết điểm danh</button>`:closed?'<p class="muted">Khóa học đã tổng kết.</p>':`<form class="stack-form" data-action="attendance"><input type="hidden" name="course_id" value="${selected}"><input type="hidden" name="event_id" value="${id}"><label>Thời gian mở điểm danh LAN<select name="duration_minutes"><option value="5">5 phút</option><option value="10">10 phút</option><option value="15" selected>15 phút</option><option value="30">30 phút</option><option value="60">60 phút</option></select></label><p class="muted">Điểm danh gắn với buổi học này. Sinh viên có phiên đăng nhập đang hoạt động trong LAN được tự động ghi nhận.</p><button class="btn btn-primary">Mở điểm danh buổi học</button></form>`}`);
     dialog.querySelector('[data-lesson-attendance]')?.addEventListener('click',()=>{dialog.close();openAttendance(session.id);});
   }
   function landing(){return window.courseDesign.landing(data,{search,status:statusFilter});}
@@ -53,12 +53,15 @@
     const c=course(),readonly=c?.status==='completed';
     const top=c?courseHeader(c):'';
     if(!c){content.innerHTML=landing();return;}
+    window.courseLearning.setContext(data,c.id,true);
     if(tab==='learning')tab='materials';
-    const tabs=[['overview','Tổng quan','th-large'],['students','Sinh viên','users'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch & điểm danh','calendar'],['exams','Kỳ thi','shield'],['grades','Bảng điểm','bar-chart']];
+    const tabs=[['weekly','Nội dung theo tuần','list-alt'],['overview','Tổng quan','th-large'],['announcements','Thông báo','bullhorn'],['students','Sinh viên','users'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch & điểm danh','calendar'],['exams','Kỳ thi','shield'],['grades','Bảng điểm','bar-chart']];
     const parentTab=({material:'materials',assignment:'assignments',event:'calendar',attendance:'calendar'})[tab]||tab;
     if(!tabs.some(([key])=>key===parentTab))tab='overview';
     let body='';
-    if(tab==='materials'||tab==='assignments')body=window.courseDesign.teaching(data,c,tab);
+    if(tab==='weekly')body=window.courseLearning.weekly(data,c.id,true);
+    if(tab==='announcements')body=window.courseLearning.announcements(data,c.id,true);
+    if(tab==='materials'||tab==='assignments')body=window.courseLearning.resources(data,c.id,tab,true);
     if(tab==='calendar')body=window.courseDesign.calendar(data,c,weekOffset);
     if(tab==='exams')body=window.courseDesign.examView(data,c);
     if(tab==='students')body=window.courseDesign.students(data,c);
@@ -108,7 +111,7 @@
       if(record?.status===value)return;
       const body=new FormData();
       body.set('session_id',sessionId);body.set('student_id',studentId);body.set('status',value);
-      body.set('reason',value==='present'?'Điểm danh thủ công: Có mặt':'Điểm danh thủ công: Đến muộn');
+      body.set('reason','Điểm danh thủ công: '+({present:'Có mặt',late:'Đến muộn',early_departure:'Về sớm',absent:'Vắng'}[value]||value));
       busy=true;choice.closest('.attendance-choices').querySelectorAll('button').forEach(button=>button.disabled=true);
       window.cssRequest('/api/learning/attendance-record',{method:'POST',body}).then(async()=>{window.cssToast('Đã cập nhật điểm danh.','success');await load();}).catch(async error=>{window.cssToast(error.message,'error');await load();}).finally(()=>{busy=false;});
       return;
@@ -141,7 +144,7 @@
     }
     if(action==='course-members'&&(f.has('add_student_id')||f.has('append_ids'))){const added=String(f.get('add_student_id')||f.get('append_ids')||'').replaceAll(',',' ').split(/\s+/).filter(Boolean);f.set('student_ids',[...new Set([...members(course()).map(s=>s.student_id),...added])].join(','));}
     if(action==='complete-course'&&!window.confirm('Tổng kết khóa học? Sau khi chốt chỉ có thể xem, không thể đăng nội dung hoặc chấm điểm.'))return;
-    if(action==='close-attendance'&&!window.confirm('Kết thúc điểm danh? Phiên đã đóng không thể sửa.'))return;
+    if(action==='close-attendance'&&!window.confirm('Kết thúc điểm danh tự động? Bạn vẫn chỉnh được kết quả sau khi đóng phiên.'))return;
     for(const name of ['starts_at','due_at','expires_at'])if(f.get(name)){f.set(name,new Date(String(f.get(name))+'+07:00').toISOString());}
     const file=f.get('file');if(file instanceof File&&file.size>20*1048576){window.cssToast('File vượt 20 MiB.','error');return;}
     busy=true;const button=form.querySelector('button[type="submit"],button:not([type])');button.disabled=true;
@@ -183,5 +186,6 @@
       }
     }catch(_){}finally{attendancePolling=false;}
   },2500);
+  document.addEventListener('course-learning-updated',load);
   load();
 })();

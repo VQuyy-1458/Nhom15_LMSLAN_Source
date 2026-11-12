@@ -1,0 +1,37 @@
+/* Shared presentation for the 2H teaching and student workspaces. */
+:root{
+  --lms-ink:#20324c;
+  --lms-muted:#657b96;
+  --lms-blue:#2864e8;
+  --lms-surface:#fff;
+  --lms-background:#f4f7fb;
+  --lms-border:#e1e8f2;
+  --lms-radius:13px;
+}
+body.app-body{font-family:Inter,"Segoe UI",Arial,sans-serif;color:var(--lms-ink)}
+.app-body :where(button,input,select,textarea){font-family:inherit}
+.app-body :where(.admin-redesign,.student-shell){color:var(--lms-ink);background:var(--lms-background)}
+.app-body :where(.admin-redesign,.student-shell) :where(.panel,.stat-card,.cl-week,.ref-modal,.student-detail-dialog){border-color:var(--lms-border);border-radius:var(--lms-radius)}
+.app-body :where(.admin-redesign,.student-shell) :where(h1,h2,h3){color:var(--lms-ink);letter-spacing:-.02em}
+.app-body :where(.admin-redesign,.student-shell) :where(.muted,.cl-row-meta){color:var(--lms-muted)}
+.app-body :where(.admin-redesign,.student-shell) :where(.btn,.cl-title,.cl-week summary){transition:background-color .15s ease,border-color .15s ease,color .15s ease}
+.app-body :where(.admin-redesign,.student-shell) :where(.btn-primary){background:var(--lms-blue);border-color:var(--lms-blue);color:#fff}
+.app-body :where(.admin-redesign,.student-shell) :where(.btn-primary):hover:not(:disabled){background:#1e55c9;border-color:#1e55c9}
+.app-body :where(.admin-redesign,.student-shell) :where(.cl-week>summary,.cl-paper-choices){background:#f7f9fd;border-color:var(--lms-border)}
+.app-body :where(.admin-redesign,.student-shell) .cl-week-number{background:#edf3ff;color:#2864e8}
+.app-body :where(.admin-redesign,.student-shell) .cl-resource-row{border-color:#e7edf5}
+.app-body :where(.admin-redesign,.student-shell) .cl-title{color:var(--lms-ink)}
+.app-body :where(.admin-redesign,.student-shell) .cl-title:hover{color:var(--lms-blue)}
+.app-body :where(.admin-redesign,.student-shell) :where(.cl-check,.cl-practice-toggle){color:#405a79;line-height:1.5}
+.app-body :where(.admin-redesign,.student-shell) :where(.cl-dialog,.ref-modal){color:var(--lms-ink);background:var(--lms-surface)}
+.app-body .admin-redesign :where(.notification-panel,.exam-monitor-panel){border-color:var(--lms-border)}
+.app-body .admin-redesign .notification-layout{gap:20px}
+.app-body .admin-redesign :where(.notification-intro,.notification-form){border-color:var(--lms-border);border-radius:var(--lms-radius)}
+.app-body .student-shell .student-scan-panel{border-color:var(--lms-border);background:var(--lms-surface)}
+@media(max-width:700px){
+  .app-body :where(.admin-redesign,.student-shell) .cl-heading{align-items:flex-start;flex-wrap:wrap}
+  .app-body :where(.admin-redesign,.student-shell) .cl-heading>div{min-width:0}
+  .app-body :where(.admin-redesign,.student-shell) .cl-paper-choices{max-width:100%}
+  .app-body .admin-redesign .notification-layout{grid-template-columns:minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){.app-body :where(.admin-redesign,.student-shell) :where(.btn,.cl-title,.cl-week summary){transition:none}}

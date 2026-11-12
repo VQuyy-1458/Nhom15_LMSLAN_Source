@@ -1,0 +1,1 @@
+class LuhnValidator {boolean isValid(String s){s=s.replace(" ","");if(s.length()<2||!s.matches("[0-9]+"))return false;int sum=0;for(int i=s.length()-1,k=0;i>=0;i--,k++){int d=s.charAt(i)-'0';if(k%2==1){d*=2;if(d>9)d-=9;}sum+=d;}return sum%10==0;}}

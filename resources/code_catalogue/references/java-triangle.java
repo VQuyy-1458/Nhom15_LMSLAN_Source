@@ -1,0 +1,1 @@
+class Triangle {double a,b,c;Triangle(double a,double b,double c)throws TriangleException{if(a<=0||b<=0||c<=0||a+b<=c||a+c<=b||b+c<=a)throw new TriangleException();this.a=a;this.b=b;this.c=c;}boolean isEquilateral(){return a==b&&b==c;}boolean isIsosceles(){return a==b||a==c||b==c;}boolean isScalene(){return !isIsosceles();}}

@@ -1,0 +1,1 @@
+class BinarySearch {List<Integer> a;BinarySearch(List<Integer> a){this.a=a;}int indexOf(int v)throws ValueNotFoundException{int l=0,r=a.size()-1;while(l<=r){int m=(l+r)/2;if(a.get(m)==v)return m;if(a.get(m)<v)l=m+1;else r=m-1;}throw new ValueNotFoundException();}}

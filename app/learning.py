@@ -22,7 +22,7 @@ LOCK = threading.RLock()
 EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip", ".c", ".cpp", ".h", ".hpp", ".java", ".py", ".js", ".ts", ".cs", ".go", ".rs", ".kt", ".png", ".jpg", ".jpeg"}
 FILE_SUBMISSION_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".zip", ".png", ".jpg", ".jpeg"}
 ASSIGNMENT_CATEGORIES = {"GENERAL", "TCP", "UDP", "RMI", "WS", "DATABASE", "WEB", "MIXED"}
-EMPTY = {"courses": [], "materials": [], "events": [], "assignments": [], "submissions": [], "attendance": [], "grades": []}
+EMPTY = {"courses": [], "materials": [], "events": [], "assignments": [], "submissions": [], "attendance": [], "grades": [], "course_weeks": []}
 WEIGHTS = {"attendance": 10, "homework": 10, "midterm": 10, "final": 70}
 
 
@@ -53,7 +53,7 @@ def initialize_enrollments():
 def gradebook(data, course, student_ids):
     now = datetime.now(timezone.utc)
     weights = course.get("weights", WEIGHTS)
-    tasks = [a for a in data["assignments"] if a["course_id"] == course["id"]]
+    tasks = [a for a in data["assignments"] if a["course_id"] == course["id"] and not a.get("practice") and not a.get("archived")]
     closed = [a for a in data["attendance"] if a["course_id"] == course["id"] and (a["closed"] or date_value(a["expires_at"]) <= now)]
     students = read_json("students.json")
     from .course_grades import exam_marks
@@ -66,11 +66,13 @@ def gradebook(data, course, student_ids):
     task_due = {task["id"]:date_value(task["due_at"]) <= now for task in tasks}
     rows = []
     for sid in student_ids:
-        absent = sum(a["records"].get(sid, {}).get("status") not in {"present", "late"}
+        absent = sum(a["records"].get(sid, {}).get("status") not in {"present", "late", "early_departure"}
                      for a in closed if enrollments.applies(course, sid, a, "attendance", students))
         values = {"attendance": max(0, 10 - absent), "homework": None, "midterm": None, "final": None}
         homework = []
         for task in tasks:
+            if task.get('participants') is not None and sid not in task['participants']:
+                continue
             if not enrollments.applies(course, sid, task, "assignment", students):
                 continue
             latest = latest_submissions.get((task["id"],sid))
@@ -79,6 +81,8 @@ def gradebook(data, course, student_ids):
                 homework.append(score)
         practice = [r["score"] for r in exam_results[sid] if r["assessment_type"] == "practice"]
         homework.extend(practice)
+        from .exercise_bank import homework_scores
+        homework.extend(homework_scores(course["id"], sid))
         if homework and all(score is not None for score in homework):
             values["homework"] = round(sum(homework) / len(homework), 2)
         for component in ("midterm", "final"):
@@ -171,13 +175,17 @@ def snapshot(session):
                 course.pop("enrollment_tracking_since", None)
         for key in ("materials", "events", "assignments", "submissions", "attendance"):
             result[key] = [copy.deepcopy(r) for r in data[key] if r["course_id"] in ids and (key != "submissions" or admin or r["student_id"] == sid)]
+        from .course_content import resource_visible
+        if not admin:
+            result['assignments'] = [r for r in result['assignments'] if resource_visible(r, sid)]
         for key in ("materials", "assignments", "submissions"):
             for row in result[key]:
                 row.pop("stored_name", None)
         if not admin:
             for kind, key in (("assignment", "assignments"), ("attendance", "attendance")):
                 for row in result[key]:
-                    row["grading_applicable"] = enrollments.applies(course_by_id[row["course_id"]], sid, row, kind, students)
+                    row["grading_applicable"] = not row.get('practice') and enrollments.applies(course_by_id[row["course_id"]], sid, row, kind, students)
+                    row.pop('participants', None)
         now = datetime.now(timezone.utc)
         for row in result["attendance"]:
             row["open"] = not row.get("closed") and date_value(row["expires_at"]) > now
@@ -187,12 +195,21 @@ def snapshot(session):
                 row.pop("code", None)
                 row["record"] = row.pop("records", {}).get(sid)
             else:
+                from .lan_attendance import online_students
+                row['online_student_ids']=list(online_students())
                 c = course_by_id[row["course_id"]]
                 row["excluded_student_ids"] = [k for k in enrollments.member_ids(c, students) if not enrollments.applies(c, k, row, "attendance", students)]
         if admin:
             result["students"] = [{"student_id": k, "full_name": v.get("full_name", ""), "active": v.get("active", True)} for k, v in read_json("students.json").items()]
         students = read_json("students.json")
         result["gradebooks"] = [gradebook(data, c, [sid] if not admin else [k for k in students if c.get("student_ids") is None or k in c["student_ids"]]) for c in courses]
+        from . import course_content, exercise_bank
+        result['course_weeks'] = course_content.snapshot(data, result)
+        allowed_activities = {r['id'] for r in exercise_bank.code_rows() if admin or r['state'] != 'idle' and sid in r['participants'] and r['course_id'] in ids}
+        if not admin:
+            for week in result['course_weeks']:
+                week['activity_ids'] = [k for k in week.get('activity_ids', []) if k in allowed_activities]
+        exercise_bank.decorate_snapshot(result, session)
         return result
 
 
@@ -223,6 +240,9 @@ def file_for(kind, item_id, session):
         elif kind in {"materials", "assignments"}:
             row = find(data, kind, item_id)
             course_access(data, row["course_id"], session)
+            from .course_content import resource_visible
+            if session['role'] != 'admin' and not resource_visible(row, session['user_id']):
+                raise LearningError(404, 'Nội dung chưa được giao hoặc đã ẩn.')
         else:
             raise LearningError(404, "Không tìm thấy file.")
         if not row.get("stored_name"):
@@ -305,6 +325,8 @@ def mutate(session, action, form, files, ip):
                     raise LearningError(400, "Chỉ mở điểm danh từ buổi học trong lịch của khóa học.")
                 existing = next((s for s in data["attendance"] if s.get("event_id") == lesson["id"]), None)
                 if existing:
+                    from . import lan_attendance
+                    if lan_attendance.opened(data,existing):write_json('learning.json',data)
                     return {"ok": True, "id": existing["id"]}
             row.update({"course_id": course_id, "title": lesson["title"] if lesson else text(form, "title"), "topic": text(form, "topic", 200, False), "description": text(form, "description", 10000, False)})
             if action == "material":
@@ -335,11 +357,18 @@ def mutate(session, action, form, files, ip):
                 if expires <= datetime.now(timezone.utc):
                     raise LearningError(400, "Thời hạn điểm danh phải ở tương lai.")
                 row.update({"event_id": lesson["id"], "lesson_at": lesson["starts_at"], "expires_at": expires.isoformat(), "code": secrets.token_hex(4).upper(), "closed": False, "records": {}})
+                row.update(mode=form.get('mode','lan'),grace_minutes=integer(form,'grace_minutes',5,0,60))
+                if row['mode'] not in {'lan','qr'}:raise LearningError(400,'Chế độ điểm danh không hợp lệ.')
                 data["attendance"].append(row)
+                from . import lan_attendance
+                lan_attendance.opened(data,row)
         elif action == "submit":
             if admin:
                 raise LearningError(403, "Chỉ tài khoản sinh viên được nộp bài.")
             assignment = find(data, "assignments", text(form, "assignment_id", 80))
+            from .course_content import resource_visible
+            if not resource_visible(assignment, sid):
+                raise LearningError(403, 'Bài chưa được giao hoặc đã ẩn.')
             course_access(data, assignment["course_id"], session, write=True)
             if assignment.get("closed_at") or date_value(assignment["due_at"]) <= datetime.now(timezone.utc):
                 raise LearningError(409, "Đã hết hạn nộp bài.")
@@ -354,7 +383,7 @@ def mutate(session, action, form, files, ip):
             if len(prior) >= assignment["max_attempts"]:
                 raise LearningError(409, "Bạn đã dùng hết số lần nộp bài.")
             guards.enter_context(submission_rate.guard(sid))
-            row.update(save_file(files.get("file"), FILE_SUBMISSION_EXTENSIONS))
+            row.update(save_file(files.get("file"), set(assignment.get("accepted_extensions", FILE_SUBMISSION_EXTENSIONS))))
             row.update({"course_id": assignment["course_id"], "assignment_id": assignment["id"], "assignment_title": assignment["title"], "student_id": sid, "ip": ip, "request_id": key, "score": None, "feedback": "", "attempt": len(prior) + 1, "grading_history": []})
             row["assignment_snapshot"] = {k: assignment.get(k) for k in ("title","description","due_at","max_attempts")}
             row["full_name"] = read_json("students.json").get(sid,{}).get("full_name",sid)
@@ -395,15 +424,13 @@ def mutate(session, action, form, files, ip):
         elif action == "attendance-record":
             row = find(data, "attendance", text(form, "session_id", 80))
             course = course_access(data, row["course_id"], session, write=True)
-            if row["closed"] or date_value(row["expires_at"]) <= datetime.now(timezone.utc):
-                raise LearningError(409, "Phiên đã kết thúc, không thể sửa điểm danh.")
             student_id = text(form, "student_id", 80)
             if student_id not in read_json("students.json") or (course["student_ids"] is not None and student_id not in course["student_ids"]):
                 raise LearningError(400, "Sinh viên không thuộc khóa học.")
             status = form.get("status")
-            if status not in {"present", "late", "absent"}:
+            if status not in {"present", "late", "early_departure", "absent"}:
                 raise LearningError(400, "Trạng thái điểm danh không hợp lệ.")
-            row["records"][student_id] = {"status": status, "checked_in_at": utc_now(), "reason": text(form, "reason", 1000)}
+            row["records"][student_id] = {"status": status, "checked_in_at": utc_now(), "reason": text(form, "reason", 1000, False), 'manual':True, 'source':'teacher'}
         elif action == "close-attendance":
             row = find(data, "attendance", text(form, "session_id", 80))
             course_access(data, row["course_id"], session, write=True)
@@ -484,6 +511,9 @@ def mutate(session, action, form, files, ip):
                 data["grades"].append(row)
         else:
             raise LearningError(404, "Không tìm thấy thao tác học tập.")
+        if action in {'material', 'assignment', 'event'}:
+            from .course_content import week_number
+            row['week_number'] = week_number(form)
         write_json("learning.json", data)
         audit("learning." + action, sid, ip, {"id": row["id"]})
         return {"ok": True, "id": row["id"]}
