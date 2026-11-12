@@ -64,7 +64,8 @@ def manage_question(session, action, form, ip):
             if old and old.get('published'):
                 raise learning.LearningError(409, 'Ẩn bài luyện tập trước khi sửa đề; bài đã giao vẫn giữ bản chụp cũ.')
             row = {'id': old['id'] if old else 'q_' + secrets.token_hex(10), 'course_id': cid,
-                   'course_ids':course_ids,'practice_key_version':old.get('practice_key_version',1) if old else 2,
+                   'course_ids':course_ids,'explicit_course_links': 'course_ids' in form or bool(old and old.get('explicit_course_links')),
+                   'practice_key_version':old.get('practice_key_version',1) if old else 2,
                    'source_url':form.get('source_url',old.get('source_url','') if old else '').strip(),
                    'title': learning.text(form, 'title'), 'statement': learning.text(form, 'statement', 20000, False),
                    'purpose': purpose, 'response_type': kind, 'week_number': learning.integer(form, 'week_number', 0, 0, 52),
@@ -74,6 +75,7 @@ def manage_question(session, action, form, ip):
                 from urllib.parse import urlsplit
                 source=urlsplit(row['source_url'])
                 if source.scheme not in {'https','http'} or not source.hostname:raise learning.LearningError(400,'Nguồn bài phải là URL HTTP/HTTPS.')
+            if old and old.get('seed_key'): row['seed_key'] = old['seed_key']
             if kind == 'code':
                 row['programming'] = configuration(form)
             else:
@@ -84,6 +86,24 @@ def manage_question(session, action, form, ip):
                     raise learning.LearningError(400, 'Nhập yêu cầu bài nộp file.')
                 row['extensions'] = extensions
             rows = [r for r in rows if r['id'] != row['id']] + [row]
+        elif action == 'link':
+            row = old
+            if row.get('archived'):
+                raise learning.LearningError(409, 'Không thể gắn bài đã lưu trữ.')
+            course = learning.course_access(data, form.get('target_course_id'), session, write=True)
+            existing = row.get('course_ids', [row['course_id']] if row.get('course_id') else [])
+            # Legacy empty lists mean all courses; materialize them before removing one.
+            if not existing and not row.get('explicit_course_links'):
+                existing = [c['id'] for c in data['courses'] if c['status'] != 'completed']
+            existing = list(dict.fromkeys(existing))
+            if form.get('enabled') == 'true':
+                if course['id'] not in existing: existing.append(course['id'])
+            elif form.get('enabled') == 'false':
+                existing = [cid for cid in existing if cid != course['id']]
+            else:
+                raise learning.LearningError(400, 'Trạng thái liên kết không hợp lệ.')
+            # Explicit empty means no courses, unlike legacy "all courses".
+            row.update(course_ids=existing, explicit_course_links=True, updated_at=utc_now())
         elif action in {'publish', 'unpublish', 'archive'}:
             row = old
             if action == 'publish' and row.get('archived'):
@@ -101,7 +121,7 @@ def manage_question(session, action, form, ip):
 
 def linked_courses(question):
     ids=question.get('course_ids', [question['course_id']] if question.get('course_id') else [])
-    return [c for c in learning.load()['courses'] if c['status']!='completed' and (not ids or c['id'] in ids)]
+    return [c for c in learning.load()['courses'] if c['status']!='completed' and (c['id'] in ids or not ids and not question.get('explicit_course_links'))]
 
 
 def practice_id(question,cid):

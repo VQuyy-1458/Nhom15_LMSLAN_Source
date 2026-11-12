@@ -34,6 +34,18 @@ class IntegrationTests(unittest.TestCase):
         pid=self.paper([qid]);code,r=self.request('/api/admin/course-practicals/save',form={'course_id':b,'title':'Other course sitting','paper_ids':json.dumps([pid]),'response_type':'code','duration_minutes':'40'})
         self.assertEqual(code,200,r)
 
+    def test_link_unlink_is_course_scoped_even_for_last_course(self):
+        a=self.course('s1 s2');b=self.create('course',name='Other',code='B',semester='2026',student_ids='s1')
+        qid=self.q(a);self.assertEqual(self.request('/api/admin/course-questions/publish',form={'id':qid})[0],200)
+        def link(cid,enabled,role='admin'):
+            return self.request('/api/admin/course-questions/link',role,{'id':qid,'target_course_id':cid,'enabled':str(enabled).lower()})[0]
+        def courses():return {r['course_id'] for r in exercise_bank.code_rows() if r.get('practice')}
+        self.assertEqual(courses(),{a});self.assertEqual(link(b,True,'s1'),403)
+        self.assertEqual(link(b,True),200);self.assertEqual(courses(),{a,b})
+        self.assertEqual(link(a,False),200);self.assertEqual(courses(),{b})
+        self.assertEqual(link(b,False),200);self.assertEqual(courses(),set())
+        self.assertEqual(link(a,True),200);self.assertEqual(courses(),{a})
+
     def test_paper_snapshot_and_random_question_access_and_scores(self):
         cid=self.course('s1 s2');ids=[self.q(cid,'Q'+str(i)) for i in range(3)];pid=self.paper(ids)
         self.assertEqual(self.request('/api/admin/question-papers/save',form={'id':pid,'title':'Changed'})[0],409)

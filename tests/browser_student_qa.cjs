@@ -589,6 +589,51 @@ async function codeCustomise(base,fixture){
   await send('Page.enable');await send('Runtime.enable');await send('Log.enable');await send('Network.enable');
   await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
   await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
+  if(process.argv.includes('--visual-unification')){
+    await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+    for(const [route,name] of [['/admin?section=dashboard','dashboard'],['/admin?section=monitor','monitor'],['/admin?section=notifications','notifications'],['/admin/question-bank','bank'],[`/admin/courses?course=${fixture.course}&tab=weekly`,'course']]){
+      await send('Page.navigate',{url:base+route});await waitFor(()=>evaluate("document.readyState==='complete' && !!document.querySelector('.admin-redesign') && !!document.querySelector('.panel, #question-bank-root [data-bank-new]')"));
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('.admin-shell')).fontFamily.includes('Segoe UI')"),true);
+      await noOverflow();if(name==='monitor'||name==='notifications')await screenshot('visual-admin-'+name+'.png',false);
+    }
+    await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
+    for(const [route,name] of [['/student/dashboard','dashboard'],[`/student/courses?course=${fixture.course}&tab=materials`,'materials'],[`/student/assignments?course=${fixture.course}`,'assignments'],['/student/attendance','attendance']]){
+      await navigate(base+route);await noOverflow();if(name==='assignments')await screenshot('visual-student-'+name+'.png',false);
+    }
+    await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+    await navigate(base+'/student/attendance');await noOverflow();await screenshot('visual-student-mobile.png',false);
+    await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+    await send('Page.navigate',{url:base+'/admin?section=notifications'});await waitFor(()=>evaluate("document.readyState==='complete' && !!document.querySelector('#notifications')"));await noOverflow();await screenshot('visual-admin-mobile.png',false);
+    assert.deepEqual(errors,[],'Visual screens have no runtime errors');console.log('PASS: unified admin/student screens, desktop and mobile');return;
+  }
+
+  if(process.argv.includes('--course-bank')){
+    await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+    await send('Page.navigate',{url:base+'/admin/question-bank'});await waitFor(()=>evaluate("document.querySelector('[data-bank-new]')"));
+    const created=await evaluate(`fetch('/api/admin/course-questions/save',{method:'POST',body:new URLSearchParams({title:'Bài kho chung',course_ids:'[]',purpose:'practice',response_type:'code',languages:'python',problems:JSON.stringify([{title:'Bài',language:'python',tests:[{input:'1',output:'1',sample:true}]}])})}).then(r=>r.json())`);
+    await evaluate(`fetch('/api/admin/course-questions/publish',{method:'POST',body:new URLSearchParams({id:${JSON.stringify(created.id)}})})`);
+    await navigate(base+`/admin/courses?course=${fixture.course}&tab=assignments`);await waitFor(()=>evaluate("!!document.querySelector('[data-course-bank]')"));await evaluate("document.querySelector('[data-course-bank]').click()");
+    await waitFor(()=>evaluate("!!document.querySelector('[data-course-bank-link]')"));assert.equal(await evaluate("document.querySelector('[data-course-bank-link]').checked"),false);
+    await evaluate("document.querySelector('[data-course-bank-link]').click()");await waitFor(()=>evaluate("document.querySelector('dialog [role=alert]').textContent.includes('Đã lưu')"));
+    const linked=await evaluate(`fetch('/api/admin/workspace').then(r=>r.json()).then(d=>d.question_bank.find(q=>q.id===${JSON.stringify(created.id)}))`);assert(linked.course_ids.includes(fixture.course));
+    await screenshot('course-bank-picker.png');assert.deepEqual(errors,[]);console.log('PASS: choose shared code exercise for course');return;
+  }
+  if(process.argv.includes('--student-2h')){
+    await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
+    await send('Page.navigate',{url:base+'/admin/question-bank'});await waitFor(()=>evaluate("document.querySelector('[data-bank-new]')"));
+    const created=await evaluate(`fetch('/api/admin/course-questions/save',{method:'POST',body:new URLSearchParams({course_id:${JSON.stringify(fixture.course)},title:'Bài code thử',purpose:'practice',response_type:'code',languages:'python',problems:JSON.stringify([{title:'Tổng',language:'python',tests:[{input:'1',output:'1',sample:true}]}])})}).then(r=>r.json())`);
+    await evaluate(`fetch('/api/admin/course-questions/publish',{method:'POST',body:new URLSearchParams({id:${JSON.stringify(created.id)}})})`);
+    await send('Network.setCookie',{name:'css_session',value:fixture.student,url:base,httpOnly:true,sameSite:'Strict'});
+    await navigate(base+`/student/courses?course=${fixture.course}&tab=materials`);await waitFor(()=>evaluate("document.querySelector('.smart-list-panel')"));
+    await navigate(base+'/student/assignments');await waitFor(()=>evaluate("document.querySelector('.assignment-course-picker')"));
+    await navigate(base+`/student/assignments?course=${fixture.course}`);await waitFor(()=>evaluate("document.querySelector('.assignment-course-space') && document.querySelector('[data-exercise-open]')"));
+    assert.match(await evaluate('document.body.innerText'),/Bài code thử/);
+    await screenshot('student-2h-assignments.png');await evaluate("document.querySelector('[data-exercise-open]').click()");
+    await waitFor(()=>evaluate("location.pathname==='/student/exams' && !!document.querySelector('a[href*=problem]')"));
+    await evaluate("document.querySelector('a[href*=problem]').click()");await waitFor(()=>evaluate("!!document.querySelector('[data-code-workspace]')"));
+    await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await navigate(base+'/student/attendance');await noOverflow();
+    assert.match(await evaluate('document.body.innerText'),/Điểm danh qua LAN/);assert.deepEqual(errors,[]);console.log('PASS: 2H student layouts, code practice and LAN attendance');return;
+  }
   if(process.argv.includes('--shared-bank')){
     await send('Network.setCookie',{name:'css_session',value:fixture.admin,url:base,httpOnly:true,sameSite:'Strict'});
     await send('Page.navigate',{url:base+'/admin/question-bank'});
