@@ -225,14 +225,22 @@ def _judge_program(source, language, problem, progress=None, image=None, extra_s
         folder = Path(directory)
         folder.chmod(0o777)
         java_entry = 'Main'
+        java_filename = 'Main.java'
         if language == 'java':
             # A complete Java program may use any public entry class, e.g. J05005.
-            java_entry = java_public_class(source)
-        filename = java_entry + '.java' if language == 'java' else LANGUAGES[language]
+            from .code_templates import java_package
+            java_class = java_public_class(source)
+            java_filename = java_class + '.java'
+            try:
+                package = java_package(source.decode('utf-8-sig', 'replace'))
+            except ValueError as exc:
+                return {"verdict":"CE","score":0,"passed":0,"total":len(problem["tests"]),"compile_log":str(exc),"tests":[]}
+            java_entry = package + '.' + java_class if package else java_class
+        filename = java_filename if language == 'java' else LANGUAGES[language]
         (folder / filename).write_bytes(source.removeprefix(b"\xef\xbb\xbf"))
         for name, content in (extra_sources or {}).items():
             (folder / name).write_bytes(content.removeprefix(b'\xef\xbb\xbf'))
-        compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", filename]}.get(language)
+        compile_command = {"c": ["gcc", "-std=c17", "-O2", filename, "-o", "program"], "cpp": ["g++", "-std=c++17", "-O2", filename, "-o", "program"], "java": ["javac", "-J-Xmx256m", "-J-XX:ActiveProcessorCount=1", "-proc:none", "-d", ".", filename]}.get(language)
         if language == 'java' and extra_sources:
             compile_command.extend(sorted(extra_sources))
         if compile_command:

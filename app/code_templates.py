@@ -6,6 +6,24 @@ ANSWER = '{{ STUDENT_ANSWER }}'
 TEST = '{{ TEST.testcode }}'
 
 
+def _java_package_match(source):
+    """Find the package declaration while preserving offsets across comments."""
+    clean = re.sub(
+        r'"""[\s\S]*?"""|//[^\r\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+        lambda match: re.sub(r'[^\r\n]', ' ', match.group()), source,
+    )
+    declaration = re.search(r'(?m)^\s*package\s+([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*;', clean)
+    if not declaration and re.search(r'(?m)^\s*package\b', clean):
+        raise ValueError('Tên package Java không hợp lệ.')
+    return declaration
+
+
+def java_package(source):
+    """Return the declared Java package without trusting comments or strings."""
+    declaration = _java_package_match(source)
+    return declaration.group(1) if declaration else ''
+
+
 def render(template, answer, code):
     def replace(match):
         expression = match.group(1).strip()
@@ -60,16 +78,27 @@ def build(source, language, problem, test):
     extras = {}
     if not template and kind == 'program':
         return source, extras
+    if template and language == 'java' and kind == 'class':
+        declaration = _java_package_match(answer)
+        if declaration:
+            package = declaration.group(1)
+            answer = answer[:declaration.start()] + answer[declaration.end():]
+            template_package = java_package(template)
+            if template_package and template_package != package:
+                raise ValueError('Package trong template phải trùng package bài nộp.')
+            if not template_package:
+                template = 'package '+package+';\n'+template
     if not template:
         if language == 'java':
             if kind == 'class':
                 # Preserve public classes in correctly named files, without rewriting source.
                 match = re.search(r'\bpublic\s+(?:(?:final|abstract)\s+)?class\s+([A-Za-z_$][\w$]*)', answer)
                 name = match.group(1) if match else 'Submission'
-                if name == 'Main' or re.search(r'^\s*package\s+', answer, re.M):
-                    raise ValueError('Bài class dùng tên lớp theo đề, không dùng Main hoặc package.')
+                if name == 'Main':
+                    raise ValueError('Bài class dùng tên lớp theo đề, không dùng Main.')
+                package = java_package(answer)
                 extras[name + '.java'] = source
-                template = 'public class Main { public static void main(String[] args) throws Exception { '+TEST+' } }'
+                template = (('package '+package+';\n') if package else '')+'public class Main { public static void main(String[] args) throws Exception { '+TEST+' } }'
             else:
                 template = 'public class Main { '+ANSWER+' public static void main(String[] args) throws Exception { new Main().runTests(); } void runTests() throws Exception { '+TEST+' } }'
         elif language == 'python':

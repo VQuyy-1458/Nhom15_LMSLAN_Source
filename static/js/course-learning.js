@@ -70,7 +70,21 @@
     if(context.admin)return window.adminDesign.modal(title,body);
     const d=document.createElement('dialog');d.className='cl-dialog';d.innerHTML=`<div class="cl-heading ui-page-bar"><h2>${esc(title)}</h2><button class="btn btn-ghost" data-cl-close aria-label="Đóng">×</button></div>${body}`;document.body.append(d);d.addEventListener('close',()=>d.remove());window.uiSurfaces.open(d);return d;
   }
-  function weekField(value=0){return `<label>Tuần học<input name="week_number" type="number" min="0" max="52" value="${value}"><small>0 = chưa gắn tuần</small></label>`;}
+  function weekField(value=0){
+    const cid=context?.cid||'';
+    const values=[...(context?.data?.course_weeks||[])
+      .filter(w=>w.course_id===cid && Number.isFinite(Number(w.week_number)))
+      .map(w=>Number(w.week_number))
+      .filter(n=>n>=0)];
+    const selected=Number.isFinite(Number(value))?Number(value):0;
+    const unique=[...new Set(values.filter(n=>n!==0))].sort((a,b)=>a-b);
+    if(!unique.length && selected===0){
+      return `<label>Tuần học<select name="week_number"><option value="0" selected>Chưa gắn tuần</option></select><small>Chưa có tuần nào trong khóa học.</small></label>`;
+    }
+    const hasSelected=selected!==0 && unique.includes(selected);
+    if(!hasSelected && selected!==0)unique.push(selected);
+    return `<label>Tuần học<select name="week_number"><option value="0" ${selected===0?'selected':''}>Chưa gắn tuần</option>${[...new Set(unique)].sort((a,b)=>a-b).map(n=>`<option value="${n}" ${n===selected?'selected':''}>Tuần ${n}</option>`).join('')}</select><small>Chọn tuần đang có trong khóa học.</small></label>`;
+  }
   function checkboxes(rows,name,selected=[]){return rows.map(r=>`<label class="cl-check"><input type="checkbox" name="${name}" value="${r.id}" ${selected.includes(r.id)?'checked':''}>${esc(r.title)}</label>`).join('')||`<div class="ui-empty-state"><p>Chưa có nội dung để chọn.</p><a class="btn btn-secondary" href="/admin/courses?course=${encodeURIComponent(context.cid)}&tab=${name==='material_ids'?'material':name==='assignment_ids'?'assignment':'weekly'}" target="_blank" rel="noopener">Bổ sung nội dung khóa học</a></div>`;}
   function weekDialog(number){
     const {data,cid}=context,w=(data.course_weeks||[]).find(r=>r.course_id===cid&&String(r.week_number)===number)||{week_number:weeks(data,cid).at(-1)+1||1};

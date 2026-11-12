@@ -1,26 +1,26 @@
 /* One sidebar style for all admin pages; page content keeps its own styling. */
-.admin-sidebar-unified .main-sidebar{width:244px;background:#192e50;color:#b7c7df;box-shadow:none;font-family:Inter,"Segoe UI",Arial,sans-serif}
+.admin-sidebar-unified .main-sidebar{width:244px;background:#172b4d;color:#c7d3e8;box-shadow:none;font-family:Inter,"Segoe UI",Arial,sans-serif}
 .admin-sidebar-unified .admin-content{margin-left:244px}
 .admin-sidebar-unified .sidebar-brand{height:91px;padding:25px 23px;gap:13px;font-size:17px;font-weight:750;line-height:1.25;color:white;border-bottom:1px solid #ffffff0e}
-.admin-sidebar-unified .sidebar-brand .brand-mark{width:39px;height:41px;background:#326feb;border-radius:11px;font-size:23px}
-.admin-sidebar-unified .sidebar-brand small{font-size:12px;font-weight:400;margin-top:4px;display:inline-block;color:#9db2d0}
+.admin-sidebar-unified .sidebar-brand .brand-mark{width:39px;height:41px;background:#245edb;border-radius:11px;font-size:23px}
+.admin-sidebar-unified .sidebar-brand small{font-size:12px;font-weight:400;margin-top:4px;display:inline-block;color:#c7d3e8}
 .admin-sidebar-unified .sidebar-user{display:flex;align-items:center;padding:21px 23px;gap:12px;min-height:81px;border-bottom:1px solid #ffffff0e}
 .admin-sidebar-unified .sidebar-avatar{width:36px;height:36px;font-size:12px;font-weight:700;background:#2b456b;color:#dbe7fb;flex-shrink:0}
 .admin-sidebar-unified .sidebar-user strong{font-size:13px;color:#fff}
-.admin-sidebar-unified .sidebar-user small{font-size:12px;color:#8da3c2;margin-top:4px}
+.admin-sidebar-unified .sidebar-user small{font-size:12px;color:#c7d3e8;margin-top:4px}
 .admin-sidebar-unified .sidebar-user:after{content:'';height:6px;width:6px;background:#34c38c;border-radius:50%;margin-left:auto;flex-shrink:0}
 .admin-sidebar-unified .sidebar-nav{padding:12px;flex:1;overflow:auto}
-.admin-sidebar-unified .sidebar-label{font-size:12px;font-weight:800;letter-spacing:1.5px;padding:12px 13px 7px;margin:0;color:#7089ac}
-.admin-sidebar-unified .sidebar-nav a{display:flex;align-items:center;padding:11px 13px;gap:12px;min-height:40px;font-size:12px;margin:3px 0;border-radius:7px;color:#b7c7df;text-decoration:none}
+.admin-sidebar-unified .sidebar-label{font-size:12px;font-weight:800;letter-spacing:1.5px;padding:12px 13px 7px;margin:0;color:#8ea4c8}
+.admin-sidebar-unified .sidebar-nav a{display:flex;align-items:center;padding:11px 13px;gap:12px;min-height:40px;font-size:12px;margin:3px 0;border-radius:7px;color:#c7d3e8;text-decoration:none}
 .admin-sidebar-unified .sidebar-nav a:hover{background:#ffffff0a;color:white}
-.admin-sidebar-unified .sidebar-nav a.active{background:#2e6bea;color:#fff;box-shadow:0 4px 12px #0b1f4430}
-.admin-sidebar-unified .sidebar-nav a i{font-size:15px;width:18px;color:#8ea9ce}
+.admin-sidebar-unified .sidebar-nav a.active{background:#245edb;color:#fff;box-shadow:0 4px 12px rgba(36,94,219,.25)}
+.admin-sidebar-unified .sidebar-nav a i{font-size:15px;width:18px;color:#c7d3e8}
 .admin-sidebar-unified .sidebar-nav a.active i{color:white}
 .admin-sidebar-unified .sidebar-badge{border-radius:5px;font-size:12px;padding:2px 6px;background:#ffffff15;color:inherit;margin-left:auto}
 .admin-sidebar-unified .design-sidebar-note{display:flex;gap:10px;margin:12px 21px 20px;font-size:12px;color:#d3dff0;line-height:1.6}
 .admin-sidebar-unified .design-sidebar-note>i{font-size:17px;color:#8da8d0}
-.admin-sidebar-unified .design-sidebar-note small{display:block;color:#7e97ba;font-size:12px}
-.admin-sidebar-unified .sidebar-footer{padding:16px 23px;font-size:12px;color:#8da3c2;border-top:1px solid #ffffff12}
+.admin-sidebar-unified .design-sidebar-note small{display:block;color:#d3dff0;font-size:12px}
+.admin-sidebar-unified .sidebar-footer{padding:16px 23px;font-size:12px;color:#c7d3e8;border-top:1px solid #ffffff12}
 .admin-sidebar-unified .main-sidebar i[data-design-icon]{display:inline-flex;align-items:center;justify-content:center;font-style:normal;line-height:1;width:1em;height:1em}
 .admin-sidebar-unified .main-sidebar i[data-design-icon]:before{content:none}
 .admin-sidebar-unified .main-sidebar i[data-design-icon] svg{display:block;width:100%;height:100%;flex-shrink:0}

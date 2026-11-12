@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="/static/css/admin-drafts.css?v=20261112-ui-1">
 <link rel="stylesheet" href="/static/css/course-learning.css?v=20261112-ui-1">
 {% if section == 'exam' %}<link rel="stylesheet" href="/static/css/exam-preflight.css?v=20261112-ui-1">{% endif %}
-{% if section == 'submissions' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261112-ui-1"><link rel="stylesheet" href="/static/css/submission-archive.css?v=20261112-ui-1">{% endif %}
+{% if section == 'submissions' %}<link rel="stylesheet" href="/static/css/programming.css?v=20261112-ui-1"><link rel="stylesheet" href="/static/css/submission-archive.css?v=20261112-ui-2">{% endif %}
 {% endblock %}
 {% block body %}
 <div class="admin-shell admin-sidebar-unified {{ 'course-admin-shell' if section == 'courses' else '' }} {{ 'admin-redesign' if section not in ['monitor','notifications'] else '' }}" data-admin-section="{{ section|default('dashboard') }}" data-draft-owner="{{ session.user_id }}">
@@ -441,7 +441,7 @@
 <script defer src="/static/js/submission-deadlines.js?v=20261112-ui-1"></script>
 <script defer src="/static/js/admin-icons.js?v=20261112-ui-1"></script>
 <script defer src="/static/js/admin-sidebar.js?v=20261112-ui-1"></script>
-<script defer src="/static/js/admin.js?v=20261112-ui-1"></script>
+<script defer src="/static/js/admin.js?v=20261112-ui-2"></script>
 {% if section not in ['monitor','notifications'] %}<script defer src="/static/js/admin-design.js?v=20261112-ui-1"></script>{% endif %}
 {% if section == 'exam' %}<script defer src="/static/js/exam-preflight.js?v=20261112-ui-1"></script><script defer src="/static/js/exam-timing.js?v=20261112-ui-1"></script><script defer src="/static/js/exam-test-csv.js?v=20261112-ui-1"></script><script defer src="/static/js/programming.js?v=20261112-ui-1"></script>{% endif %}
 {% if section in ['exam','courses','bank'] %}<script defer src="/static/js/admin-exams.js?v=20261112-ui-1"></script>{% endif %}

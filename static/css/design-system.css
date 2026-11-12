@@ -39,6 +39,20 @@
 .ui-standard .admin-shell[data-admin-section="monitor"] #admin-scope-form>label>.fa{display:none}
 .ui-standard .admin-shell[data-admin-section="monitor"] #admin-scope-form :is(select,.course-select){width:100%;min-width:0;max-width:none}
 .ui-standard .admin-shell #monitor :is([data-monitor-archive],[data-force],[data-adjust]){font-family:inherit;font-size:14px;font-weight:600;line-height:1.4}
+.ui-standard .admin-shell #monitor table{min-width:1000px}
+.ui-standard .admin-shell #monitor table :is(th,td){padding:9px 10px}
+.ui-standard .admin-shell #monitor table td{vertical-align:middle;line-height:1.4}
+.ui-standard .admin-shell #monitor table td .cell-sub{margin-top:2px;line-height:1.35}
+.ui-standard .admin-shell #monitor .monitor-row-actions{display:grid;grid-template-columns:94px 68px 82px;align-items:center;gap:6px;width:max-content}
+.ui-standard .admin-shell #monitor .monitor-row-actions>.btn{min-height:32px;padding:6px;font-size:12px;line-height:1.35;white-space:nowrap}
+.ui-standard .admin-shell #monitor .monitor-row-actions>[data-monitor-archive]{grid-column:1}
+.ui-standard .admin-shell #monitor .monitor-row-actions>[data-force]{grid-column:2}
+.ui-standard .admin-shell #monitor .monitor-row-actions>[data-adjust]{grid-column:3}
+.ui-standard .admin-shell #monitor [data-monitor-archive]{color:var(--ui-primary);background:var(--ui-blue-soft);border-color:var(--ui-primary)}
+.ui-standard .admin-shell #monitor [data-force]{color:var(--ui-danger);background:#fff0f0;border-color:var(--ui-danger)}
+.ui-standard .admin-shell #monitor [data-adjust]{color:var(--ui-warning-text);background:#fff6df;border-color:var(--ui-warning)}
+.ui-standard .admin-shell #monitor .monitor-row-actions>.btn:hover:not(:disabled){filter:brightness(.96)}
+@media(max-width:767px){.ui-standard .admin-shell #monitor .monitor-row-actions>.btn{min-height:44px}}
 .ui-standard .admin-shell #accounts td>.actions-inline{gap:6px;width:clamp(260px,25vw,380px);max-width:100%;align-items:center}
 .ui-standard .admin-shell #accounts td>.actions-inline>.btn{min-height:32px;padding:6px 10px;font-size:12px;font-weight:600;line-height:1.4;white-space:nowrap;flex:0 0 auto}
 .ui-standard .admin-shell #archive-filter{display:grid;grid-template-columns:minmax(160px,2fr) repeat(2,minmax(120px,1fr)) auto;align-items:end;gap:12px}

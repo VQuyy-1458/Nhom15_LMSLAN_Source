@@ -50,14 +50,15 @@ def initialize_enrollments():
         return changed
 
 
-def gradebook(data, course, student_ids):
+def gradebook(data, course, student_ids, *, grade_context=None):
     now = datetime.now(timezone.utc)
     weights = course.get("weights", WEIGHTS)
     tasks = [a for a in data["assignments"] if a["course_id"] == course["id"] and not a.get("practice") and not a.get("archived")]
     closed = [a for a in data["attendance"] if a["course_id"] == course["id"] and (a["closed"] or date_value(a["expires_at"]) <= now)]
     students = read_json("students.json")
     from .course_grades import exam_marks
-    exam_results = exam_marks(course["id"], student_ids)
+    grade_context = grade_context or {}
+    exam_results = exam_marks(course["id"], student_ids, **grade_context.get("exams", {}))
     latest_submissions = {(s["assignment_id"],s["student_id"]):s for s in data["submissions"]}
     overrides_by_student = {}
     for override in data["grades"]:
@@ -82,7 +83,7 @@ def gradebook(data, course, student_ids):
         practice = [r["score"] for r in exam_results[sid] if r["assessment_type"] == "practice"]
         homework.extend(practice)
         from .exercise_bank import homework_scores
-        homework.extend(homework_scores(course["id"], sid))
+        homework.extend(homework_scores(course["id"], sid, **grade_context.get("homework", {})))
         if homework and all(score is not None for score in homework):
             values["homework"] = round(sum(homework) / len(homework), 2)
         for component in ("midterm", "final"):
@@ -202,7 +203,14 @@ def snapshot(session):
         if admin:
             result["students"] = [{"student_id": k, "full_name": v.get("full_name", ""), "active": v.get("active", True)} for k, v in read_json("students.json").items()]
         students = read_json("students.json")
-        result["gradebooks"] = [gradebook(data, c, [sid] if not admin else [k for k in students if c.get("student_ids") is None or k in c["student_ids"]]) for c in courses]
+        from .exam_catalog import listing as exam_listing
+        from .exercise_bank import sessions as practical_sessions
+        code_submissions = read_json("programming_submissions.json", [])
+        grade_context = {
+            "exams": {"exam_rows": exam_listing(), "file_submissions": read_json("submissions.json", {}), "code_submissions": code_submissions},
+            "homework": {"records": code_submissions, "practical_sessions": practical_sessions()},
+        }
+        result["gradebooks"] = [gradebook(data, c, [sid] if not admin else [k for k in students if c.get("student_ids") is None or k in c["student_ids"]], grade_context=grade_context) for c in courses]
         from . import course_content, exercise_bank
         result['course_weeks'] = course_content.snapshot(data, result)
         allowed_activities = {r['id'] for r in exercise_bank.code_rows() if admin or r['state'] != 'idle' and sid in r['participants'] and r['course_id'] in ids}

@@ -4,6 +4,7 @@ Uvicorn, Starlette, or multipart package is required.
 """
 from __future__ import annotations
 import hashlib
+import gzip
 import html
 import ipaddress
 import json
@@ -187,7 +188,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         self.send_header("Permissions-Policy", "camera=(self), microphone=(), geolocation=()")
         self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
-        self.send_header("Cache-Control", "no-store")
+        if not any(key.lower() == "cache-control" for key in (headers or {})):
+            self.send_header("Cache-Control", "no-store")
         if self.close_connection:
             self.send_header("Connection", "close")
         for k,v in (headers or {}).items(): self.send_header(k,v)
@@ -203,7 +205,25 @@ class Handler(BaseHTTPRequestHandler):
             except (BrokenPipeError, ConnectionResetError): pass
 
     def _json(self, data, status=200, headers=None):
-        self._send(status, json.dumps(data,ensure_ascii=False).encode(), "application/json; charset=utf-8", headers)
+        payload = json.dumps(data, ensure_ascii=False).encode()
+        response_headers = dict(headers or {})
+        gzip_ok = False
+        for accepted in self.headers.get("Accept-Encoding", "").lower().split(","):
+            parts = [part.strip() for part in accepted.split(";")]
+            if parts[0] != "gzip":
+                continue
+            quality = next((part[2:] for part in parts[1:] if part.startswith("q=")), "1")
+            try:
+                gzip_ok = float(quality) > 0
+            except ValueError:
+                pass
+        if gzip_ok and len(payload) >= 4096:
+            compressed = gzip.compress(payload, compresslevel=3)
+            if len(compressed) < len(payload):
+                payload = compressed
+                response_headers["Content-Encoding"] = "gzip"
+                response_headers["Vary"] = "Accept-Encoding"
+        self._send(status, payload, "application/json; charset=utf-8", response_headers)
 
     def _redirect(self, location, status=303, cookie=None, clear_cookie=False):
         self._send(status, b"", "text/plain; charset=utf-8", {"Location":location}, cookie=cookie, clear_cookie=clear_cookie)
@@ -291,7 +311,12 @@ class Handler(BaseHTTPRequestHandler):
                 rel=urllib.parse.unquote(path[len("/static/"):]); target=(STATIC_DIR/rel).resolve()
                 if not target.is_relative_to(STATIC_DIR.resolve()) or not target.is_file(): return self._send(404,"Not found")
                 ctype=mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-                return self._send(200,target.read_bytes(),ctype)
+                stat=target.stat()
+                etag=f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+                headers={"Cache-Control":"public, max-age=300","ETag":etag}
+                if self.headers.get("If-None-Match") == etag:
+                    return self._send(304,b"",ctype,headers)
+                return self._send(200,target.read_bytes(),ctype,headers)
             if path=="/health": return self._json({"status":"ok","service":"LAN-LMS","time":utc_now(),"launcher_id":os.getenv("CSS_LAUNCH_ID")})
             if path=="/api/admin/readiness":
                 self._auth(req,"admin")
@@ -395,7 +420,10 @@ class Handler(BaseHTTPRequestHandler):
                 allowed={"bank","dashboard","courses","monitor","notifications","exam","accounts","submissions","server","admins"}
                 if section not in allowed: section="dashboard"
                 selected_exam = next((r for r in exam_catalog.listing() if r["id"] == req.query.get("exam", [""])[0]), None) if section == "exam" else None
-                return self._html(self._render("admin.html",session=sess,section=section,exam_engine_detail=bool(selected_exam and selected_exam["type"] == "file" and selected_exam["active"]),exam_files=list_exam_files(),settings={**read_json("settings.json"), **({"exam_state":"scheduled"} if exam_timing.waiting(read_json("settings.json").get("exam_state"),read_json("settings.json").get("exam_started_at")) else {})},monitoring=monitoring_snapshot(),course_count=len(learning.load()["courses"]),sent_notifications=list(reversed(read_json("notifications.json", [])))[0:30] if section=="notifications" else []))
+                settings = read_json("settings.json") if section == "exam" else {}
+                if settings and exam_timing.waiting(settings.get("exam_state"), settings.get("exam_started_at")):
+                    settings["exam_state"] = "scheduled"
+                return self._html(self._render("admin.html",session=sess,section=section,exam_engine_detail=bool(selected_exam and selected_exam["type"] == "file" and selected_exam["active"]),exam_files=list_exam_files() if section == "exam" else [],settings=settings,course_count=len(learning.load()["courses"]),sent_notifications=list(reversed(read_json("notifications.json", [])))[0:30] if section=="notifications" else []))
             if path=="/admin/accounts-template.txt":
                 self._auth(req,"admin")
                 content="21010001|01/02/2003|Nguyen Van A\n21010002|15/08/2003|Tran Thi B\n"

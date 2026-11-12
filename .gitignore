@@ -21,6 +21,7 @@ htmlcov/
 /backups/
 /logs/
 /previews/
+/sample-data/ui-review/data/
 *.server.lock
 .*.server.lock
 

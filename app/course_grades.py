@@ -8,11 +8,11 @@ def valid_score(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def exam_marks(course_id, student_ids):
+def exam_marks(course_id, student_ids, *, exam_rows=None, file_submissions=None, code_submissions=None):
     from .exam_catalog import listing
-    exams = [e for e in listing() if e.get("course_id") == course_id and e.get("assessment_type") in {"practice", "midterm", "final"} and e.get("state") != "idle"]
-    files = read_json("submissions.json", {})
-    code = read_json("programming_submissions.json", [])
+    exams = [e for e in (exam_rows if exam_rows is not None else listing()) if e.get("course_id") == course_id and e.get("assessment_type") in {"practice", "midterm", "final"} and e.get("state") != "idle"]
+    files = file_submissions if file_submissions is not None else read_json("submissions.json", {})
+    code = code_submissions if code_submissions is not None else read_json("programming_submissions.json", [])
     indexed_code = {}
     for attempt in code:
         indexed_code.setdefault((attempt.get("exam_id"),attempt.get("student_id"),attempt.get("problem_index")),[]).append(attempt)

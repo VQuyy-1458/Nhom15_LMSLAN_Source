@@ -32,8 +32,9 @@ def sessions():
     return rows
 
 
-def members(course):
-    return [sid for sid, s in read_json('students.json').items() if s.get('active', True) and (course.get('student_ids') is None or sid in course['student_ids'])]
+def members(course, students=None):
+    students = students if students is not None else read_json('students.json')
+    return [sid for sid, s in students.items() if s.get('active', True) and (course.get('student_ids') is None or sid in course['student_ids'])]
 
 
 def configuration(form):
@@ -99,9 +100,10 @@ def manage_question(session, action, form, ip):
         return {'ok': True, 'id': row['id']}
 
 
-def linked_courses(question):
+def linked_courses(question, courses=None):
     ids=question.get('course_ids', [question['course_id']] if question.get('course_id') else [])
-    return [c for c in learning.load()['courses'] if c['status']!='completed' and (not ids or c['id'] in ids)]
+    courses = courses if courses is not None else learning.load()['courses']
+    return [c for c in courses if c['status']!='completed' and (not ids or c['id'] in ids)]
 
 
 def practice_id(question,cid):
@@ -227,12 +229,14 @@ def combined(questions):
 
 def code_rows():
     result=[r for r in sessions() if r['type']=='programming']
+    courses = learning.load()['courses']
+    students = read_json('students.json')
     for q in bank():
         if q['response_type']!='code' or not q.get('published') or q.get('archived'):continue
-        for course in linked_courses(q):
+        for course in linked_courses(q, courses):
             result.append({**copy.deepcopy(q),'id':practice_id(q,course['id']),'course_id':course['id'],'practice':True,
                 'type':'programming','state':'started','activity_type':'practice','assessment_type':'test',
-                'duration_minutes':0,'ends_at':FUTURE,'participants':members(course),
+                'duration_minutes':0,'ends_at':FUTURE,'participants':members(course, students),
                 'description':q.get('statement','')+'\nBài tự luyện, không tính điểm khóa học.'})
     return result
 
@@ -251,11 +255,11 @@ def decorate_snapshot(result, session):
     return result
 
 
-def homework_scores(course_id, sid):
+def homework_scores(course_id, sid, *, records=None, practical_sessions=None):
     from . import programming
-    records = programming.rows()
+    records = records if records is not None else programming.rows()
     scores = []
-    for row in sessions():
+    for row in (practical_sessions if practical_sessions is not None else sessions()):
         if row['type'] != 'programming' or row['course_id'] != course_id or row['state'] == 'idle' or sid not in row['participants']:
             continue
         marks = []

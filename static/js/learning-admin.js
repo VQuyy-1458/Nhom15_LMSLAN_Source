@@ -55,7 +55,7 @@
     if(!c){content.innerHTML=landing();return;}
     window.courseLearning.setContext(data,c.id,true);
     if(tab==='learning')tab='materials';
-    const tabs=[['weekly','Nội dung theo tuần','list-alt'],['overview','Tổng quan','th-large'],['announcements','Thông báo','bullhorn'],['students','Sinh viên','users'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch & điểm danh','calendar'],['exams','Kỳ thi','shield'],['grades','Bảng điểm','bar-chart']];
+    const tabs=[['overview','Tổng quan','th-large'],['weekly','Nội dung theo tuần','list-alt'],['announcements','Thông báo','bullhorn'],['students','Sinh viên','users'],['materials','Tài liệu','book'],['assignments','Bài tập','file-text-o'],['calendar','Lịch & điểm danh','calendar'],['exams','Kỳ thi','shield'],['grades','Bảng điểm','bar-chart']];
     const parentTab=({material:'materials',assignment:'assignments',event:'calendar',attendance:'calendar'})[tab]||tab;
     if(!tabs.some(([key])=>key===parentTab))tab='overview';
     let body='';

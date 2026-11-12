@@ -40,9 +40,9 @@ def assigned_indices(row,sid):
     return indices(row,sid)
 
 
-def eligible(row, sid):
-    course = learning.load()["courses"]
-    c = next((c for c in course if c["id"] == row["course_id"]), None)
+def eligible(row, sid, courses=None):
+    courses = courses if courses is not None else learning.load()["courses"]
+    c = next((c for c in courses if c["id"] == row["course_id"]), None)
     return sid in row["participants"] and (not row["course_id"] or c and (c.get("student_ids") is None or sid in c["student_ids"]))
 
 
@@ -65,12 +65,13 @@ def snapshot(sid):
     attempts = read_json("programming_attempts.json", {})
     result = []
     now = datetime.now(timezone.utc)
+    courses = learning.load()["courses"]
     for row in all_exams():
-        if row["type"] != "programming" or (row["state"] == "idle" and not row.get("auto_start_ready")) or not eligible(row, sid): continue
+        if row["type"] != "programming" or (row["state"] == "idle" and not row.get("auto_start_ready")) or not eligible(row, sid, courses): continue
         attempt = attempts.get(row["id"] + ":" + sid)
         from .deadlines import exam_end
         common_end = exam_end(row.get("started_at"), row.get("duration_minutes"), row.get("ends_at"))
-        course = next((c for c in learning.load()['courses'] if c['id'] == row.get('course_id')), None)
+        course = next((c for c in courses if c['id'] == row.get('course_id')), None)
         course_closed = bool(course and course['status'] == 'completed')
         finalized = bool(attempt and attempt.get("status") == "submitted")
         allowed = bool(not course_closed and attempt and not finalized and row["state"] == "started" and not row.get("waiting") and learning.date_value(attempt["ends_at"]) > now)
