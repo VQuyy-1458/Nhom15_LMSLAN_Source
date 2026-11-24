@@ -23,7 +23,7 @@ def run(form):
         if problem.get('checker','tokens') not in {'tokens','exact','json'}: raise ValueError('Cách so khớp không hợp lệ.')
         problem.setdefault('checker','tokens')
         tests = problem.get('tests')
-        if not isinstance(tests,list) or not 1 <= len(tests) <= 100: raise ValueError('Cần 1–100 test.')
+        if not isinstance(tests,list) or len(tests) > 100: raise ValueError('Tối đa 100 test.')
         for test in tests:
             if not isinstance(test,dict): raise ValueError('Test không hợp lệ.')
             for key in ('input','output','test_code'):
@@ -31,6 +31,9 @@ def run(form):
                 if not isinstance(value,str) or len(value)>100000: raise ValueError('Dữ liệu test không hợp lệ.')
             test['sample'] = test.get('sample') is True
         code_templates.validate(problem)
+        from .oop_rubric import validate as validate_oop
+        problem['oop_rubric'] = validate_oop(problem.get('oop_rubric'), problem['points'], language, problem.get('answer_kind','program'))
+        code_runner.test_weights(problem)
         if not code_runner.budget_valid(problem): raise ValueError('Cấu hình vượt ngân sách chấm.')
     except (ValueError,TypeError,KeyError) as exc:
         raise learning.LearningError(400,str(exc)) from exc

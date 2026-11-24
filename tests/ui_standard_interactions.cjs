@@ -33,9 +33,16 @@ module.exports=async({base,fixture,send,evaluate,waitFor,navigate})=>{
   await tab('Escape');await closed();
   await cookie('admin');
   await navigate(base+'/admin/question-bank');
+  const courseOptions=await evaluate(`(async()=>{const [response]=await Promise.all([fetch('/api/admin/workspace')]),data=await response.json();return {active:data.courses.filter(c=>c.status==='active').map(c=>c.id).sort(),options:[...document.querySelector('[data-bank-course]').options].map(o=>o.value).filter(Boolean).sort()};})()`);
+  assert.deepEqual(courseOptions.options,courseOptions.active,'Bank course filter should list active courses only');
+  await evaluate(`{const filter=document.querySelector('[data-bank-course]');filter.value=${JSON.stringify(fixture.course)};filter.dispatchEvent(new Event('change',{bubbles:true}));}`);
+  const courseRows=await evaluate(`(async()=>{const data=await fetch('/api/admin/workspace').then(r=>r.json()),course=${JSON.stringify(fixture.course)};const questions=data.question_bank.filter(q=>{const ids=Array.isArray(q.course_ids)?q.course_ids:q.course_id?[q.course_id]:[];return !q.archived&&(!ids.length||ids.includes(course));});return {expected:Math.min(12,questions.length),actual:document.querySelectorAll('#question-bank-root .cl-lines .cl-resource-row').length};})()`);
+  assert.equal(courseRows.actual,courseRows.expected,'Bank list should filter questions by selected course');
   await click('[data-bank-new]');await waitFor(()=>evaluate("!!document.querySelector('.ui-workspace [data-cl-form=question]')"));
   assert.equal(await evaluate(visibleH1),1);
   assert.equal(await evaluate("!!document.querySelector('dialog:modal')"),false);
+  assert.equal(await evaluate("!!document.querySelector('[data-cl-form=question]').elements.source_url"),false,'New questions should not show a source field');
+  assert.equal(await evaluate("!!document.querySelector('[data-cl-form=question]').elements.week_number"),false,'New questions should not show a week field');
   await evaluate("{const f=document.querySelector('[data-cl-form=question]');f.elements.title.value='Kiểm tra nháp chưa lưu';f.elements.title.dispatchEvent(new Event('input',{bubbles:true}));}");
   await click('[data-design-close]');await closed();
   await waitFor(()=>evaluate("document.activeElement.matches('[data-bank-new]')"));

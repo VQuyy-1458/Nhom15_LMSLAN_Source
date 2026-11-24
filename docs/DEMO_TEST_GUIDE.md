@@ -77,6 +77,21 @@ Nếu lúc tạo dữ liệu đã có kỳ thi đang phát/đang chạy, lượt
 nguyên. Sau khi kết thúc, bạn có thể chọn khóa mẫu và các file `DEMO_De_Thi_A.txt`,
 `DEMO_De_Thi_B.txt` để thiết lập lượt thi mới.
 
+## Demo chấm Java OOP
+
+Để thêm bài thực hành BankAccount vào khóa `JAVA-OOP-2026`, dừng server rồi chạy:
+
+```powershell
+.\.venv-windows\Scripts\python.exe -m scripts.seed_bank_account_oop_demo
+```
+
+Bài có 7 tiêu chí cấu trúc (40 điểm) và 6 test hành vi (60 điểm). Dùng các file
+trong `demo-inputs/bank-account-oop-demo/`: `correct` đạt 100 điểm,
+`wrong-public-field` vẫn chạy đúng nhưng mất điểm đóng gói, còn
+`wrong-withdrawal` bị trừ điểm hành vi. Có thể chạy lại script an toàn; bài đã
+có sẽ không bị nhân đôi. Sau khi seed xong, khởi động lại server và mở bài trong
+kho câu hỏi của khóa Java OOP.
+
 ## Sao lưu và chạy lại
 
 Trước khi thêm mẫu, các file dữ liệu gốc được sao lưu vào

@@ -39,7 +39,7 @@ def members(course, students=None):
 
 def configuration(form):
     config = exam_catalog.validate_programming(form)
-    if not config['problems'] or any(not p['tests'] for p in config['problems']):
+    if not config['problems'] or any(not p['tests'] and not p.get('oop_rubric') for p in config['problems']):
         raise learning.LearningError(400, 'Cần ít nhất một bài toán với test case.')
     return config
 
@@ -301,7 +301,7 @@ def run_sample(session, form, ip):
         if not isinstance(source, str) or not source.strip() or len(source.encode('utf-8')) > 100000:
             raise learning.LearningError(400, 'Mã nguồn phải từ 1 đến 100.000 byte.')
         problem['tests'] = [t for t in problem['tests'] if t['sample']]
-        if not problem['tests']:
+        if not problem['tests'] and not problem.get('oop_rubric'):
             raise learning.LearningError(400, 'Giảng viên chưa công bố test mẫu.')
     if not code_runner.ready():
         raise learning.LearningError(503, 'Bộ chấm Docker chưa sẵn sàng.')

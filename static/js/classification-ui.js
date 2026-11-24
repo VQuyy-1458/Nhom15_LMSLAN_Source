@@ -103,7 +103,7 @@
     }
     const question=event.target.closest('[data-question-create],[data-question-edit]');if(!question)return;
     const row=pageData.content.find(r=>r.id===question.dataset.questionEdit)||{};
-    const dialog=window.adminDesign.modal('Câu hỏi lập trình',`<form class="stack-form" data-tax-action="questions/save"><input type="hidden" name="id" value="${row.id||''}"><input type="hidden" name="type" value="programming"><label>Khóa học<select name="course_id" required>${options(pageData.courses.map(c=>[c.id,c.name]),[row.course_id||pageData.courses[0]?.id])}</select></label>${fields(row)}${window.examConfig.programmingFields(row)}<p class="muted">Mỗi câu hỏi cần đúng một bài toán và ít nhất một test case. Câu hỏi chưa tự giao cho học viên.</p><button class="btn btn-primary">Lưu câu hỏi</button></form>`);
+    const dialog=window.adminDesign.modal('Câu hỏi lập trình',`<form class="stack-form" data-tax-action="questions/save"><input type="hidden" name="id" value="${row.id||''}"><input type="hidden" name="type" value="programming"><label>Khóa học<select name="course_id" required>${options(pageData.courses.map(c=>[c.id,c.name]),[row.course_id||pageData.courses[0]?.id])}</select></label>${fields(row)}${window.examConfig.programmingFields(row)}<p class="muted">Mỗi câu hỏi cần đúng một bài toán và ít nhất một test case hoặc tiêu chí OOP. Câu hỏi chưa tự giao cho học viên.</p><button class="btn btn-primary">Lưu câu hỏi</button></form>`);
     window.examConfig.showProblem(dialog.querySelector('[data-program-problem]'));
   });
   addEventListener('DOMContentLoaded',()=>{if(document.getElementById('classification-page'))loadPage().catch(e=>window.cssToast(e.message,'error'));});

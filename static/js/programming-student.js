@@ -4,6 +4,7 @@
   const esc=window.cssEscape;
   const languages={c:'C',cpp:'C++',java:'Java',python:'Python'};
   const filenames={c:'main.c',cpp:'main.cpp',java:'Main.java',python:'main.py'};
+  const zipDrafts=new WeakMap();
   const templates={
     c:'#include <stdio.h>\n\nint main(void) {\n    // Đọc dữ liệu từ stdin, in kết quả ra stdout.\n    \n    return 0;\n}\n',
     cpp:'#include <iostream>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n\n    // Viết lời giải của bạn tại đây.\n    \n    return 0;\n}\n',
@@ -15,7 +16,7 @@
   const key=(e,index,language)=>`lan-lms:code:${encodeURIComponent(context.student.student_id)}:${e.id}:${index}:${language}`;
   function read(key){try{return JSON.parse(localStorage.getItem(key))||memory.get(key);}catch(_){return memory.get(key);}}
   function write(key,value){memory.set(key,value);try{localStorage.setItem(key,JSON.stringify(value));return true;}catch(_){return false;}}
-  function draft(e,index,language){const saved=read(key(e,index,language));if(saved)return saved;const spec=context?.programming?.exams.find(row=>row.id===e.id)?.problems.find(p=>p.index===index);const comment=language==='python'?'#':'//';return {source:spec&&spec.answer_kind!=='program'?comment+' Viết '+(spec.answer_kind==='class'?'lớp':'hàm/phương thức')+' đúng tên và giao diện trong đề.\n':templates[language],filename:filenames[language]};}
+  function draft(e,index,language){const saved=read(key(e,index,language));if(saved)return saved;const spec=context?.programming?.exams.find(row=>row.id===e.id)?.problems.find(p=>p.index===index);const comment=language==='python'?'#':'//';return {source:spec?.starter_code||(spec&&spec.answer_kind!=='program'?comment+' Viết '+(spec.answer_kind==='class'?'lớp':'hàm/phương thức')+' đúng tên và giao diện trong đề.\n':templates[language]),filename:filenames[language]};}
   function problemUrl(e,index){
     if(index===undefined&&e.activity_type&&e.activity_type!=='exam'){
       let back;try{back=sessionStorage.getItem('lan-lms:exercise-return:'+e.id);}catch(_){}
@@ -52,8 +53,8 @@
   function workspace(e,p,rows){
     const selected=read(key(e,p.index,'selected'));
     const allowed=p.language?[p.language]:e.languages; const language=allowed.includes(selected)?selected:allowed[0];
-    const saved=read(key(e,p.index,language))||{source:p.answer_kind&&p.answer_kind!=='program'?'':templates[language],filename:filenames[language]};
-    return `<div class="code-workspace" data-code-workspace data-exam-id="${esc(e.id)}" data-problem-index="${p.index}"><nav class="code-breadcrumb" aria-label="Điều hướng bài thi"><a href="${esc(problemUrl(e))}"><i class="fa fa-arrow-left"></i> Danh sách bài</a></nav><header class="code-workspace-header"><div><h1>${esc(p.title)}</h1></div>${deadline(e)}</header><div class="code-workspace-grid"><section class="panel code-statement"><h2>Đề bài</h2><div class="code-limits"><span>${p.points} điểm</span><span>${p.time_limit_ms} ms / test</span><span>${p.memory_limit_mb} MB</span></div><p class="student-description">${esc(p.statement||'Giảng viên chưa bổ sung đề bài.')}</p><h3>Ví dụ</h3>${p.samples.map((t,i)=>`<div class="code-sample"><h4>Ví dụ ${i+1}</h4>${t.test_code?`<strong>Test code</strong><pre class="code-output">${esc(t.test_code)}</pre>`:''}${!t.test_code||t.input?`<strong>Input</strong><pre class="code-output">\n${esc(t.input)}</pre>`:''}<strong>Result</strong><pre class="code-output">\n${esc(t.output)}</pre></div>`).join('')||'<p class="muted">Bài này không có test mẫu công khai.</p>'}</section><section class="panel code-solution"><form data-code-submit data-allowed="${e.can_submit}" data-expires-at="${esc(e.attempt.ends_at)}"><input type="hidden" name="exam_id" value="${esc(e.id)}"><input type="hidden" name="problem_index" value="${p.index}"><div class="code-solution-toolbar"><label for="code-language">Ngôn ngữ biên dịch<select id="code-language" name="language">${allowed.map(l=>`<option value="${l}" ${l===language?'selected':''}>${languages[l]}</option>`).join('')}</select></label><button class="btn btn-secondary btn-small" type="button" data-code-upload><i class="fa fa-upload"></i> Tải file lên</button><input class="code-file-input" type="file" name="file" aria-label="Tải file mã nguồn" accept="${e.languages.map(l=>'.'+filenames[l].split('.').pop()).join(',')}"></div><div class="code-editor-caption"><strong data-code-filename>${esc(saved.filename)}</strong><span data-code-draft-status>Nháp riêng cho bài và ngôn ngữ này</span></div><label class="sr-only" for="code-source">Mã nguồn lời giải</label><div class="code-editor-shell"><pre class="code-line-numbers" aria-hidden="true">1</pre><textarea id="code-source" class="code-editor" name="source" data-code-editor spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-describedby="code-editor-help">${esc(saved.source)}</textarea></div><p class="muted" id="code-editor-help">${p.answer_kind==='class'?'Nộp lớp theo đề; Java có thể khai báo package theo đề; không dùng lớp Main cho bài Class.':p.answer_kind==='method'?'Nộp hàm/phương thức theo đề; không viết main.':'Nộp chương trình hoàn chỉnh; Java tự nhận tên public class có main.'}</p><div class="code-submit-bar"><p data-code-submit-message role="status"></p><button type="submit" class="btn btn-primary" ${e.can_submit?'':'disabled'}><i class="fa fa-paper-plane"></i> Submit bài</button></div>${e.activity_type&&e.activity_type!=='exam'?'<div class="code-submit-bar"><button type="button" class="btn btn-secondary" data-exercise-run>Chạy test mẫu</button></div><pre class="code-output" data-exercise-run-result role="status"></pre>':''}<p class="ref-form-error" data-code-error role="alert"></p><p class="alert alert-info" data-code-closed ${e.can_submit?'hidden':''}>Đã đóng nhận bài. Bạn vẫn có thể xem đề, bản nháp và lịch sử.</p></form></section></div><section class="panel code-problem-history"><div class="panel-heading ui-page-bar"><div><h2>Lịch sử submit · Bài ${codeLabel(p.index)}</h2></div><span data-code-history-connection role="status"></span></div><div data-code-problem-history>${history(rows.filter(r=>r.problem_index===p.index),'programming:history:'+e.id+':'+p.index)}</div></section></div>`;
+    const saved=read(key(e,p.index,language))||{source:p.starter_code||(p.answer_kind&&p.answer_kind!=='program'?'':templates[language]),filename:filenames[language]};
+    return `<div class="code-workspace" data-code-workspace data-exam-id="${esc(e.id)}" data-problem-index="${p.index}"><nav class="code-breadcrumb" aria-label="Điều hướng bài thi"><a href="${esc(problemUrl(e))}"><i class="fa fa-arrow-left"></i> Danh sách bài</a></nav><header class="code-workspace-header"><div><h1>${esc(p.title)}</h1></div>${deadline(e)}</header><div class="code-workspace-grid"><section class="panel code-statement"><h2>Đề bài</h2><div class="code-limits"><span>${p.points} điểm</span><span>${p.time_limit_ms} ms / test</span><span>${p.memory_limit_mb} MB</span></div><p class="student-description">${esc(p.statement||'Giảng viên chưa bổ sung đề bài.')}</p>${(p.provided_files||[]).length?`<details class="ui-rule-details"><summary>File Java giảng viên cung cấp (${p.provided_files.length})</summary>${p.provided_files.map(file=>`<h3>${esc(file.filename)}</h3><pre class="code-output">${esc(file.source)}</pre>`).join('')}</details>`:''}<h3>Ví dụ</h3>${p.samples.map((t,i)=>`<div class="code-sample"><h4>Ví dụ ${i+1}</h4>${t.test_code?`<strong>Test code</strong><pre class="code-output">${esc(t.test_code)}</pre>`:''}${!t.test_code||t.input?`<strong>Input</strong><pre class="code-output">\n${esc(t.input)}</pre>`:''}<strong>Result</strong><pre class="code-output">\n${esc(t.output)}</pre></div>`).join('')||'<p class="muted">Bài này không có test mẫu công khai.</p>'}</section><section class="panel code-solution"><form data-code-submit data-accept-zip="${p.accept_java_zip?'true':'false'}" data-allowed="${e.can_submit}" data-expires-at="${esc(e.attempt.ends_at)}"><input type="hidden" name="exam_id" value="${esc(e.id)}"><input type="hidden" name="problem_index" value="${p.index}"><div class="code-solution-toolbar"><label for="code-language">Ngôn ngữ biên dịch<select id="code-language" name="language">${allowed.map(l=>`<option value="${l}" ${l===language?'selected':''}>${languages[l]}</option>`).join('')}</select></label><button class="btn btn-secondary btn-small" type="button" data-code-upload><i class="fa fa-upload"></i> Tải file lên</button><input class="code-file-input" type="file" name="file" aria-label="Tải file mã nguồn" accept="${e.languages.map(l=>'.'+filenames[l].split('.').pop()).join(',')}${p.accept_java_zip?',.zip':''}"></div><div class="code-editor-caption"><strong data-code-filename>${esc(saved.filename)}</strong><span data-code-draft-status>Nháp riêng cho bài và ngôn ngữ này</span></div><label class="sr-only" for="code-source">Mã nguồn lời giải</label><div class="code-editor-shell"><pre class="code-line-numbers" aria-hidden="true">1</pre><textarea id="code-source" class="code-editor" name="source" data-code-editor spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-describedby="code-editor-help">${esc(saved.source)}</textarea></div><p class="muted" id="code-editor-help">${p.answer_kind==='class'?'Nộp lớp theo đề; Java có thể khai báo package theo đề; không dùng lớp Main cho bài Class.':p.answer_kind==='method'?'Nộp hàm/phương thức theo đề; không viết main.':'Nộp chương trình hoàn chỉnh; Java tự nhận tên public class có main.'}</p><div class="code-submit-bar"><p data-code-submit-message role="status"></p><button type="submit" class="btn btn-primary" ${e.can_submit?'':'disabled'}><i class="fa fa-paper-plane"></i> Submit bài</button></div>${e.activity_type&&e.activity_type!=='exam'?'<div class="code-submit-bar"><button type="button" class="btn btn-secondary" data-exercise-run>Chạy test mẫu</button></div><pre class="code-output" data-exercise-run-result role="status"></pre>':''}<p class="ref-form-error" data-code-error role="alert"></p><p class="alert alert-info" data-code-closed ${e.can_submit?'hidden':''}>Đã đóng nhận bài. Bạn vẫn có thể xem đề, bản nháp và lịch sử.</p></form></section></div><section class="panel code-problem-history"><div class="panel-heading ui-page-bar"><div><h2>Lịch sử submit · Bài ${codeLabel(p.index)}</h2></div><span data-code-history-connection role="status"></span></div><div data-code-problem-history>${history(rows.filter(r=>r.problem_index===p.index),'programming:history:'+e.id+':'+p.index)}</div></section></div>`;
   }
   function history(rows,id){const visible=window.listUi.view(id,rows,'submissions');return window.listUi.controls(id,'submissions')+(visible.map(r=>renderResult(r)).join('')||'<p class="muted">Chưa có lần submit nào cho bài này.</p>');}
   function current(){return document.querySelector('[data-code-workspace]');}
@@ -115,8 +116,15 @@
   }
   async function upload(form,file){
     if(!file)return;
-    if(!file.size||file.size>100000)throw new Error('File mã nguồn phải từ 1 đến 100.000 byte.');
     const extension=file.name.split('.').pop().toLowerCase();
+    if(extension==='zip'){
+      if(form.dataset.acceptZip!=='true'||form.elements.language.value!=='java')throw new Error('Bài này không nhận ZIP mã Java.');
+      if(!file.size||file.size>300000)throw new Error('ZIP mã Java phải từ 1 đến 300.000 byte.');
+      zipDrafts.set(form,file);form.querySelector('[data-code-filename]').textContent=file.name;form.elements.file.value='';
+      form.querySelector('[data-code-submit-message]').textContent='Đã chọn ZIP. Bấm Submit bài để nộp các file Java.';return;
+    }
+    if(!file.size||file.size>100000)throw new Error('File mã nguồn phải từ 1 đến 100.000 byte.');
+    zipDrafts.delete(form);
     const language=[...form.elements.language.options].map(o=>o.value).find(l=>filenames[l].split('.').pop()===extension);
     if(!language)throw new Error('Định dạng file không thuộc ngôn ngữ được phép của kỳ thi.');
     let source;try{source=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());}catch(_){throw new Error('File mã nguồn phải dùng UTF-8.');}
@@ -136,11 +144,11 @@
       const url=new URL(location.href);url.searchParams.delete('problem');history.replaceState(null,'',url.pathname+url.search);location.reload();
     }catch(error){finish.disabled=false;window.cssToast(error.message||'Không thể kết thúc kỳ thi.','error');}
   });
-  document.addEventListener('input',event=>{if(event.target.matches('[data-code-editor]'))save(event.target.form);});
+  document.addEventListener('input',event=>{if(event.target.matches('[data-code-editor]')){const form=event.target.form;if(zipDrafts.has(form)){zipDrafts.delete(form);form.querySelector('[data-code-filename]').textContent=filenames[form.elements.language.value];form.querySelector('[data-code-submit-message]').textContent='Đã chuyển sang nộp mã trong trình soạn thảo.';}save(form);}});
   document.addEventListener('scroll',event=>{if(event.target.matches?.('[data-code-editor]'))updateLines(event.target.form);},true);
   document.addEventListener('change',async event=>{
     const form=event.target.closest('[data-code-submit]');if(!form)return;
-    if(event.target.name==='language')changeLanguage(form,event.target.value);
+    if(event.target.name==='language'){zipDrafts.delete(form);changeLanguage(form,event.target.value);}
     if(event.target.name==='file'){
       const error=form.querySelector('[data-code-error]');error.textContent='';
       form.dataset.uploading='true';
@@ -167,14 +175,14 @@
     form.dataset.sending='true';updateDeadline(form);
     try{
       if(form.elements.file.files.length)await upload(form,form.elements.file.files[0]);
-      const source=form.elements.source.value;if(!source.trim())throw new Error('Hãy nhập mã nguồn trước khi submit.');
-      if(new TextEncoder().encode(source).length>100000)throw new Error('Mã nguồn tối đa 100.000 byte.');
-      save(form);
+      const zip=zipDrafts.get(form),source=form.elements.source.value;if(!zip&&!source.trim())throw new Error('Hãy nhập mã nguồn trước khi submit.');
+      if(!zip&&new TextEncoder().encode(source).length>100000)throw new Error('Mã nguồn tối đa 100.000 byte.');
+      if(!zip)save(form);
       const body=new FormData();body.set('exam_id',form.elements.exam_id.value);body.set('problem_index',form.elements.problem_index.value);body.set('language',form.elements.language.value);
-      const signature=JSON.stringify([form.elements.exam_id.value,form.elements.problem_index.value,form.elements.language.value,source]);
+      const signature=JSON.stringify([form.elements.exam_id.value,form.elements.problem_index.value,form.elements.language.value,zip?`${zip.name}:${zip.size}:${zip.lastModified}`:source]);
       if(form.dataset.requestSignature!==signature){form.dataset.requestSignature=signature;form.dataset.requestId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;}
       body.set('request_id',form.dataset.requestId);
-      body.set('file',new File([source],form.querySelector('[data-code-filename]').textContent,{type:'text/plain'}));
+      body.set('file',zip||new File([source],form.querySelector('[data-code-filename]').textContent,{type:'text/plain'}));
       const data=await window.cssRequest('/api/student/programming/submit',{method:'POST',body});
       delete form.dataset.requestId;delete form.dataset.requestSignature;
       const node=form.closest('[data-code-workspace]');

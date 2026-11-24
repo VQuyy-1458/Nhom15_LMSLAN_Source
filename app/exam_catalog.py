@@ -181,12 +181,43 @@ def validate_programming(form):
         for test in tests:
             if not isinstance(test, dict) or not isinstance(test.get("input", ""), str) or not isinstance(test.get("output", ""), str) or len(test.get("input", "")) > 100000 or len(test.get("output", "")) > 100000:
                 raise learning.LearningError(400, "Dữ liệu test case không hợp lệ hoặc quá lớn.")
-            cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "sample": test.get("sample") is True, "test_code":test.get("test_code", ""), "feedback_visibility":test.get("feedback_visibility", "sample")})
+            category = test.get('category', 'behavior')
+            if category not in {'behavior', 'exception'}:
+                raise learning.LearningError(400, 'Nhóm test phải là hành vi hoặc ngoại lệ.')
+            label = test.get('criterion', '')
+            if not isinstance(label, str) or len(label) > 120:
+                raise learning.LearningError(400, 'Tên tiêu chí test không hợp lệ.')
+            cases.append({"input": test.get("input", ""), "output": test.get("output", ""), "sample": test.get("sample") is True, "test_code":test.get("test_code", ""), "feedback_visibility":test.get("feedback_visibility", "sample"), "points":test.get("points", ""), "category":category, "criterion":label})
         checker = problem.get("checker", "tokens")
         if checker not in {"exact", "tokens", "json"}:
             raise learning.LearningError(400, "Cách so khớp kết quả không hợp lệ.")
         cleaned.append({"title": learning.text(problem, "title"), "statement": learning.text(problem, "statement", required=False, limit=20000), "points": integer(problem.get("points", 100), "Điểm bài toán", 1, 1000), "time_limit_ms": integer(problem.get("time_limit_ms", 1000), "Giới hạn thời gian (ms)", 100, 30000), "memory_limit_mb": integer(problem.get("memory_limit_mb", 256), "Bộ nhớ (MB)", 16, 2048), "checker": checker, "tests": cases})
         cleaned[-1].update(answer_kind=problem.get('answer_kind','program'), template=problem.get('template',''), language=problem.get('language',''))
+        from .oop_rubric import validate as validate_oop
+        try:
+            rubric = validate_oop(problem.get('oop_rubric'), cleaned[-1]['points'], cleaned[-1]['language'], cleaned[-1]['answer_kind'])
+        except (ValueError, TypeError) as exc:
+            raise learning.LearningError(400, str(exc)) from exc
+        if rubric:
+            cleaned[-1]['oop_rubric'] = rubric
+        from .java_sources import teacher_files
+        try:
+            provided = teacher_files(problem.get('provided_files'), rubric['class_name'] if rubric else '')
+        except ValueError as exc:
+            raise learning.LearningError(400, str(exc)) from exc
+        if provided:
+            if cleaned[-1]['language'] != 'java' or cleaned[-1]['answer_kind'] != 'class':
+                raise learning.LearningError(400, 'File Java cung cấp chỉ dùng cho bài Java dạng class.')
+            cleaned[-1]['provided_files'] = provided
+        if problem.get('accept_java_zip') is True:
+            if not rubric:
+                raise learning.LearningError(400, 'Nộp nhiều file Java cần cấu hình tên lớp trong tiêu chí OOP.')
+            cleaned[-1]['accept_java_zip'] = True
+        starter = problem.get('starter_code', '')
+        if not isinstance(starter, str) or len(starter) > 100000:
+            raise learning.LearningError(400, 'Mã khởi đầu không hợp lệ hoặc quá dài.')
+        if starter:
+            cleaned[-1]['starter_code'] = starter
         if not isinstance(cleaned[-1]['language'], str) or cleaned[-1]['language'] and cleaned[-1]['language'] not in languages:
             raise learning.LearningError(400, 'Ngôn ngữ bài toán không hợp lệ.')
         from .code_templates import validate
@@ -194,10 +225,15 @@ def validate_programming(form):
             validate(cleaned[-1])
         except (ValueError, TypeError) as exc:
             raise learning.LearningError(400, str(exc)) from exc
-        if (cleaned[-1]['answer_kind'] != 'program' or cleaned[-1]['template']) and cleaned[-1]['language'] not in languages:
+        if (cleaned[-1]['answer_kind'] != 'program' or cleaned[-1]['template'] or rubric) and cleaned[-1]['language'] not in languages:
             raise learning.LearningError(400, 'Bài dùng mã kiểm thử cần chọn một ngôn ngữ thuộc kỳ thi.')
         if cleaned[-1]['answer_kind'] == 'class' and cleaned[-1]['language'] == 'c':
             raise learning.LearningError(400, 'C không hỗ trợ bài class.')
+        from .code_runner import test_weights
+        try:
+            test_weights(cleaned[-1])
+        except ValueError as exc:
+            raise learning.LearningError(400, str(exc)) from exc
     row["programming"] = {"languages": languages, "problems": cleaned}
     if any(not code_runner.budget_valid(problem) for problem in cleaned):
         raise learning.LearningError(400, "Số test và thời gian mỗi test vượt ngân sách chấm. Hãy giảm số test hoặc giới hạn thời gian.")

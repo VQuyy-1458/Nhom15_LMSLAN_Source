@@ -16,3 +16,8 @@
 .code-exam-participants .participant-list{max-height:240px}
 .code-exam-participants .student-option:has(input:disabled){opacity:.7}
 .code-exam-participants .section-badge{white-space:nowrap}
+.exam-problem [data-oop-for][hidden]{display:none!important}
+.exam-oop-entry{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0}
+.exam-oop-entry p{margin:4px 0 0;font-size:13px;line-height:1.5}
+.exam-oop-entry .btn{flex:none}
+@media(max-width:560px){.exam-oop-entry{align-items:stretch;flex-direction:column}.exam-oop-entry .btn{width:100%}}

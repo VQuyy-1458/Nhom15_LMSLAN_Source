@@ -71,7 +71,34 @@ def image_identity():
 
 
 def budget_valid(problem):
-    return len(problem["tests"]) * (problem["time_limit_ms"]/1000 + 1) <= MAX_JOB_SECONDS-30
+    from .oop_rubric import tests as rubric_tests
+    return (len(problem["tests"]) + len(rubric_tests(problem.get("oop_rubric")))) * (problem["time_limit_ms"]/1000 + 1) <= MAX_JOB_SECONDS-30
+
+
+def test_weights(problem):
+    """Give each structural criterion its stated score; share the rest among manual cases."""
+    from .oop_rubric import tests as rubric_tests
+    tests = rubric_tests(problem.get("oop_rubric")) + problem["tests"]
+    if not tests or len(tests) > 100:
+        raise ValueError('Cần từ 1 đến 100 tiêu chí/test case cho một bài.')
+    explicit, unset = 0.0, []
+    weights = []
+    for index, test in enumerate(tests):
+        value = test.get('points', '')
+        if value in ('', None):
+            weights.append(None); unset.append(index)
+        else:
+            try: weight = float(value)
+            except (ValueError, TypeError) as exc: raise ValueError('Điểm test case không hợp lệ.') from exc
+            if not 0 < weight <= problem['points'] or round(weight, 2) != weight:
+                raise ValueError('Điểm test case phải dương và tối đa 2 chữ số thập phân.')
+            weights.append(weight); explicit += weight
+    remaining = round(problem['points'] - explicit, 2)
+    if remaining < 0 or (unset and remaining <= 0) or (not unset and remaining != 0):
+        raise ValueError('Tổng điểm tiêu chí và test case phải bằng điểm tối đa của bài.')
+    for index in unset:
+        weights[index] = remaining / len(unset)
+    return tests, weights
 
 
 def _remove_container(name):
@@ -158,35 +185,77 @@ def _container(folder, command, *, memory, timeout, input_data=b"", readonly=Tru
 def judge(source, language, problem, progress=None, image=None):
     from .code_templates import build, validate
     validate(problem)
-    if problem.get('answer_kind', 'program') == 'program' and not problem.get('template'):
-        return _judge_program(source, language, problem, progress, image)
+    tests, weights = test_weights(problem)
+    bundled = {}
+    if language == 'java' and problem.get('accept_java_zip') and source.startswith(b'PK'):
+        from .java_sources import submission
+        source, bundled = submission(source, problem['oop_rubric']['class_name'])
+    from .java_sources import teacher_files
+    provided = teacher_files(problem.get('provided_files'), (problem.get('oop_rubric') or {}).get('class_name',''))
+    for item in provided:
+        if item['filename'].lower() in {name.lower() for name in bundled}:
+            raise ValueError('File Java trong bài nộp trùng file giảng viên cung cấp.')
+        bundled[item['filename']] = item['source'].encode('utf-8')
+    if problem.get('answer_kind', 'program') == 'program' and not problem.get('template') and not problem.get('oop_rubric'):
+        result = _judge_program(source, language, problem, progress, image)
+        for row, test, weight in zip(result['tests'], tests, weights):
+            row.update(criterion=test.get('criterion') or f'Test {row["index"]}',
+                       category=test.get('category','behavior'),points=weight,
+                       earned=weight if row['verdict']=='AC' else 0)
+        if result['tests']:
+            result['score'] = round(sum(row['earned'] for row in result['tests']),2)
+        return result
     results = []
     started = time.monotonic()
-    total = len(problem['tests'])
+    total = len(tests)
     if not total or total > 100 or not budget_valid(problem):
         raise ValueError('Cấu hình test không hợp lệ.')
-    for index, test in enumerate(problem['tests']):
+    compiled_source = False
+    for index, test in enumerate(tests):
         if time.monotonic() - started > MAX_JOB_SECONDS:
             raise RuntimeError('Lượt chấm vượt thời gian xử lý tổng.')
         try:
-            generated, extras = build(source, language, problem, test)
+            if problem.get('answer_kind') == 'program' and test.get('category') == 'structure':
+                # The reflection probe supplies its own Main; keep the submitted
+                # entry point under a different name for this structural check.
+                probe_source = re.sub(rb'\bMain\b', b'__SubmittedMain', source) if language == 'java' else source
+                generated, extras = build(probe_source, language, dict(problem, answer_kind='class', template=''), test)
+            else:
+                generated, extras = build(source, language, problem, test)
+            if any(name.lower() in {extra.lower() for extra in extras} for name in bundled):
+                raise ValueError('Tên file Java trùng với lớp chính của bài nộp.')
+            extras.update(bundled)
         except (ValueError, UnicodeError) as exc:
             return {'verdict':'CE','score':0,'passed':0,'total':total,'compile_log':str(exc),'tests':[]}
         if progress: progress('judging', index, total)
-        one = dict(problem, tests=[test])
+        one = dict(problem, tests=[test], oop_rubric=None)
         result = _judge_program(generated, language, one, image=image, extra_sources=extras)
         if result['verdict'] == 'CE':
             # Compiler diagnostics can contain private test code from the wrapper.
             result['private_compile_log'] = result['compile_log']
             result['compile_log'] = 'Không biên dịch được bài làm với mã kiểm thử. Kiểm tra tên lớp, constructor và chữ ký phương thức.'
-            result['total'] = total
-            return result
+            if not compiled_source:
+                result['total'] = total
+                return result
+            # A later teacher test may reference a missing student member.
+            # The source compiled in an earlier reflection test: only this criterion fails.
+            results.append({'index':index+1,'sample':test['sample'],'verdict':'WA','time_ms':0,
+                            'input':test['input'],'expected':test['output'],'actual':'',
+                            'stderr':'','test_code':test.get('test_code',''),
+                            'private_compile_log':result['private_compile_log'],
+                            'criterion':test.get('criterion') or f'Test {index+1}', 'category':test.get('category','behavior'),
+                            'points':weights[index],'earned':0,
+                            'feedback_visibility':test.get('feedback_visibility','sample')})
+            continue
+        compiled_source = True
         row = result['tests'][0]
-        row.update(index=index+1, test_code=test.get('test_code',''))
+        row.update(index=index+1, test_code=test.get('test_code',''),
+                   criterion=test.get('criterion') or f'Test {index+1}',category=test.get('category','behavior'),
+                   points=weights[index],earned=weights[index] if row['verdict']=='AC' else 0)
         results.append(row)
     passed = sum(t['verdict']=='AC' for t in results)
     if progress: progress('judging', total, total)
-    return {'verdict':'AC' if passed==total else next(t['verdict'] for t in results if t['verdict']!='AC'), 'score':round(problem['points']*passed/total,2),'passed':passed,'total':total,'compile_log':'','tests':results}
+    return {'verdict':'AC' if passed==total else next(t['verdict'] for t in results if t['verdict']!='AC'), 'score':round(sum(t['earned'] for t in results),2),'passed':passed,'total':total,'compile_log':'','tests':results}
 
 
 def java_public_class(source):

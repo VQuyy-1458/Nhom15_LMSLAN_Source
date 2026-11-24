@@ -52,7 +52,7 @@ def _snapshot(exam_id, row=None, include_fingerprint=True):
     problems = row.get("programming", {}).get("problems", []) if code else []
     languages = row.get("programming", {}).get("languages", []) if code else []
     if code:
-        check("Bài toán và test case", bool(problems) and all(p.get("tests") and code_runner.budget_valid(p) for p in problems), "Mỗi bài cần có test và nằm trong ngân sách chấm.")
+        check("Bài toán và test case", bool(problems) and all((p.get("tests") or p.get('oop_rubric')) and code_runner.budget_valid(p) for p in problems), "Mỗi bài cần có test hoặc tiêu chí OOP và nằm trong ngân sách chấm.")
         check("Ngôn ngữ", bool(languages) and all(l in code_runner.LANGUAGES for l in languages), ", ".join(languages))
     from .exam_timing import window
     from datetime import datetime, timezone
@@ -66,7 +66,7 @@ def _snapshot(exam_id, row=None, include_fingerprint=True):
     return row, {"exam_id": row["id"], "title": row["title"], "type": row["type"], "course_name": course["name"] if course else "Kỳ thi chung",
                  "assessment_type": row.get("assessment_type", "test"), "duration_minutes": row["duration_minutes"], "languages": languages,
                  "participants": [{"student_id": sid, "full_name": students.get(sid, {}).get("full_name", sid)} for sid in participants],
-                 "problems": [{"index": i, "title": p["title"], "points": p["points"], "tests": len(p["tests"])} for i, p in enumerate(problems)],
+                 "problems": [{"index": i, "title": p["title"], "points": p["points"], "tests": len(code_runner.test_weights(p)[0])} for i, p in enumerate(problems)],
                  "total_points": sum(p["points"] for p in problems), "scheduled_at": row.get("scheduled_at"), "planned_end": ends.isoformat() if row.get("scheduled_at") else None, "files": files, "checks": checks, "fingerprint": fingerprint}
 
 
@@ -108,7 +108,7 @@ def verify_reference(session, form, ip):
     if not _gate.acquire(blocking=False):
         raise learning.LearningError(429, "Đang chấm một lời giải chuẩn. Chờ hoàn tất rồi thử bài tiếp theo.")
     job_id = uuid.uuid4().hex
-    job = {"id": job_id, "exam_id": exam_id, "problem_index": index, "fingerprint": report["fingerprint"], "state": "running", "stage": "preparing", "completed_tests": 0, "total_tests": len(problem["tests"])}
+    job = {"id": job_id, "exam_id": exam_id, "problem_index": index, "fingerprint": report["fingerprint"], "state": "running", "stage": "preparing", "completed_tests": 0, "total_tests": len(code_runner.test_weights(problem)[0])}
     with _jobs_lock:
         # Only the most recent job for each problem is needed by the review UI.
         for key in list(_jobs):

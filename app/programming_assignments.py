@@ -51,7 +51,7 @@ def manage(session, action, form, ip):
             known.update(classification.values(form,"question_ids",[]))
             for problem,raw in zip(config["problems"],json.loads(form.get("problems","[]"))):
                 if isinstance(raw.get("source_question_id"),str) and raw["source_question_id"] in known:problem["source_question_id"]=raw["source_question_id"]
-            if not config["problems"] or any(not p["tests"] for p in config["problems"]):
+            if not config["problems"] or any(not p["tests"] and not p.get('oop_rubric') for p in config["problems"]):
                 raise learning.LearningError(400, "Cần ít nhất một bài toán và test case cho mỗi bài.")
             row = {"id": old["id"] if old else "pa_" + secrets.token_hex(12),
                    "type": "programming", "activity_type": "assignment", "course_id": course_id,
@@ -107,7 +107,7 @@ def run_sample(session, form, ip):
             problem["tests"] = [{"input": value, "output": "", "sample": True}]
         else:
             problem["tests"] = [t for t in problem["tests"] if t["sample"]]
-        if not problem["tests"]:
+        if not problem["tests"] and not problem.get('oop_rubric'):
             raise learning.LearningError(400, "Bài chưa có test mẫu. Hãy chọn chạy với input tự nhập.")
     if not code_runner.ready():
         raise learning.LearningError(503, "Bộ chấm Docker chưa sẵn sàng.")

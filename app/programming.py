@@ -55,6 +55,7 @@ def public_submission(row, admin=False):
             if not grade: continue
             grade.pop('private_compile_log', None)
             for test in grade["tests"]:
+                test.pop('private_compile_log', None)
                 from .code_templates import visible
                 if not visible(test):
                     for key in ("input", "expected", "actual", "stderr", "test_code"): test.pop(key, None)
@@ -83,7 +84,7 @@ def snapshot(sid):
             item["started_at"] = row.get("started_at") or row.get("scheduled_at")
         item.update({"ends_at": common_end.isoformat() if common_end else None, "status": "submitted" if finalized else "expired" if (attempt and learning.date_value(attempt["ends_at"])<=now) or (common_end and common_end<=now) else row["state"], "attempt": attempt, "can_start": not course_closed and row["state"] == "started" and not row.get("waiting") and not attempt and (not common_end or common_end>now), "can_submit": allowed and (not common_end or common_end>now), "finalized": finalized, "submitted_at": attempt.get("submitted_at") if finalized else None, "languages": row["programming"]["languages"], "problems": []})
         if attempt:
-            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "answer_kind": p.get("answer_kind", "program"), "language": p.get("language", ""), "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"]) if i in assigned_indices(row,sid)]
+            item["problems"] = [{"index": i, "title": p["title"], "statement": p["statement"], "points": p["points"], "time_limit_ms": p["time_limit_ms"], "memory_limit_mb": p["memory_limit_mb"], "answer_kind": p.get("answer_kind", "program"), "language": p.get("language", ""), "starter_code":p.get("starter_code", ""), "provided_files":p.get('provided_files',[]), "accept_java_zip":p.get('accept_java_zip',False), "samples": [t for t in p["tests"] if t["sample"]]} for i, p in enumerate(row["programming"]["problems"]) if i in assigned_indices(row,sid)]
         result.append(item)
     return {"exams": result, "submissions": [public_submission(r) for r in rows() if r["student_id"] == sid]}
 
@@ -96,7 +97,7 @@ def control(session, form, ip, runner_ready=None, now=None):
         if action == "start":
             if row["state"] != "idle": raise learning.LearningError(409, "Kỳ thi không ở trạng thái bản nháp.")
             problems = row["programming"]["problems"]
-            if not problems or any(not p["tests"] for p in problems): raise learning.LearningError(400, "Mỗi bài toán cần ít nhất một test case trước khi mở thi.")
+            if not problems or any(not p["tests"] and not p.get("oop_rubric") for p in problems): raise learning.LearningError(400, "Mỗi bài toán cần ít nhất một test case hoặc tiêu chí OOP trước khi mở thi.")
             if any(not code_runner.budget_valid(p) for p in problems): raise learning.LearningError(400, "Cấu hình đề cũ vượt ngân sách chấm. Hãy giảm số test hoặc thời gian mỗi test trước khi mở thi.")
             from .admin_workspace import course_members
             course, members = course_members(row["course_id"])
@@ -198,9 +199,11 @@ def finish(session, form, ip):
 def submit(session, form, file, ip):
     if not file or not file.get("filename"): raise learning.LearningError(400, "Hãy chọn file mã nguồn.")
     content = file["data"]
-    if not content or len(content) > 100000: raise learning.LearningError(400, "Mã nguồn phải từ 1 đến 100.000 byte.")
-    try: content.decode("utf-8-sig", "strict")
-    except UnicodeDecodeError: raise learning.LearningError(400, "Mã nguồn phải dùng UTF-8.")
+    is_zip = Path(file['filename']).suffix.lower() == '.zip'
+    if not content or len(content) > (300000 if is_zip else 100000): raise learning.LearningError(400, "Mã nguồn hoặc ZIP vượt giới hạn dung lượng.")
+    if not is_zip:
+        try: content.decode("utf-8-sig", "strict")
+        except UnicodeDecodeError: raise learning.LearningError(400, "Mã nguồn phải dùng UTF-8.")
     sid, language = session["user_id"], form.get("language")
     request_id = form.get("request_id", "").strip()
     if len(request_id) > 80 or any(not (x.isascii() and (x.isalnum() or x in "._:-")) for x in request_id):
@@ -227,10 +230,17 @@ def submit(session, form, file, ip):
         if common_end and common_end <= datetime.now(timezone.utc): raise learning.LearningError(409, "Đã hết thời gian nộp bài của kỳ thi.")
         if not runner_ready: raise learning.LearningError(503, "Bộ chấm chưa sẵn sàng, vui lòng thử lại.")
         if language not in row["programming"]["languages"] or language not in code_runner.LANGUAGES: raise learning.LearningError(400, "Ngôn ngữ không được phép trong kỳ thi.")
-        if Path(file["filename"]).suffix.lower() != Path(code_runner.LANGUAGES[language]).suffix: raise learning.LearningError(400, "Phần mở rộng file không khớp ngôn ngữ đã chọn.")
+        problem = row["programming"]["problems"][index]
+        if is_zip:
+            if language != 'java' or not problem.get('accept_java_zip'):
+                raise learning.LearningError(400, 'Bài này không nhận ZIP mã Java.')
+            from .java_sources import submission
+            try: submission(content, problem['oop_rubric']['class_name'])
+            except ValueError as exc: raise learning.LearningError(400, str(exc)) from exc
+        elif Path(file["filename"]).suffix.lower() != Path(code_runner.LANGUAGES[language]).suffix:
+            raise learning.LearningError(400, "Phần mở rộng file không khớp ngôn ngữ đã chọn.")
         pending = [r for r in records if r["state"] in {"queued", "running"}]
         if len(pending) >= 50 or sum(r["student_id"] == sid for r in pending) >= 2: raise learning.LearningError(429, "Bạn còn bài đang chấm hoặc hàng đợi đang đầy. Chờ kết quả trước khi nộp tiếp.")
-        problem = row["programming"]["problems"][index]
         if problem.get('language') and language != problem['language']:
             raise learning.LearningError(400, 'Ngôn ngữ không khớp mã kiểm thử của bài toán.')
         guards.enter_context(submission_rate.guard(sid))

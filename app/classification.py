@@ -208,7 +208,7 @@ def manage(session, action, form, ip):
                 kind_meta=question_library.question_metadata(form,row)
                 if kind_meta["response_type"] == "code":
                     config=exam_catalog.validate_programming(form)
-                    if len(config["problems"])!=1 or not config["problems"][0]["tests"]:raise learning.LearningError(400,"Câu hỏi cần đúng một bài toán có test case.")
+                    if len(config["problems"])!=1 or not (config["problems"][0]["tests"] or config["problems"][0].get('oop_rubric')):raise learning.LearningError(400,"Câu hỏi cần đúng một bài toán có test case hoặc tiêu chí OOP.")
                 else:
                     extensions=list(dict.fromkeys(form.get("file_extensions", ".pdf .zip .txt").lower().split()))
                     if not extensions or any(e not in learning.EXTENSIONS for e in extensions):raise learning.LearningError(400,"Định dạng bài nộp không hợp lệ.")
